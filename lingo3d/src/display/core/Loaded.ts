@@ -6,6 +6,8 @@ import ObjectManager from "./ObjectManager"
 import ILoaded from "../../interface/ILoaded"
 import { PhysicsOptions } from "../../interface/IPhysics"
 import { addOutline, deleteOutline } from "../../engine/renderLoop/effectComposer/outlinePass"
+import { addBloom, deleteBloom } from "../../engine/renderLoop/effectComposer/selectiveBloomPass/renderSelectiveBloom"
+import { addSSR, deleteSSR } from "../../engine/renderLoop/effectComposer/ssrPass"
 
 export default abstract class Loaded<T> extends ObjectManager<Mesh> implements ILoaded {
     protected loadedGroup = new Group()
@@ -179,11 +181,38 @@ export default abstract class Loaded<T> extends ObjectManager<Mesh> implements I
         this._outline = val
 
         this._outlineHandle?.cancel()
-
-        if (!val) return
-
         this._outlineHandle = this.loadedResolvable.then(loaded => {
             val ? addOutline(loaded) : deleteOutline(loaded)
+        })
+    }
+
+    private _bloom?: boolean
+    private _bloomHandle?: Cancellable
+    public override get bloom() {
+        return !!this._bloom
+    }
+    public override set bloom(val: boolean) {
+        if (this._bloom === val) return
+        this._bloom = val
+
+        this._bloomHandle?.cancel()
+        this._bloomHandle = this.loadedResolvable.then(loaded => {
+            val ? addBloom(loaded) : deleteBloom(loaded)
+        })
+    }
+
+    private _reflection?: boolean
+    private _reflectionHandle?: Cancellable
+    public override get reflection() {
+        return !!this._reflection
+    }
+    public override set reflection(val: boolean) {
+        if (this._reflection === val) return
+        this._reflection = val
+
+        this._reflectionHandle?.cancel()
+        this._reflectionHandle = this.loadedResolvable.then(loaded => {
+            val ? addSSR(loaded) : deleteSSR(loaded)
         })
     }
 
@@ -192,7 +221,7 @@ export default abstract class Loaded<T> extends ObjectManager<Mesh> implements I
         handle.watch(this.loadedResolvable.then(loaded => {
             if (!this.managerSet) {
                 this.managerSet = true
-                loaded.traverse(child => child.userData.manager = this)
+                loaded.traverse(child => child.userData.manager ??= this)
             }
             set.add(loaded)
             handle.then(() => set.delete(loaded))

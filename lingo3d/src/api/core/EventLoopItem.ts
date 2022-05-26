@@ -5,11 +5,8 @@ import IEventLoop from "../../interface/IEventLoop"
 import Appendable from "./Appendable"
 
 export default abstract class EventLoopItem extends Appendable implements IEventLoop {
-    public timer(time: number, cb: () => void): Cancellable
-    public timer(time: number, repeat: number, cb: () => void) : Cancellable
-    public timer(...args: Array<any>): Cancellable {
-        //@ts-ignore
-        return this.watch(timer(...args))
+    public timer(time: number, repeat: number, cb: () => void) : Cancellable {
+        return this.watch(timer(time, repeat, cb))
     }
 
     public loop(cb: () => void) {
@@ -24,7 +21,7 @@ export default abstract class EventLoopItem extends Appendable implements IEvent
         return this.watch(new Cancellable(cb))
     }
 
-    protected createEffect(cb: () => (() => void) | Promise<void> | void, getStates: Array<GetGlobalState<any> | any>) {
+    protected createEffect(cb: () => (() => void) | void, getStates: Array<GetGlobalState<any> | any>) {
         return this.watch(createEffect(cb, getStates))
     }
 

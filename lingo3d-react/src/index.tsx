@@ -1,21 +1,28 @@
 import type * as types from "lingo3d"
 export { types }
 
+export { screenshot, onAfterRender, keyboard, mouse } from "lingo3d"
+
 export { default as World } from "./components/World"
-export { default as Editor } from "./components/Editor"
+export { default as LingoEditor } from "./components/editor/LingoEditor"
+export { default as Editor } from "./components/editor/Editor"
+export { default as SceneGraph } from "./components/editor/SceneGraph"
+export { default as Toolbar } from "./components/editor/Toolbar"
+export { default as Library } from "./components/editor/Library"
 export { default as Stats } from "./components/Stats"
 
 export { default as Keyboard } from "./components/api/Keyboard"
-export { default as Sound } from "./components/api/Sound"
 export { default as Mouse } from "./components/api/Mouse"
+export { default as Sound } from "./components/api/Sound"
+export { default as Trigger } from "./components/api/Trigger"
 
 export { default as Group } from "./components/display/Group"
 export { default as Model } from "./components/display/Model"
+export { default as Dummy } from "./components/display/Dummy"
+export { default as SvgMesh } from "./components/display/SvgMesh"
 export { default as Reflector } from "./components/display/Reflector"
-export { default as Scene } from "./components/display/Scene"
 export { default as Skybox } from "./components/display/Skybox"
 export { default as Sprite } from "./components/display/Sprite"
-export { default as SvgMesh } from "./components/display/SvgMesh"
 
 export { default as Camera } from "./components/display/cameras/Camera"
 export { default as OrbitCamera } from "./components/display/cameras/OrbitCamera"
@@ -55,6 +62,8 @@ export { default as useSound } from "./hooks/useSound"
 export { default as useTimer } from "./hooks/useTimer"
 export { default as useWindowSize } from "./hooks/useWindowSize"
 export { default as useDocumentScroll } from "./hooks/useDocumentScroll"
+export { default as useRenderer } from "./hooks/useRenderer"
+export { default as useScene } from "./hooks/useScene"
 
 export { default as Reticle } from "@lincode/react-reticle"
 export { default as Joystick } from "@lincode/react-joystick"

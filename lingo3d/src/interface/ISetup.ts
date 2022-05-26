@@ -1,83 +1,44 @@
-import { AmbientOcclusion } from "../states/useAmbientOcclusion"
-import { DefaultLight } from "../states/useDefaultLight"
-import { Encoding } from "../states/useEncoding"
-import { PerformanceValue } from "../states/usePerformance"
+import settings from "../api/settings"
 import { ExtractProps } from "./utils/extractProps"
 
-export default interface ISetup {
-    performance?: PerformanceValue
-    gridHelper?: boolean
-    cameraHelper?: boolean
-    lightHelper?: boolean
-    defaultFog?: boolean
-    defaultLight?: DefaultLight
-    defaultLightScale?: number
-    defaultOrbitControls?: boolean
-    gravity?: number
-    mapPhysics?: number
-    wasmPath?: string
-    logarithmicDepth?: boolean
-    encoding?: Encoding
-    exposure?: number
-    pbr?: boolean
-    selectiveBloom?: boolean
-    bloom?: boolean
-    bloomStrength?: number
-    bloomRadius?: number
-    bloomThreshold?: number
-    bokeh?: boolean
-    bokehFocus?: number
-    bokehMaxBlur?: number
-    bokehAperture?: number
-    ambientOcclusion?: AmbientOcclusion
-    outline?: boolean
-    outlineColor?: string
-    outlineHiddenColor?: string
-    outlinePattern?: string
-    outlinePulse?: number
-    outlineStrength?: number
-    outlineThickness?: number
-    texture?: string
-    skybox?: string
-    color?: string
-}
+export default interface ISetup extends Partial<typeof settings> {}
 
 export const setupSchema: Required<ExtractProps<ISetup>> = {
+    pixelRatio: Number,
     performance: String,
-    gridHelper: Boolean,
-    cameraHelper: Boolean,
-    lightHelper: Boolean,
-    defaultFog: Boolean,
+    skybox: [String, Array],
     defaultLight: [String, Boolean],
     defaultLightScale: Number,
     defaultOrbitControls: Boolean,
+    defaultFog: String,
+    gridHelper: Boolean,
+    gridHelperSize: Number,
     gravity: Number,
-    mapPhysics: Number,
+    repulsion: Number,
     wasmPath: String,
+    autoMount: [Boolean, String],
     logarithmicDepth: Boolean,
     encoding: String,
     exposure: Number,
     pbr: Boolean,
-    selectiveBloom: Boolean,
     bloom: Boolean,
     bloomStrength: Number,
     bloomRadius: Number,
     bloomThreshold: Number,
-    bokeh: Boolean,
-    bokehFocus: Number,
-    bokehMaxBlur: Number,
-    bokehAperture: Number,
     ambientOcclusion: [Boolean, String],
-    outline: Boolean,
     outlineColor: String,
     outlineHiddenColor: String,
     outlinePattern: String,
     outlinePulse: Number,
     outlineStrength: Number,
     outlineThickness: Number,
+    lensDistortion: Boolean,
+    lensIor: Number,
+    lensBand: Number,
     texture: String,
-    skybox: String,
     color: String
 }
 
-export const setupDefaults: ISetup = {}
+export const setupDefaults: ISetup = {
+    ...settings
+}

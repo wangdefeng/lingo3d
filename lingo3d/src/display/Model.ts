@@ -1,18 +1,24 @@
 import { Group } from "three"
 import fit from "./utils/fit"
 import Loaded from "./core/Loaded"
-import AnimationManager from "./core/SimpleObjectManager/AnimationManager"
+import AnimationManager from "./core/mixins/AnimationMixin/AnimationManager"
 import { scaleDown } from "../engine/constants"
-import IModel, { modelDefaults } from "../interface/IModel"
+import IModel, { modelDefaults, modelSchema } from "../interface/IModel"
 import { objectURLMapperPtr } from "./utils/loaders/setObjectURLMapper"
 import { Resolvable } from "@lincode/promiselikes"
 import { lazyLoadFBX, lazyLoadGLTF } from "./utils/loaders/lazyLoad"
+import FoundManager from "./core/FoundManager"
 
 export default class Model extends Loaded<Group> implements IModel {
     public static componentName = "model"
     public static defaults = modelDefaults
+    public static schema = modelSchema
+
+    protected loadedAnims?: Record<string, string>
 
     public async loadAnimation(url: string, name = url) {
+        (this.loadedAnims ??= {})[name] = url
+
         const resolvable = new Resolvable()
         ;(this.loadingAnims ??= []).push(resolvable)
 
@@ -49,7 +55,7 @@ export default class Model extends Loaded<Group> implements IModel {
 
         let result: Group | undefined
         try {
-            if (objectURLMapperPtr[0](url).endsWith(".fbx"))
+            if (objectURLMapperPtr[0](url).toLowerCase().endsWith(".fbx"))
                 result = await (await lazyLoadFBX()).default(url, true)
             else
                 result = await (await lazyLoadGLTF()).default(url, true)
@@ -122,5 +128,19 @@ export default class Model extends Loaded<Group> implements IModel {
         
         this.loadedGroup.add(loadedObject3d)
         this.loadedResolvable.resolve(loadedObject3d)
+    }
+
+    public override find(name: string, hiddenFromSceneGraph?: boolean): FoundManager | undefined {
+        const child = super.find(name, hiddenFromSceneGraph)
+        child && (child.model = this)
+        return child
+    }
+
+    public override findAll(name: string): Array<FoundManager> {
+        const children = super.findAll(name)
+        for (const child of children)
+            child.model = this
+
+        return children
     }
 }

@@ -1,15 +1,17 @@
-import { Object3D, Group } from "three"
+import { Object3D, Group, PropertyBinding } from "three"
 import { deg2Rad, rad2Deg } from "@lincode/math"
 import scene from "../../engine/scene"
 import SimpleObjectManager from "./SimpleObjectManager"
 import { scaleDown, scaleUp } from "../../engine/constants"
 import IObjectManager from "../../interface/IObjectManager"
+import FoundManager from "./FoundManager"
 
 export default abstract class ObjectManager<T extends Object3D = Object3D> extends SimpleObjectManager<T> implements IObjectManager {
     public constructor(object3d: T) {
         super(object3d)
+        
         const group = this.outerObject3d = new Group()
-        this.initOuterObject3d()
+        group.userData.manager = this
 
         scene.add(group)
         group.add(object3d)
@@ -62,5 +64,23 @@ export default abstract class ObjectManager<T extends Object3D = Object3D> exten
     }
     public set innerZ(val: number) {
         this.object3d.position.z = val * scaleDown
+    }
+
+    public find(name: string, hiddenFromSceneGraph?: boolean): FoundManager | undefined {
+        const child = this.outerObject3d.getObjectByName(PropertyBinding.sanitizeNodeName(name))
+        if (!child) return
+
+        const result = child.userData.manager ??= new FoundManager(child)
+        !hiddenFromSceneGraph && this._append(result)
+
+        return result
+    }
+
+    public findAll(name: string): Array<FoundManager> {
+        const result: Array<FoundManager> = []
+        this.outerObject3d.traverse(child => {
+            child.name === name && result.push(child.userData.manager ??= new FoundManager(child))
+        })
+        return result
     }
 }

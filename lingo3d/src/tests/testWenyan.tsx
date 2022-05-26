@@ -11,21 +11,14 @@ import aimWalkSrc from "../../assets-local/aim-walk.fbx"
 //@ts-ignore
 import recoilSrc from "../../assets-local/recoil.fbx"
 
-import Model from "../display/Model"
-import keyboard from "../api/keyboard"
+import { Model, keyboard, Sky, mouse, Octahedron, Cube, DirectionalLight, settings, ThirdPersonCamera, Reflector } from "../index"
+
 import { endPoint, mapRange } from "@lincode/math"
-import Sky from "../display/Sky"
-import Reflector from "../display/Reflector"
 import { random } from "@lincode/utils"
-import mouse from "../api/mouse"
 // import Spring from "../api/Spring"
 import store, { createEffect } from "@lincode/reactivity"
-import Octahedron from "../display/primitives/Octahedron"
-import Cube from "../display/primitives/Cube"
 import randomColor from "randomcolor"
-import DirectionalLight from "../display/lights/DirectionalLight"
-import { settings } from ".."
-import ThirdPersonCamera from "../display/cameras/ThirdPersonCamera"
+import { setGridHelper } from "../states/useGridHelper"
 
 export default {}
 
@@ -42,8 +35,6 @@ export const text2ImageData = (text: string) => {
     context.fillText(text, 0, 200)
     return canvas.toDataURL("image/png")
 }
-
-settings.fillWindow = true
 
 const model = new Model()
 model.src = botSrc
@@ -125,7 +116,6 @@ const reflector = new Reflector()
 reflector.width = 10000
 reflector.height = 10000
 reflector.rotationX = -90
-reflector.shape = "circle"
 reflector.physics = true
 reflector.mass = 0
 
@@ -134,7 +124,7 @@ cam.mouseControl = true
 cam.activate()
 cam.innerX = 20
 cam.minPolarAngle = 70
-cam.target = model
+cam.append(model)
 
 // const camSpring = cam.watch(new Spring())
 // camSpring.from = 1
@@ -218,7 +208,7 @@ model.onLoad = () => {
             bolt.physics = true
             bolt.ignorePhysicsGroups = [2]
             bolt.applyLocalImpulse(0, 0, 50)
-            bolt.timer(5000, () => bolt.dispose())
+            bolt.timer(5000, 0, () => bolt.dispose())
 
             // bolt.listenToIntersection("text", t => {
             //     if (t.name === "error") {
@@ -239,7 +229,7 @@ mouse.onMouseUp = () => {
     setRecoil(true)
 }
 
-settings.gridHelper = true
+setGridHelper(true)
 
 keyboard.onKeyDown = (key) => {
     if (key === "w")
@@ -251,46 +241,4 @@ keyboard.onKeyUp = (key) => {
         setRunning(false)
 }
 
-settings.defaultLight = false
-
-const l0 = new DirectionalLight()
-l0.innerZ = -100
-l0.intensity = 0.25
-
-const l1 = new DirectionalLight()
-l1.innerZ = -0
-l1.intensity = 0.25
-
-const l2 = new DirectionalLight()
-l2.innerZ = 100
-l2.intensity = 0.25
-
-const l3 = new DirectionalLight()
-l3.innerZ = -100
-l3.innerX = -100
-l3.intensity = 0.25
-
-const l4 = new DirectionalLight()
-l4.innerZ = -0
-l4.innerX = -100
-l4.intensity = 0.25
-
-const l5 = new DirectionalLight()
-l5.innerZ = 100
-l5.innerX = -100
-l5.intensity = 0.25
-
-const l6 = new DirectionalLight()
-l6.innerZ = -100
-l6.innerX = 100
-l6.intensity = 0.25
-
-const l7 = new DirectionalLight()
-l7.innerZ = -0
-l7.innerX = 100
-l7.intensity = 0.25
-
-const l8 = new DirectionalLight()
-l8.innerZ = 100
-l8.innerX = 100
-l8.intensity = 0.25
+settings.bloomStrength = 0.5

@@ -15,16 +15,11 @@ import fallingSrc from "../../assets-local/falling.fbx"
 
 export default {}
 
-import Model from "../display/Model"
-import keyboard from "../api/keyboard"
-import Sky from "../display/Sky"
-import Reflector from "../display/Reflector"
-import mouse from "../api/mouse"
-import store, { createEffect } from "@lincode/reactivity"
-import Octahedron from "../display/primitives/Octahedron"
+import { Model, keyboard, Sky, Reflector, mouse, Octahedron, ThirdPersonCamera } from "../index"
+
+import store, { createEffect, createNestedEffect } from "@lincode/reactivity"
 import { Cancellable } from "@lincode/promiselikes"
-import { settings } from ".."
-import ThirdPersonCamera from "../display/cameras/ThirdPersonCamera"
+import { setGridHelper } from "../states/useGridHelper"
 
 const model = new Model()
 model.src = botSrc
@@ -49,9 +44,6 @@ const reflector = new Reflector()
 reflector.width = 10000
 reflector.height = 10000
 reflector.rotationX = -90
-reflector.shape = "circle"
-reflector.contrast = 0.5
-reflector.blur = 2
 reflector.physics = true
 reflector.mass = 0
 
@@ -61,7 +53,7 @@ cam.rotationY = 180
 cam.mouseControl = true
 cam.activate()
 cam.innerX = 20
-cam.target = model
+cam.append(model)
 
 // const camSpring = cam.watch(new Spring())
 // camSpring.from = 1
@@ -76,7 +68,7 @@ const [setRunning, getRunning] = store(false)
 const [setJump, getJump] = store(false)
 const [setAirborn, getAirborn] = store(false)
 
-const useFireBolt = (aim: boolean) => createEffect(() => {
+const useFireBolt = (aim: boolean) => createNestedEffect(() => {
     // if (aim)
     //     camSpring.to = 1.5
     // else
@@ -103,11 +95,11 @@ const useFireBolt = (aim: boolean) => createEffect(() => {
         bolt.physics = true
         bolt.ignorePhysicsGroups = [2]
         bolt.applyLocalImpulse(0, 0, 50)
-        bolt.timer(5000, () => bolt.dispose())
+        bolt.timer(5000, 0, () => bolt.dispose())
     }
 }, [aim])
 
-const useDetectLanding = (airborn: boolean) => createEffect(() => {
+const useDetectLanding = (airborn: boolean) => createNestedEffect(() => {
     if (!airborn) return
 
     model.playAnimation(fallingSrc)
@@ -195,7 +187,7 @@ mouse.onMouseUp = () => {
     setAim(false)
 }
 
-settings.gridHelper = true
+setGridHelper(true)
 
 keyboard.onKeyDown = (key) => {
     if (key === "w")

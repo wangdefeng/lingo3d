@@ -6,7 +6,7 @@ import TexturedBasicMixin from "./core/mixins/TexturedBasicMixin"
 import TexturedStandardMixin from "./core/mixins/TexturedStandardMixin"
 import fit from "./utils/fit"
 import measure from "./utils/measure"
-import ISvgMesh, { svgMeshDefaults } from "../interface/ISvgMesh"
+import ISvgMesh, { svgMeshDefaults, svgMeshSchema } from "../interface/ISvgMesh"
 
 const lazyLoadSVG = lazy(() => import("./utils/loaders/loadSVG"))
 
@@ -15,11 +15,11 @@ const svgGeometryCache = new WeakMap<SVGResult, Array<ExtrudeBufferGeometry>>()
 class SvgMesh extends Loaded<SVGResult> implements ISvgMesh {
     public static componentName = "svgMesh"
     public static defaults = svgMeshDefaults
+    public static schema = svgMeshSchema
 
     protected material = new MeshStandardMaterial()
 
     public override dispose() {
-        if (this.done) return this
         super.dispose()
         this.material.dispose()
         return this
@@ -31,6 +31,7 @@ class SvgMesh extends Loaded<SVGResult> implements ISvgMesh {
 
     protected resolveLoaded(svgData: SVGResult) {
         const loadedObject3d = new Group()
+        loadedObject3d.scale.y *= -1
 
         const geometries = forceGet(svgGeometryCache, svgData, () => {
             const shapes: Array<Shape> = []
@@ -41,11 +42,14 @@ class SvgMesh extends Loaded<SVGResult> implements ISvgMesh {
             if (!shapes.length) return []
 
             const testGroup = new Group()
-            for (const shape of shapes)
-                testGroup.add(new Mesh(new ExtrudeBufferGeometry(shape, {
+            for (const shape of shapes) {
+                const geom = new ExtrudeBufferGeometry(shape, {
                     depth: 0,
                     bevelEnabled: false
-                })))
+                })
+                geom.dispose()
+                testGroup.add(new Mesh(geom))
+            }
 
             const size = measure(testGroup)
 
@@ -70,13 +74,11 @@ class SvgMesh extends Loaded<SVGResult> implements ISvgMesh {
         !this.heightSet && (this.object3d.scale.y = size.y)
         !this.depthSet && (this.object3d.scale.z = size.z)
 
-        loadedObject3d.scale.y *= -1
-
         this.loadedGroup.add(loadedObject3d)
 
         this.loadedResolvable.resolve(loadedObject3d)
     }
 }
 interface SvgMesh extends Loaded<SVGResult>, TexturedBasicMixin, TexturedStandardMixin {}
-applyMixins(SvgMesh, [TexturedBasicMixin, TexturedStandardMixin])
+applyMixins(SvgMesh, [TexturedStandardMixin, TexturedBasicMixin])
 export default SvgMesh

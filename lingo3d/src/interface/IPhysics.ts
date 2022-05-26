@@ -1,13 +1,12 @@
-import PhysicsItem from "../display/core/SimpleObjectManager/PhysicsItem"
-import cubeShape from "../display/core/SimpleObjectManager/PhysicsItem/cannon/shapes/cubeShape"
-import IAnimation, { animationDefaults, animationSchema } from "./IAnimation"
+import PhysicsMixin from "../display/core/mixins/PhysicsMixin"
+import cubeShape from "../display/core/mixins/PhysicsMixin/cannon/shapes/cubeShape"
 import { ExtractProps } from "./utils/extractProps"
 
 export type PhysicsGroupIndex = 0 | 1 | 2 | 3 | 4 | 5
 export type PhysicsOptions = boolean | "2d" | "map" | "map-debug" | "character"
-export type PhysicsShape = (this: PhysicsItem) => Promise<void>
+export type PhysicsShape = (this: PhysicsMixin) => Promise<void>
 
-export default interface IPhysics extends IAnimation {
+export default interface IPhysics {
     maxAngularVelocityX: number
     maxAngularVelocityY: number
     maxAngularVelocityZ: number
@@ -29,8 +28,6 @@ export default interface IPhysics extends IAnimation {
 }
 
 export const physicsSchema: Required<ExtractProps<IPhysics>> = {
-    ...animationSchema,
-
     maxAngularVelocityX: Number,
     maxAngularVelocityY: Number,
     maxAngularVelocityZ: Number,
@@ -52,8 +49,6 @@ export const physicsSchema: Required<ExtractProps<IPhysics>> = {
 }
 
 export const physicsDefaults: IPhysics = {
-    ...animationDefaults,
-
     maxAngularVelocityX: Infinity,
     maxAngularVelocityY: Infinity,
     maxAngularVelocityZ: Infinity,

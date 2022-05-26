@@ -6,11 +6,13 @@ import fairySrc from "../../assets-local/fairy.glb"
 import Sky from "../display/Sky"
 import Cube from "../display/primitives/Cube"
 import FirstPersonCamera from "../display/cameras/FirstPersonCamera"
+import { setVR } from "../states/useVR"
+
+setVR("webxr")
 
 export default {}
 
 settings.defaultOrbitControls = true
-settings.fillWindow = true
 
 const player = new Cube()
 player.width = 50
@@ -28,7 +30,7 @@ keyboard.onKeyPress = (k) => {
 }
 
 const cam = new FirstPersonCamera()
-cam.target = player
+cam.append(player)
 cam.mouseControl = "drag"
 cam.active = true
 

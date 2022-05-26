@@ -1,20 +1,20 @@
-import { Camera, Group } from "three"
+import { Group, PerspectiveCamera } from "three"
 import ObjectManager from "../ObjectManager"
 import CameraMixin from "../mixins/CameraMixin"
 import { applyMixins, debounce } from "@lincode/utils"
-import SimpleObjectManager from "../SimpleObjectManager"
-import Point3d from "../../../api/Point3d"
 import { scaleUp, scaleDown } from "../../../engine/constants"
 import { ray, vector3_, vector3, euler } from "../../utils/reusables"
-import pillShape from "../SimpleObjectManager/PhysicsItem/cannon/shapes/pillShape"
+import pillShape from "../mixins/PhysicsMixin/cannon/shapes/pillShape"
 import ICameraBase, { MouseControl, MouseControlMode } from "../../../interface/ICameraBase"
-import { Cancellable } from "@lincode/promiselikes"
 import { deg2Rad, rad2Deg } from "@lincode/math"
 import { MIN_POLAR_ANGLE, MAX_POLAR_ANGLE } from "../../../globals"
+import { Reactive } from "@lincode/reactivity"
+import PositionedItem from "../../../api/core/PositionedItem"
+import StaticObjectManager from "../StaticObjectManager"
 
 const PI_2 = Math.PI * 0.5
 
-abstract class CameraBase<T extends Camera> extends ObjectManager<Group> implements ICameraBase {
+abstract class CameraBase<T extends PerspectiveCamera> extends ObjectManager<Group> implements ICameraBase {
     protected camera: T
 
     protected override _physicsShape = pillShape
@@ -30,8 +30,14 @@ abstract class CameraBase<T extends Camera> extends ObjectManager<Group> impleme
         return ray.set(this.camera.getWorldPosition(vector3_), this.camera.getWorldDirection(vector3))
     }
 
-    public override append(object: SimpleObjectManager) {
+    public override append(object: PositionedItem) {
+        this._append(object)
         this.camera.add(object.outerObject3d)
+    }
+
+    public override attach(object: PositionedItem) {
+        this._append(object)
+        this.camera.attach(object.outerObject3d)
     }
 
     public override get width() {
@@ -61,7 +67,7 @@ abstract class CameraBase<T extends Camera> extends ObjectManager<Group> impleme
         this.camera.scale.z = 1 / num
     }
 
-    public override lookAt(target: SimpleObjectManager | Point3d) {
+    public override lookAt(target: PositionedItem | StaticObjectManager | { x: number, y: number, z: number }) {
         super.lookAt(target)
         this.rotationY += 180
     }
@@ -76,7 +82,7 @@ abstract class CameraBase<T extends Camera> extends ObjectManager<Group> impleme
 
         euler.x = Math.max(PI_2 - this._maxPolarAngle, Math.min(PI_2 - this._minPolarAngle, euler.x))
 
-        manager.quaternion.setFromEuler(euler)
+        manager.setRotationFromEuler(euler)
         !inner && this.physicsRotate()
     }
 
@@ -111,23 +117,25 @@ abstract class CameraBase<T extends Camera> extends ObjectManager<Group> impleme
 
     public mouseControlMode?: MouseControlMode
 
-    private mouseControlHandle: Cancellable | undefined
-    private _mouseControl?: MouseControl
+    protected mouseControlState = new Reactive<MouseControl>(false)
+    private mouseControlInit?: boolean
 
     public get mouseControl() {
-        return this._mouseControl
+        return this.mouseControlState.get()
     }
-    public set mouseControl(val: MouseControl | undefined) {
-        if (this._mouseControl === val) return
-        this._mouseControl = val
-        
-        this.mouseControlHandle?.cancel()
-        if (!val) return
+    public set mouseControl(val: MouseControl) {
+        this.mouseControlState.set(val)
 
-        const handle = this.mouseControlHandle = this.cancellable()
-        import("./enableMouseControl").then(module => module.default.call(this, handle))
+        if (!val || this.mouseControlInit) return
+        this.mouseControlInit = true
+
+        import("./enableMouseControl").then(module => module.default.call(this))
+    }
+
+    public override getCenter() {
+        return this.getWorldPosition()
     }
 }
-interface CameraBase<T extends Camera> extends ObjectManager<Group>, CameraMixin<T> {}
+interface CameraBase<T extends PerspectiveCamera> extends ObjectManager<Group>, CameraMixin<T> {}
 applyMixins(CameraBase, [CameraMixin])
 export default CameraBase

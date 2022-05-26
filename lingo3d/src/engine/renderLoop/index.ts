@@ -1,6 +1,5 @@
 import { createEffect } from "@lincode/reactivity"
 import { preventTreeShake } from "@lincode/utils"
-import { PerspectiveCamera } from "three"
 import SimpleObjectManager from "../../display/core/SimpleObjectManager"
 import Cube from "../../display/primitives/Cube"
 import { vector3 } from "../../display/utils/reusables"
@@ -11,6 +10,7 @@ import { setOutline } from "../../states/useOutline"
 import { getPerformance } from "../../states/usePerformance"
 import { getRenderer } from "../../states/useRenderer"
 import { getResolution } from "../../states/useResolution"
+import { getSecondaryCamera } from "../../states/useSecondaryCamera"
 import { setSelectiveBloom } from "../../states/useSelectiveBloom"
 import { setSSR } from "../../states/useSSR"
 import { getVR } from "../../states/useVR"
@@ -26,36 +26,59 @@ preventTreeShake(resize)
 
 export default {}
 
-let getBlob: ((blob: Blob) => void) | undefined
-
-export const toBlob = () => new Promise<Blob>(resolve => getBlob = resolve)
-
-const handleBlob = () => {
-    if (!getBlob) return
-    const getBlobCopy = getBlob
-    getBlob = undefined
-    getRenderer().domElement.toBlob(blob => blob && getBlobCopy(blob))
-}
-
 createEffect(() => {
     const vr = getVR()
     const camera = getCamera()
+    const secondaryCamera = getSecondaryCamera()
     const renderer = getRenderer()
 
-    if (getPerformance() === "speed" || vr === "webxr") {
+    if (secondaryCamera) {
+        const [resX, resY] = getResolution()
+        const width = resX * 1
+        const height = resY * 0.5
+
+        secondaryCamera.aspect = camera.aspect = width / height
+        camera.updateProjectionMatrix()
+        secondaryCamera.updateProjectionMatrix()
+
         const handle = loop(() => {
             emitBeforeRender()
 
-            renderer.render(scene, camera)
+            renderer.setViewport(0, 0, width, height)
+            renderer.setScissor(0, 0, width, height)
+            renderer.setScissorTest(true)
+            renderer.render(scene, secondaryCamera)
             
-            handleBlob()
+            renderer.setViewport(0, height, width, height)
+            renderer.setScissor(0, height, width, height)
+            renderer.render(scene, camera)
+
+            emitAfterRender()
+        })
+        return () => {
+            handle.cancel()
+
+            renderer.setViewport(0, 0, resX, resY)
+            renderer.setScissor(0, 0, resX, resY)
+            renderer.setScissorTest(false)
+            
+            camera.aspect = resX / resY
+            camera.updateProjectionMatrix()
+        }
+    }
+    
+    if (getPerformance() === "speed" || vr === "webxr") {
+        const handle = loop(() => {
+            emitBeforeRender()
+            renderer.render(scene, camera)
             emitAfterRender()
         })
         return () => {
             handle.cancel()
         }
     }
-    if (vr && camera instanceof PerspectiveCamera) {
+
+    if (vr) {
         const focus = new Cube()
         focus.scale = 0.5
         focus.visible = false
@@ -108,7 +131,6 @@ createEffect(() => {
             camera.quaternion.copy(quat)
             camera.position.copy(pos)
 
-            handleBlob()
             emitAfterRender()
         })
         return () => {
@@ -118,6 +140,9 @@ createEffect(() => {
             renderer.setViewport(0, 0, resX, resY)
             renderer.setScissor(0, 0, resX, resY)
             renderer.setScissorTest(false)
+
+            camera.aspect = resX / resY
+            camera.updateProjectionMatrix()
         }
     }
 
@@ -145,10 +170,9 @@ createEffect(() => {
         }
         effectComposer.render()
 
-        handleBlob()
         emitAfterRender()
     })
     return () => {
         handle.cancel()
     }
-}, [getPerformance, getVR, getCamera, getResolution, getRenderer])
+}, [getPerformance, getVR, getCamera, getSecondaryCamera, getResolution, getRenderer])

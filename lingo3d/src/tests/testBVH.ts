@@ -1,5 +1,4 @@
 import keyboard from "../api/keyboard"
-import settings from "../api/settings"
 import Model from "../display/Model"
 //@ts-ignore
 import fairySrc from "../../assets-local/fairy.glb"
@@ -21,30 +20,22 @@ import LeftSrc from "../../assets-local/skybox/Left.png"
 import RightSrc from "../../assets-local/skybox/Right.png"
 //@ts-ignore
 import UpSrc from "../../assets-local/skybox/Up.png"
-//@ts-ignore
-import f1Src from "../../assets-local/f1.png"
 
 import ThirdPersonCamera from "../display/cameras/ThirdPersonCamera"
-import Sky from "../display/Sky"
-import rendering from "../api/rendering"
-import Skybox from "../display/Skybox"
+import settings from "../api/settings"
 
 export default {}
-
-settings.defaultOrbitControls = true
-settings.fillWindow = true
 
 const player = new Model()
 player.src = personSrc
 player.width = 20
 player.depth = 20
 player.z = -100
-player.y = 500
+player.y = 210.59
 player.physics = "character"
 player.animations = { running: runningSrc, idle: idleSrc }
 player.animation = "idle"
 player.rotationY = 90
-player.boxVisible = true
 
 keyboard.onKeyPress = (k) => {
     if (k === "w") {
@@ -69,9 +60,6 @@ cam.active = true
 const map = new Model()
 map.src = fairySrc
 map.scale = 20
-map.physics = "map-debug"
+map.physics = "map"
 
-// const sky = new Sky()
-
-const skybox = new Skybox()
-skybox.texture = [LeftSrc, RightSrc, UpSrc, DownSrc, FrontSrc, BackSrc]
+settings.skybox = [LeftSrc, RightSrc, UpSrc, DownSrc, FrontSrc, BackSrc]

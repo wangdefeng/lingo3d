@@ -8,21 +8,21 @@ import { container } from "../../engine/renderLoop/renderSetup"
 import { getCamera } from "../../states/useCamera"
 import EventLoopItem from "../../api/core/EventLoopItem"
 import CameraMixin from "../core/mixins/CameraMixin"
-import IOrbitCamera, { orbitCameraDefaults } from "../../interface/IOrbitCamera"
+import IOrbitCamera, { orbitCameraDefaults, orbitCameraSchema } from "../../interface/IOrbitCamera"
 import { loop } from "../../engine/eventLoop"
-import ObjectManager from "../core/ObjectManager"
-import { getOrbitControlsEnabled } from "../../states/useOrbitControlsEnabled"
 import { vector3 } from "../utils/reusables"
-import { emitOrbitControls } from "../../events/onOrbitControls"
-import { setSelectionEnabled } from "../../states/useSelectionEnabled"
-import mainCamera from "../../engine/mainCamera"
 import { MIN_POLAR_ANGLE, MAX_POLAR_ANGLE } from "../../globals"
+import { getTransformControlsDragging } from "../../states/useTransformControlsDragging"
+import { onKeyClear } from "../../events/onKeyClear"
+import { onSceneChange } from "../../events/onSceneChange"
+import PositionedItem from "../../api/core/PositionedItem"
+import scene from "../../engine/scene"
 
-class OrbitCamera extends EventLoopItem implements IOrbitCamera {
+class OrbitCamera extends PositionedItem implements IOrbitCamera {
     public static componentName = "orbitCamera"
     public static defaults = orbitCameraDefaults
+    public static schema = orbitCameraSchema
 
-    public outerObject3d: PerspectiveCamera
     private controls: OrbitControls
 
     private updateDebounced = debounce(() => this.controls.update(), 0, "trailing")
@@ -30,13 +30,25 @@ class OrbitCamera extends EventLoopItem implements IOrbitCamera {
     public constructor(
         protected camera = new PerspectiveCamera(75, 1, camNear, camFar)
     ) {
-        super()
-        this.outerObject3d = camera
-        const controls = this.controls = new OrbitControls(camera, container)
+        super(camera)
+        scene.add(camera)
 
-        this.initOuterObject3d()
         this.initCamera()
 
+        this.createEffect(() => {
+            const target = this.targetState.get()
+            if (!target) return
+
+            this.controls.target = target.outerObject3d.position
+            const handle = onSceneChange(() => target.parent !== this && this.targetState.set(undefined))
+            
+            return () => {
+                this.controls.target = new Vector3()
+                handle.cancel()
+            }
+        }, [this.targetState.get])
+
+        const controls = this.controls = new OrbitControls(camera, container)
         controls.enabled = false
         controls.enablePan = false
         controls.enableZoom = false
@@ -49,7 +61,8 @@ class OrbitCamera extends EventLoopItem implements IOrbitCamera {
         this.updateDebounced()
 
         this.createEffect(() => {
-            if (!getOrbitControlsEnabled() || getCamera() !== camera || !this.enabledState.get()) return
+            if (getTransformControlsDragging() || getCamera() !== camera || !this.enabledState.get())
+                return
 
             controls.enabled = true
             const handle = loop(this.updateDebounced)
@@ -64,8 +77,8 @@ class OrbitCamera extends EventLoopItem implements IOrbitCamera {
                     const localPt = camera.worldToLocal(pt.clone())
                     const localTarget = camera.worldToLocal(controls.target.clone())
                     
-                    if (localPt.z - localTarget.z <= 0)
-                        pt = controls.target.clone().add(direction.multiplyScalar(-0.001))
+                    if (localPt.z - localTarget.z <= 1)
+                        pt = controls.target.clone().add(direction.multiplyScalar(-1))
 
                     camera.position.copy(pt)
                     this.updateDebounced()
@@ -73,45 +86,64 @@ class OrbitCamera extends EventLoopItem implements IOrbitCamera {
                 container.addEventListener("wheel", cb)
                 handle.then(() => container.removeEventListener("wheel", cb))
             }
+            if (this.enableFlyState.get()) {
+                const downSet = new Set<string>()
+
+                const moveForward = (distance: number) => {
+                    const direction = camera.getWorldDirection(vector3)
+                    camera.position.add(direction.clone().multiplyScalar(distance * scaleDown))
+                    this.controls.target.copy(camera.position).add(direction)
+                    this.updateDebounced()
+                }
+                const moveRight = (distance: number) => {
+                    vector3.setFromMatrixColumn(this.outerObject3d.matrix, 0)
+                    camera.position.addScaledVector(vector3, distance * scaleDown)
+                    this.controls.target.addScaledVector(vector3, distance * scaleDown)
+                    this.updateDebounced()
+                }
+                const moveUp = (distance: number) => {
+                    const dist = distance * scaleDown
+                    camera.position.y += dist
+                    this.controls.target.y += dist
+                    this.updateDebounced()
+                }
+                handle.watch(loop(() => {
+                    if (downSet.has("w"))
+                        moveForward(downSet.has("Shift") ? 50 : 10)
+                    else if (downSet.has("s"))
+                        moveForward(downSet.has("Shift") ? -50 : -10)
+
+                    if (downSet.has("a"))
+                        moveRight(-10)
+                    else if (downSet.has("d"))
+                        moveRight(10)
+
+                    if (downSet.has("ArrowDown"))
+                        moveUp(-10)
+                    else if (downSet.has("ArrowUp"))
+                        moveUp(10)
+                }))
+
+                const handleKeyDown = (e: KeyboardEvent) => {
+                    downSet.add(e.key.length === 1 ? e.key.toLocaleLowerCase() : e.key)
+                }
+                const handleKeyUp = (e: KeyboardEvent) => {
+                    downSet.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key)
+                }
+                document.addEventListener("keydown", handleKeyDown)
+                document.addEventListener("keyup", handleKeyUp)
+                handle.watch(onKeyClear(() => downSet.clear()))
+
+                handle.then(() => {
+                    document.removeEventListener("keydown", handleKeyDown)
+                    document.removeEventListener("keyup", handleKeyUp)
+                })
+            }
             return () => {
                 controls.enabled = false
                 handle.cancel()
             }
-        }, [getCamera, getOrbitControlsEnabled, this.enableZoomState.get, this.enabledState.get])
-
-        let azimuthStart = 0
-        let polarStart = 0
-        let targetStart = vector3
-        let started = false
-
-        controls.addEventListener("start", () => {
-            started = true
-            azimuthStart = controls.getAzimuthalAngle() * rad2Deg
-            polarStart = controls.getPolarAngle() * rad2Deg
-            targetStart = controls.target.clone()
-            camera === mainCamera && emitOrbitControls("start")
-        })
-
-        controls.addEventListener("change", () => {
-            if (!started) return
-            const azimuthDiff = Math.abs(controls.getAzimuthalAngle() * rad2Deg - azimuthStart)
-            const polarDiff = Math.abs(controls.getPolarAngle() * rad2Deg - polarStart)
-        
-            const { x, y, z } = controls.target
-            const { x: x0, y: y0, z: z0 } = targetStart
-            const targetDiff = Math.max(Math.abs(x0 - x), Math.abs(y0 - y), Math.abs(z0 - z))
-        
-            if (azimuthDiff > 2 || polarDiff > 2 || targetDiff > 0.02) {
-                setSelectionEnabled(false)
-                camera === mainCamera && emitOrbitControls("move")
-            }
-        })
-        
-        controls.addEventListener("end", () => {
-            started = false
-            setSelectionEnabled(true)
-            camera === mainCamera && emitOrbitControls("stop")
-        })
+        }, [getCamera, getTransformControlsDragging, this.enableZoomState.get, this.enableFlyState.get, this.enabledState.get])
 
         this.then(() => controls.dispose())
     }
@@ -143,42 +175,45 @@ class OrbitCamera extends EventLoopItem implements IOrbitCamera {
         this.controls.target.z = val * scaleDown
     }
 
-    protected _target: ObjectManager | undefined
-    public get target() {
-        return this._target
-    }
-    public set target(target: ObjectManager | undefined) {
-        this._target = target
-        this.controls.target = target?.outerObject3d.position ?? new Vector3()
-    }
-
-    public override append(object: ObjectManager) {
-        if (this._target) {
+    private targetState = new Reactive<PositionedItem | undefined>(undefined)
+    public override append(object: PositionedItem) {
+        if (this.targetState.get()) {
             super.append(object)
             return
         }
+        this._append(object)
         this.outerObject3d.parent?.add(object.outerObject3d)
-        this.target = object
+        this.targetState.set(object)
     }
 
-    public get x() {
+    public override attach(object: PositionedItem) {
+        if (this.targetState.get()) {
+            super.attach(object)
+            return
+        }
+        this._append(object)
+        this.outerObject3d.parent?.attach(object.outerObject3d)
+        this.targetState.set(object)
+    }
+
+    public override get x() {
         return this.camera.position.x * scaleUp
     }
-    public set x(val: number) {
+    public override set x(val: number) {
         this.camera.position.x = val * scaleDown
     }
 
-    public get y() {
+    public override get y() {
         return this.camera.position.y * scaleUp
     }
-    public set y(val: number) {
+    public override set y(val: number) {
         this.camera.position.y = val * scaleDown
     }
 
-    public get z() {
+    public override get z() {
         return this.camera.position.z * scaleUp
     }
-    public set z(val: number) {
+    public override set z(val: number) {
         this.camera.position.z = val * scaleDown
     }
 
@@ -214,6 +249,14 @@ class OrbitCamera extends EventLoopItem implements IOrbitCamera {
     }
     public set enableZoom(val: boolean) {
         this.enableZoomState.set(val)
+    }
+
+    private enableFlyState = new Reactive(false)
+    public get enableFly() {
+        return this.enableFlyState.get()
+    }
+    public set enableFly(val: boolean) {
+        this.enableFlyState.set(val)
     }
 
     private enabledState = new Reactive(true)
@@ -307,6 +350,10 @@ class OrbitCamera extends EventLoopItem implements IOrbitCamera {
             this.controls.minDistance = -Infinity
             this.controls.maxDistance = Infinity
         })
+    }
+
+    public override getCenter() {
+        return this.getWorldPosition()
     }
 }
 interface OrbitCamera extends EventLoopItem, CameraMixin<PerspectiveCamera> {}

@@ -1,8 +1,13 @@
 import { event } from "@lincode/events"
 import { debounce } from "@lincode/utils"
-import SimpleObjectManager from "../display/core/SimpleObjectManager"
+import Appendable from "../api/core/Appendable"
+import { getCamera } from "../states/useCamera"
 
-const [_emitSelectionTarget, onSelectionTarget] = event<SimpleObjectManager | undefined>()
-const emitSelectionTarget = debounce(_emitSelectionTarget, 0, "trailing")
+const [_emitSelectionTarget, onSelectionTarget] = event<{ target?: Appendable, rightClick?: boolean }>()
+const emitSelectionTarget = debounce((target?: Appendable, rightClick?: boolean) => (
+    _emitSelectionTarget({ target, rightClick })
+), 0, "trailing")
 
 export { emitSelectionTarget, onSelectionTarget }
+
+getCamera(() => emitSelectionTarget())

@@ -3,9 +3,12 @@ import { Mesh, MeshStandardMaterial, BufferGeometry } from "three"
 import ObjectManager from "./ObjectManager"
 import TexturedBasicMixin from "./mixins/TexturedBasicMixin"
 import TexturedStandardMixin from "./mixins/TexturedStandardMixin"
-import IPrimitive from "../../interface/IPrimitive"
+import IPrimitive, { primitiveDefaults, primitiveSchema } from "../../interface/IPrimitive"
 
 abstract class Primitive extends ObjectManager<Mesh> implements IPrimitive {
+    public static defaults = primitiveDefaults
+    public static schema = primitiveSchema
+
     protected material: MeshStandardMaterial
     protected transparent?: boolean
 
@@ -20,12 +23,11 @@ abstract class Primitive extends ObjectManager<Mesh> implements IPrimitive {
     }
 
     public override dispose() {
-        if (this.done) return this
         super.dispose()
         this.material.dispose()
         return this
     }
 }
 interface Primitive extends ObjectManager<Mesh>, TexturedBasicMixin, TexturedStandardMixin {}
-applyMixins(Primitive, [TexturedBasicMixin, TexturedStandardMixin])
+applyMixins(Primitive, [TexturedStandardMixin, TexturedBasicMixin])
 export default Primitive

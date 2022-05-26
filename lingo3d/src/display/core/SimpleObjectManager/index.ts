@@ -1,30 +1,21 @@
 import { rad2Deg, deg2Rad, distance3d } from "@lincode/math"
-import { Matrix3, Object3D, PropertyBinding, Vector3 } from "three"
-import { clickSet, mouseDownSet, mouseOutSet, mouseMoveSet, mouseOverSet, mouseUpSet } from "./raycast"
-import { frustum, matrix4, quaternion, ray, vector3, vector3_, vector3_1, vector3_half } from "../../utils/reusables"
-import { forceGet, throttle } from "@lincode/utils"
-import { OBB } from "three/examples/jsm/math/OBB"
+import { Object3D, Vector3 } from "three"
+import { quaternion, vector3, vector3_ } from "../../utils/reusables"
 import { scaleDown, scaleUp } from "../../../engine/constants"
-import { addBloom, deleteBloom } from "../../../engine/renderLoop/effectComposer/selectiveBloomPass/renderSelectiveBloom"
-import worldToClient from "../../utils/worldToClient"
-import { Cancellable } from "@lincode/promiselikes"
 import Point3d from "../../../api/Point3d"
-import { point2Vec, vec2Point } from "../../utils/vec2Point"
+import { point2Vec } from "../../utils/vec2Point"
 import ISimpleObjectManager, { OnIntersectValue } from "../../../interface/ISimpleObjectManager"
-import PhysicsItem from "./PhysicsItem"
-import { cannonContactBodies, cannonContactMap } from "./PhysicsItem/cannon/cannonLoop"
-import { MouseInteractionPayload } from "../../../interface/IMouse"
-import { addSSR, deleteSSR } from "../../../engine/renderLoop/effectComposer/ssrPass"
-import { getCamera } from "../../../states/useCamera"
-import bvhContactMap from "./PhysicsItem/bvh/bvhContactMap"
-import { addOutline, deleteOutline } from "../../../engine/renderLoop/effectComposer/outlinePass"
 import getCenter from "../../utils/getCenter"
-import applyMaterialProperties, { applySet } from "./applyMaterialProperties"
+import PositionedItem from "../../../api/core/PositionedItem"
+import StaticObjectManager from "../StaticObjectManager"
+import { applyMixins, forceGet } from "@lincode/utils"
+import PhysicsMixin from "../mixins/PhysicsMixin"
+import bvhContactMap from "../mixins/PhysicsMixin/bvh/bvhContactMap"
+import { cannonContactBodies, cannonContactMap } from "../mixins/PhysicsMixin/cannon/cannonLoop"
 import { Reactive } from "@lincode/reactivity"
+import { Cancellable } from "@lincode/promiselikes"
 
-const idMap = new Map<string, Set<SimpleObjectManager>>()
-const thisOBB = new OBB()
-const targetOBB = new OBB()
+export const idMap = new Map<string, Set<SimpleObjectManager>>()
 
 const makeSet = () => new Set()
 
@@ -38,144 +29,8 @@ const distance3dCached = (pt: Point3d, vecSelf: Vector3) => {
     return result
 }
 
-
-const updateFrustum = throttle(() => {
-    const camera = getCamera()
-    frustum.setFromProjectionMatrix(matrix4.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse))
-}, 200, "leading")
-
-
-
-export default class SimpleObjectManager<T extends Object3D = Object3D> extends PhysicsItem implements ISimpleObjectManager {
-    public outerObject3d: Object3D
-
-    public constructor(
-        public object3d: T
-    ) {
-        super()
-        this.outerObject3d = object3d
-        this.initOuterObject3d()
-    }
-
-    public override dispose() {
-        if (this.done) return this
-        super.dispose()
-
-        this._id !== undefined && idMap.get(this._id)!.delete(this)
-        deleteSSR(this.object3d)
-
-        return this
-    }
-
-    public find<T extends SimpleObjectManager>(name: string): T | undefined {
-        const child = this.outerObject3d.getObjectByName(PropertyBinding.sanitizeNodeName(name))
-        return child && (child.userData.manager ??= new SimpleObjectManager(child))
-    }
-
-    public findAll<T extends SimpleObjectManager>(name: string): Array<T> {
-        const result: Array<T> = []
-
-        this.outerObject3d.traverse(child => {
-            child.name === name && result.push(child.userData.manager ??= new SimpleObjectManager(child))
-        })
-        return result
-    }
-
-    protected addToRaycastSet(set: Set<Object3D>, handle: Cancellable) {
-        set.add(this.object3d)
-        handle.then(() => set.delete(this.object3d))
-    }
-
-    protected clickHandle: Cancellable | undefined
-    private _onClick?: (e: MouseInteractionPayload) => void
-    public get onClick(): ((e: MouseInteractionPayload) => void) | undefined {
-        return this._onClick
-    }
-    public set onClick(cb: ((e: MouseInteractionPayload) => void) | undefined) {
-        this.clickHandle?.cancel()
-
-        this._onClick = cb
-        if (!cb) return
-        
-        this.addToRaycastSet(clickSet, this.clickHandle = new Cancellable())
-    }
-
-    protected mouseDownHandle: Cancellable | undefined
-    private _onMouseDown?: (e: MouseInteractionPayload) => void
-    public get onMouseDown(): ((e: MouseInteractionPayload) => void) | undefined {
-        return this._onMouseDown
-    }
-    public set onMouseDown(cb: ((e: MouseInteractionPayload) => void) | undefined) {
-        this.mouseDownHandle?.cancel()
-
-        this._onMouseDown = cb
-        if (!cb) return
-        
-        this.addToRaycastSet(mouseDownSet, this.mouseDownHandle = new Cancellable())
-    }
-
-    protected mouseUpHandle: Cancellable | undefined
-    private _onMouseUp?: (e: MouseInteractionPayload) => void
-    public get onMouseUp(): ((e: MouseInteractionPayload) => void) | undefined {
-        return this._onMouseUp
-    }
-    public set onMouseUp(cb: ((e: MouseInteractionPayload) => void) | undefined) {
-        this.mouseUpHandle?.cancel()
-
-        this._onMouseUp = cb
-        if (!cb) return
-        
-        this.addToRaycastSet(mouseUpSet, this.mouseUpHandle = new Cancellable())
-    }
-
-    protected mouseOverHandle: Cancellable | undefined
-    private _onMouseOver?: (e: MouseInteractionPayload) => void
-    public get onMouseOver(): ((e: MouseInteractionPayload) => void) | undefined {
-        return this._onMouseOver
-    }
-    public set onMouseOver(cb: ((e: MouseInteractionPayload) => void) | undefined) {
-        this.mouseOverHandle?.cancel()
-
-        this._onMouseOver = cb
-        if (!cb) return
-        
-        this.addToRaycastSet(mouseOverSet, this.mouseOverHandle = new Cancellable())
-    }
-
-    protected mouseOutHandle: Cancellable | undefined
-    private _onMouseOut?: (e: MouseInteractionPayload) => void
-    public get onMouseOut(): ((e: MouseInteractionPayload) => void) | undefined {
-        return this._onMouseOut
-    }
-    public set onMouseOut(cb: ((e: MouseInteractionPayload) => void) | undefined) {
-        this.mouseOutHandle?.cancel()
-
-        this._onMouseOut = cb
-        if (!cb) return
-        
-        this.addToRaycastSet(mouseOutSet, this.mouseOutHandle = new Cancellable())
-    }
-
-    protected mouseMoveHandle: Cancellable | undefined
-    private _onMouseMove?: (e: MouseInteractionPayload) => void
-    public get onMouseMove(): ((e: MouseInteractionPayload) => void) | undefined {
-        return this._onMouseMove
-    }
-    public set onMouseMove(cb: ((e: MouseInteractionPayload) => void) | undefined) {
-        this.mouseMoveHandle?.cancel()
-
-        this._onMouseMove = cb
-        if (!cb) return
-        
-        this.addToRaycastSet(mouseMoveSet, this.mouseMoveHandle = new Cancellable())
-    }
-
-    public get name() {
-        return this.outerObject3d.name
-    }
-    public set name(val: string) {
-        this.outerObject3d.name = PropertyBinding.sanitizeNodeName(val)
-    }
+class SimpleObjectManager<T extends Object3D = Object3D> extends StaticObjectManager<T> implements ISimpleObjectManager {
+    public override object3d!: T
 
     private _id?: string
     public get id() {
@@ -185,44 +40,6 @@ export default class SimpleObjectManager<T extends Object3D = Object3D> extends 
         this._id !== undefined && idMap.get(this._id)!.delete(this)
         this._id = val
         val !== undefined && forceGet(idMap, val, makeSet).add(this)
-    }
-
-    public getWorldPosition() {
-        return vec2Point(this.object3d.getWorldPosition(vector3_))
-    }
-
-    protected getRay() {
-        return ray.set(this.object3d.getWorldPosition(vector3_), this.object3d.getWorldDirection(vector3))
-    }
-
-    public pointAt(distance: number) {
-        return vec2Point(this.getRay().at(distance * scaleDown, vector3))
-    }
-
-    public rayIntersectsAt(target: SimpleObjectManager, maxDistance?: number) {
-        if (this.done) return undefined
-        if (target.done) return undefined
-        if (this === target) return undefined
-
-        targetOBB.set(
-            target.object3d.getWorldPosition(new Vector3()),
-            vector3_half,
-            new Matrix3().setFromMatrix4(target.object3d.matrixWorld)
-        )
-        
-        const vec = targetOBB.intersectRay(this.getRay(), vector3)
-        if (!vec) return
-        
-        if (maxDistance) {
-            const { x, y, z } = this.object3d.getWorldPosition(vector3_)
-            if (distance3d(vec.x, vec.y, vec.z, x, y, z) * scaleUp > maxDistance)
-                return
-        }
-        return vec2Point(vec)
-    }
-
-    public rayIntersects(target: SimpleObjectManager) {
-        return !!this.rayIntersectsAt(target)
     }
 
     public getRayIntersectionsAt(id: string, maxDistance?: number) {
@@ -247,35 +64,6 @@ export default class SimpleObjectManager<T extends Object3D = Object3D> extends 
             for (const [target, pt] of this.getRayIntersectionsAt(id, maxDistance))
                 cb(target, pt)
         })
-    }
-
-    public intersects(target: SimpleObjectManager) {
-        if (this.done) return false
-        if (target.done) return false
-        if (this === target) return false
-
-        if ((this.bvhMap && target.bvhCharacter) || (this.bvhCharacter && target.bvhMap))
-            return (
-                bvhContactMap.get(this)?.has(target) ||
-                bvhContactMap.get(target)?.has(this) || false
-            )
-
-        if (this.cannonBody && target.cannonBody) {
-            cannonContactBodies.add(this.cannonBody)
-            cannonContactBodies.add(target.cannonBody)
-            return (
-                cannonContactMap.get(this.cannonBody)?.has(target.cannonBody) ||
-                cannonContactMap.get(target.cannonBody)?.has(this.cannonBody) || false
-            )
-        }
-
-        thisOBB.set(this.object3d.getWorldPosition(new Vector3()), vector3_1.clone(), new Matrix3())
-        thisOBB.applyMatrix4(this.object3d.matrixWorld)
-
-        targetOBB.set(target.object3d.getWorldPosition(new Vector3()), vector3_1.clone(), new Matrix3())
-        targetOBB.applyMatrix4(target.object3d.matrixWorld)
-
-        return thisOBB.intersectsOBB(targetOBB, 0)
     }
 
     public getIntersections(id: string) {
@@ -309,29 +97,29 @@ export default class SimpleObjectManager<T extends Object3D = Object3D> extends 
 
     private onIntersectState?: Reactive<OnIntersectValue | undefined>
     private onIntersectOutState?: Reactive<OnIntersectValue | undefined>
-    private intersectIDsState?: Reactive<Array<string> | undefined>
+    private intersectIdsState?: Reactive<Array<string> | undefined>
 
     private initIntersect() {
         if (this.onIntersectState) return
 
         this.onIntersectState = new Reactive<OnIntersectValue | undefined>(undefined)
         this.onIntersectOutState = new Reactive<OnIntersectValue | undefined>(undefined)
-        this.intersectIDsState = new Reactive<Array<string> | undefined>(undefined)
+        this.intersectIdsState = new Reactive<Array<string> | undefined>(undefined)
 
         this.createEffect(() => {
-            const { onIntersect, onIntersectOut, intersectIDs } = this
-            if (!intersectIDs || (!onIntersect && !onIntersectOut)) return
+            const { onIntersect, onIntersectOut, intersectIds } = this
+            if (!intersectIds || (!onIntersect && !onIntersectOut)) return
 
             const handles: Array<Cancellable> = []
 
-            for (const id of intersectIDs)
+            for (const id of intersectIds)
                 handles.push(this.listenToIntersection(id, onIntersect, onIntersectOut))
 
             return () => {
                 for (const handle of handles)
                     handle.cancel()
             }
-        }, [this.onIntersectState.get, this.onIntersectOutState.get, this.intersectIDsState.get])
+        }, [this.onIntersectState.get, this.onIntersectOutState.get, this.intersectIdsState.get])
     }
     
     public get onIntersect() {
@@ -350,20 +138,41 @@ export default class SimpleObjectManager<T extends Object3D = Object3D> extends 
         this.onIntersectOutState?.set(val)
     }
 
-    public get intersectIDs() {
-        return this.intersectIDsState?.get()
+    public get intersectIds() {
+        return this.intersectIdsState?.get()
     }
-    public set intersectIDs(val: Array<string> | undefined) {
+    public set intersectIds(val: Array<string> | undefined) {
         this.initIntersect()
-        this.intersectIDsState?.set(val)
+        this.intersectIdsState?.set(val)
     }
 
-    public get clientX() {
-        return worldToClient(this.object3d).x
+    public override dispose() {
+        super.dispose()
+        this._id !== undefined && idMap.get(this._id)!.delete(this)
+        return this
     }
 
-    public get clientY() {
-        return worldToClient(this.object3d).y
+    public override intersects(target: SimpleObjectManager): boolean {
+        if (this.done) return false
+        if (target.done) return false
+        if (this === target) return false
+
+        if ((this.bvhMap && target.bvhCharacter) || (this.bvhCharacter && target.bvhMap))
+            return (
+                bvhContactMap.get(this)?.has(target) ||
+                bvhContactMap.get(target)?.has(this) || false
+            )
+
+        if (this.cannonBody && target.cannonBody) {
+            cannonContactBodies.add(this.cannonBody)
+            cannonContactBodies.add(target.cannonBody)
+            return (
+                cannonContactMap.get(this.cannonBody)?.has(target.cannonBody) ||
+                cannonContactMap.get(target.cannonBody)?.has(this.cannonBody) || false
+            )
+        }
+
+        return super.intersects(target)
     }
 
     public get width() {
@@ -386,7 +195,7 @@ export default class SimpleObjectManager<T extends Object3D = Object3D> extends 
     public set depth(val: number) {
         this.object3d.scale.z = val * scaleDown
     }
-    
+
     public get x() {
         return this.outerObject3d.position.x * scaleUp
     }
@@ -449,12 +258,14 @@ export default class SimpleObjectManager<T extends Object3D = Object3D> extends 
         this.physicsUpdate && ((this.physicsUpdate.rotation ??= {}).x = true)
     }
 
+    protected onRotationY?: () => void
     public get rotationY() {
         return this.outerObject3d.rotation.y * rad2Deg
     }
     public set rotationY(val: number) {
         this.outerObject3d.rotation.y = val * deg2Rad
         this.physicsUpdate && ((this.physicsUpdate.rotation ??= {}).y = true)
+        this.onRotationY?.()
     }
 
     public get rotationZ() {
@@ -472,36 +283,6 @@ export default class SimpleObjectManager<T extends Object3D = Object3D> extends 
         this.rotationZ = val
     }
 
-    public get reflection() {
-        return !!this.object3d.userData.ssr
-    }
-    public set reflection(val: boolean) {
-        val ? addSSR(this.object3d) : deleteSSR(this.object3d)
-    }
-
-    public get bloom() {
-        return !!this.outerObject3d.userData.bloom
-    }
-    public set bloom(val: boolean) {
-        val ? addBloom(this.outerObject3d) : deleteBloom(this.outerObject3d)
-    }
-
-    public get outline() {
-        return !!this.object3d.userData.outline
-    }
-    public set outline(val: boolean) {
-        val ? addOutline(this.object3d) : deleteOutline(this.object3d)
-    }
-
-    private _visible?: boolean
-    public get visible() {
-        return !!this._visible
-    }
-    public set visible(val: boolean) {
-        this._visible = val
-        this.outerObject3d.visible = val
-    }
-
     public get innerVisible() {
         return this.object3d.visible
     }
@@ -509,70 +290,10 @@ export default class SimpleObjectManager<T extends Object3D = Object3D> extends 
         this.object3d.visible = val
     }
 
-    public get frustumCulled() {
-        return this.outerObject3d.frustumCulled
-    }
-    public set frustumCulled(val: boolean) {
-        this.outerObject3d.traverse(child => child.frustumCulled = val)
-    }
-
-    protected _metalnessFactor?: number
-    public get metalnessFactor() {
-        return this._metalnessFactor ?? 1
-    }
-    public set metalnessFactor(val: number) {
-        this._metalnessFactor = val
-        applySet.add(this)
-        applyMaterialProperties()
-    }
-    
-    protected _roughnessFactor?: number
-    public get roughnessFactor() {
-        return this._roughnessFactor ?? 1
-    }
-    public set roughnessFactor(val: number) {
-        this._roughnessFactor = val
-        applySet.add(this)
-        applyMaterialProperties()
-    }
-
-    protected _environmentFactor?: number
-    public get environmentFactor() {
-        return this._environmentFactor ?? 1
-    }
-    public set environmentFactor(val: number) {
-        this._environmentFactor = val
-        applySet.add(this)
-        applyMaterialProperties()
-    }
-    
-    protected _toon?: boolean
-    public get toon() {
-        return this._toon ?? false
-    }
-    public set toon(val: boolean) {
-        this._toon = val
-        applySet.add(this)
-        applyMaterialProperties()
-    }
-
-    protected _pbr?: boolean
-    public get pbr() {
-        return this._pbr ?? false
-    }
-    public set pbr(val: boolean) {
-        this._pbr = val
-        applySet.add(this)
-        applyMaterialProperties()
-    }
-
-    public lookAt(target: SimpleObjectManager | Point3d) {
-        if ("object3d" in target)
-            this.outerObject3d.lookAt(target.object3d.getWorldPosition(vector3))
-        else
-            this.outerObject3d.lookAt(point2Vec(target))
-
+    public override lookAt(target: PositionedItem | StaticObjectManager | { x: number, y: number, z: number }) {
+        super.lookAt(target)
         this.physicsRotate()
+        this.onRotationY?.()
     }
 
     public translateX(val: number) {
@@ -590,32 +311,16 @@ export default class SimpleObjectManager<T extends Object3D = Object3D> extends 
         this.physicsMove()
     }
 
-    public rotateX(val: number) {
-        this.outerObject3d.rotateX(val * deg2Rad)
-
-        this.physicsRotate()
-    }
-
-    public rotateY(val: number) {
-        this.outerObject3d.rotateY(val * deg2Rad)
-
-        this.physicsRotate()
-    }
-
-    public rotateZ(val: number) {
-        this.outerObject3d.rotateZ(val * deg2Rad)
-        this.physicsRotate()
-    }
-
-    public placeAt(object: SimpleObjectManager | Point3d) {
+    public placeAt(object: PositionedItem | StaticObjectManager | { x: number, y: number, z: number }) {
         if ("object3d" in object) {
-            this.outerObject3d.position.copy(object.object3d.getWorldPosition(vector3))
+            this.outerObject3d.position.copy(getCenter(object.object3d ?? object.outerObject3d))
             this.outerObject3d.quaternion.copy(object.outerObject3d.getWorldQuaternion(quaternion))
         }
         else this.outerObject3d.position.copy(point2Vec(object))
 
         this.physicsMove()
         this.physicsRotate()
+        this.onRotationY?.()
     }
 
     public moveForward(distance: number) {
@@ -636,9 +341,7 @@ export default class SimpleObjectManager<T extends Object3D = Object3D> extends 
 
         this.physicsMoveXZ()
 	}
-
-    public get frustumVisible() {
-        updateFrustum()
-        return frustum.containsPoint(getCenter(this.object3d))
-    }
 }
+interface SimpleObjectManager<T extends Object3D = Object3D> extends StaticObjectManager, PositionedItem, PhysicsMixin {}
+applyMixins(SimpleObjectManager, [PositionedItem, PhysicsMixin])
+export default SimpleObjectManager

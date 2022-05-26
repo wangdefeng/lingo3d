@@ -7,7 +7,7 @@ import { wireframeMaterial } from "./reusables"
 import scene from "../../engine/scene"
 //@ts-ignore
 import { threeToCannon, ShapeType } from "three-to-cannon"
-import PhysicsItem from "../core/SimpleObjectManager/PhysicsItem"
+import PhysicsMixin from "../core/mixins/PhysicsMixin"
 import Cube from "../primitives/Cube"
 import Sphere from "../primitives/Sphere"
 import { timer } from "../../engine/eventLoop"
@@ -35,7 +35,7 @@ export default async () => {
         // const collider = new Mesh(mergedGeometry, wireframeMaterial)
 		// scene.add(collider)
 
-        const trimeshShape = async function (this: PhysicsItem) {
+        const trimeshShape = async function (this: PhysicsMixin) {
             for (const geom of geometries) {
                 const mesh = new Mesh(geom, wireframeMaterial)
                 const result = threeToCannon(mesh as any, { type: ShapeType.MESH })
@@ -48,7 +48,7 @@ export default async () => {
         model.physics = true
         model.mass = 0
 
-        timer(1000, Infinity, () => {
+        timer(1000, -1, () => {
             const ball = new Sphere()
             ball.scale = 0.1
             ball.y = 100

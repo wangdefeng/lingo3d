@@ -1,8 +1,6 @@
 import { createEffect } from "@lincode/reactivity"
 import { emitTransformControls } from "../events/onTransformControls"
 import { getCamera } from "../states/useCamera"
-import { setOrbitControlsEnabled } from "../states/useOrbitControlsEnabled"
-import { setSelectionEnabled } from "../states/useSelectionEnabled"
 import { getSelectionTarget } from "../states/useSelectionTarget"
 import { getTransformControlsMode } from "../states/useTransformControlsMode"
 import { getTransformControlsSpace } from "../states/useTransformControlsSpace"
@@ -11,6 +9,8 @@ import { container } from "./renderLoop/renderSetup"
 import scene from "./scene"
 import { lazy } from "@lincode/utils"
 import { Cancellable } from "@lincode/promiselikes"
+import mainCamera from "./mainCamera"
+import { setTransformControlsDragging } from "../states/useTransformControlsDragging"
 
 export default {}
 
@@ -25,8 +25,7 @@ const lazyTransformControls = lazy(async () => {
 
     transformControls.addEventListener("dragging-changed", ({ value }) => {
         dragging = value
-        setOrbitControlsEnabled(!dragging)
-        setSelectionEnabled(!dragging)
+        setTransformControlsDragging(dragging)
         emitTransformControls(dragging ? "start" : "stop")
     })
 
@@ -41,18 +40,15 @@ createEffect(() => {
     const space = getTransformControlsSpace()
     const snap = getTransformControlsSnap()
 
-    if (!target) return
-
-    const { physics } = target
-    let restorePhysics = false
-    if (target.mass !== 0 && physics !== "map" && physics !== "map-debug") {
-        target.physics = false
-        restorePhysics = true
-    }
+    if (!target || getCamera() !== mainCamera) return
 
     const handle = new Cancellable()
 
     lazyTransformControls().then(transformControls => {
+        if (mode === "select") {
+            transformControls.enabled = false
+            return
+        }
         transformControls.setMode(mode)
         transformControls.setSpace(space)
         transformControls.setScaleSnap(snap)
@@ -71,6 +67,5 @@ createEffect(() => {
     })
     return () => {
         handle.cancel()
-        restorePhysics && (target.physics = physics)
     }
-}, [getSelectionTarget, getTransformControlsMode, getTransformControlsSpace, getTransformControlsSnap])
+}, [getSelectionTarget, getTransformControlsMode, getTransformControlsSpace, getTransformControlsSnap, getCamera])

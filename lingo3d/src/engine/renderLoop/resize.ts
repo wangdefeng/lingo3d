@@ -1,14 +1,13 @@
 import { deg2Rad } from "@lincode/math"
 import { createEffect } from "@lincode/reactivity"
-import { OrthographicCamera, PerspectiveCamera } from "three"
+import { Camera, OrthographicCamera, PerspectiveCamera } from "three"
 import { scaleDown } from "../constants"
 import { frustum } from "../../display/cameras/OrthographicCamera"
 import { getCamera } from "../../states/useCamera"
 import { setCameraDistance } from "../../states/useCameraDistance"
-import { setContainerZoom } from "../../states/useContainerZoom"
 import { getViewportSize } from "../../states/useViewportSize"
 import mainCamera from "../mainCamera"
-import { outline, container } from "./renderSetup"
+import { referenceOutline, rootContainer } from "./renderSetup"
 import { getVR } from "../../states/useVR"
 import { getResolution } from "../../states/useResolution"
 
@@ -18,8 +17,8 @@ const getZ = (height: number, camera: PerspectiveCamera) => Math.abs((height * 0
 
 createEffect(() => {
     const [resX, resY] = getResolution()
-    const [viewportWidth, viewportHeight] = getViewportSize()
-    const camera = getCamera()
+    const [vw, vh] = getViewportSize() ?? getResolution()
+    const camera: Camera = getCamera()
 
     const aspect = resX / resY
 
@@ -36,10 +35,10 @@ createEffect(() => {
 
     const size0 = {
         width: resX,
-        height: viewportHeight - ((viewportWidth - resX) * viewportHeight / viewportWidth)
+        height: vh - ((vw - resX) * vh / vw)
     }
     const size1 = {
-        width: viewportWidth - ((viewportHeight - resY) * viewportWidth / viewportHeight),
+        width: vw - ((vh - resY) * vw / vh),
         height: resY
     }
 
@@ -47,16 +46,14 @@ createEffect(() => {
     const val1 = Math.min(resX - size1.width, resY - size1.height)
 
     if (val0 > val1) {
-        camera === mainCamera && setCameraDistance(getZ(viewportWidth / aspect, mainCamera) * scaleDown)
-        Object.assign(outline.style, { width: size0.width + "px", height: size0.height + "px" })
-        setContainerZoom(size0.width / viewportWidth)
+        setCameraDistance(getZ(vw / aspect, mainCamera) * scaleDown)
+        Object.assign(referenceOutline.style, { width: size0.width + "px", height: size0.height + "px" })
     }
     else {
-        camera === mainCamera && setCameraDistance(getZ(viewportHeight, mainCamera) * scaleDown)
-        Object.assign(outline.style, { width: size1.width + "px", height: size1.height + "px" })
-        setContainerZoom(size1.width / viewportWidth)
+        setCameraDistance(getZ(vh, mainCamera) * scaleDown)
+        Object.assign(referenceOutline.style, { width: size1.width + "px", height: size1.height + "px" })
     }
 
-    Object.assign(container.style, { width: resX + "px", height: resY + "px" })
+    // Object.assign(rootContainer.style, { width: resX + "px", height: resY + "px" })
 
 }, [getResolution, getViewportSize, getCamera, getVR])

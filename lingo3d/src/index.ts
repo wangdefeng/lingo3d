@@ -1,4 +1,5 @@
 import engine from "./engine"
+import { preventTreeShake } from "@lincode/utils"
 preventTreeShake(engine)
 
 import Cube from "./display/primitives/Cube"
@@ -13,11 +14,10 @@ import Circle from "./display/primitives/Circle"
 
 import ParticleSystem from "./display/ParticleSystem"
 import Model from "./display/Model"
+import Dummy from "./display/Dummy"
 import SvgMesh from "./display/SvgMesh"
-import Sprite from "./display/Sprite"
 import Reflector from "./display/Reflector"
-import GroundReflector from "./display/GroundReflector"
-import Scene from "./display/Scene"
+import Sprite from "./display/Sprite"
 import Group from "./display/Group"
 import Skybox from "./display/Skybox"
 import Sky from "./display/Sky"
@@ -27,34 +27,36 @@ import FirstPersonCamera from "./display/cameras/FirstPersonCamera"
 import OrbitCamera from "./display/cameras/OrbitCamera"
 import AmbientLight from "./display/lights/AmbientLight"
 import AreaLight from "./display/lights/AreaLight"
+import BoxLight from "./display/lights/BoxLight"
 import DirectionalLight from "./display/lights/DirectionalLight"
 import SkyLight from "./display/lights/SkyLight"
 import PointLight from "./display/lights/PointLight"
 import SpotLight from "./display/lights/SpotLight"
 
-import circleShape from "./display/core/SimpleObjectManager/PhysicsItem/cannon/shapes/circleShape"
-import cubeShape from "./display/core/SimpleObjectManager/PhysicsItem/cannon/shapes/cubeShape"
-import cylinderShape from "./display/core/SimpleObjectManager/PhysicsItem/cannon/shapes/cylinderShape"
-import sphereShape from "./display/core/SimpleObjectManager/PhysicsItem/cannon/shapes/sphereShape"
-import torusShape from "./display/core/SimpleObjectManager/PhysicsItem/cannon/shapes/torusShape"
-import pillShape from "./display/core/SimpleObjectManager/PhysicsItem/cannon/shapes/pillShape"
+import circleShape from "./display/core/mixins/PhysicsMixin/cannon/shapes/circleShape"
+import cubeShape from "./display/core/mixins/PhysicsMixin/cannon/shapes/cubeShape"
+import cylinderShape from "./display/core/mixins/PhysicsMixin/cannon/shapes/cylinderShape"
+import sphereShape from "./display/core/mixins/PhysicsMixin/cannon/shapes/sphereShape"
+import torusShape from "./display/core/mixins/PhysicsMixin/cannon/shapes/torusShape"
+import pillShape from "./display/core/mixins/PhysicsMixin/cannon/shapes/pillShape"
 
+import Trigger from "./api/Trigger"
 import keyboard, { Keyboard } from "./api/keyboard"
 import mouse, { Mouse } from "./api/mouse"
 import gamepad from "./api/gamepad"
-import background from "./api/background"
-import rendering from "./api/rendering"
 import settings from "./api/settings"
 import preload from "./api/preload"
 // import HandTracker from "./api/HandTracker"
 import Point3d from "./api/Point3d"
 import { Sound } from "./api/Sound"
+import screenshot from "./api/screenshot"
 
-import applySetup from "./display/utils/deserialize/applySetup"
-import { container, outline } from "./engine/renderLoop/renderSetup"
+import applySetup from "./display/utils/serializer/applySetup"
+import { rootContainer } from "./engine/renderLoop/renderSetup"
 import { loop, timer } from "./engine/eventLoop"
-import { preventTreeShake } from "@lincode/utils"
 import SimpleObjectManager from "./display/core/SimpleObjectManager"
+import FoundManager from "./display/core/FoundManager"
+import { onAfterRender } from "./events/onAfterRender"
 
 export default {}
 
@@ -71,11 +73,10 @@ export {
 
     ParticleSystem,
     Model,
+    Dummy,
     SvgMesh,
-    Sprite,
     Reflector,
-    GroundReflector,
-    Scene,
+    Sprite,
     Group,
     Skybox,
     Sky,
@@ -85,6 +86,7 @@ export {
     OrbitCamera,
     AmbientLight,
     AreaLight,
+    BoxLight,
     DirectionalLight,
     SkyLight,
     PointLight,
@@ -97,25 +99,26 @@ export {
     torusShape,
     pillShape,
 
+    Trigger,
     Keyboard,
     keyboard,
     Mouse,
     mouse,
     gamepad,
-    background,
-    rendering,
     settings,
     preload,
     
     // HandTracker,
     Point3d,
     Sound,
+    screenshot,
 
     applySetup,
     loop,
     timer,
+    onAfterRender,
 
-    outline,
-    container,
-    SimpleObjectManager as Object
+    rootContainer,
+    SimpleObjectManager as Object,
+    FoundManager
 }

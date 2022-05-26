@@ -1,16 +1,26 @@
 import { LinearEncoding, LinearToneMapping, NoToneMapping, PCFSoftShadowMap, sRGBEncoding } from "three"
 import { getExposure } from "../../states/useExposure"
-import ResizeObserver from "resize-observer-polyfill"
-import { getResolution } from "../../states/useResolution"
+import { getResolution, setResolution } from "../../states/useResolution"
 import { getPerformance } from "../../states/usePerformance"
 import { getPixelRatio } from "../../states/usePixelRatio"
-import { VRButton } from "three/examples/jsm/webxr/VRButton"
 import { createEffect } from "@lincode/reactivity"
 import { getVR } from "../../states/useVR"
 import settings from "../../api/settings"
 import { getRenderer } from "../../states/useRenderer"
 import { getEncoding } from "../../states/useEncoding"
 import { getPBR } from "../../states/usePBR"
+import { getViewportSize } from "../../states/useViewportSize"
+import { getSecondaryCamera } from "../../states/useSecondaryCamera"
+import { VRButton } from "./VRButton"
+
+export const rootContainer = document.createElement("div")
+Object.assign(rootContainer.style, {
+    position: "absolute",
+    left: "0px",
+    top: "0px",
+    width: "100%",
+    height: "100%"
+})
 
 export const container = document.createElement("div")
 Object.assign(container.style, {
@@ -18,34 +28,62 @@ Object.assign(container.style, {
     left: "0px",
     top: "0px",
     width: "100%",
-    height: "100%"
+    zIndex: "10"
 })
+rootContainer.appendChild(container)
+getSecondaryCamera(cam => container.style.height = cam ? "50%" : "100%")
+
 export const containerBounds = [container.getBoundingClientRect()]
 const resizeObserver = new ResizeObserver(() => containerBounds[0] = container.getBoundingClientRect())
 resizeObserver.observe(container)
 
 queueMicrotask(() => {
-    if (!settings.autoMount || container.parentElement) return
-    document.body.appendChild(container)
-    settings.fillWindow = true
+    if (!settings.autoMount || rootContainer.parentElement) return
+    
+    if (typeof settings.autoMount === "string") {
+        const el = document.querySelector(settings.autoMount)
+        if (!el) return
+
+        el.appendChild(rootContainer)
+
+        const resizeObserver = new ResizeObserver(() => {
+            const res: [number, number] = [el.clientWidth, el.clientHeight]
+            setResolution(res)
+        })
+        resizeObserver.observe(el)
+        return
+    }
+
+    window.addEventListener("resize", () => {
+        setResolution([window.innerWidth, window.innerHeight])
+    })
+    document.body.appendChild(rootContainer)
 })
 
-export const outline = document.createElement("div")
-Object.assign(outline.style, {
+export const referenceOutline = document.createElement("div")
+Object.assign(referenceOutline.style, {
     border: "1px solid blue",
     position: "absolute",
     left: "50%",
     top: "50%",
-    transform: "translateX(-50%) translateY(-50%)"
+    transform: "translateX(-50%) translateY(-50%)",
+    pointerEvents: "none"
 })
+container.appendChild(referenceOutline)
+
+createEffect(() => {
+    const [vw, vh] = getViewportSize() ?? getResolution()
+    const [rx, ry] = getResolution()
+    referenceOutline.style.display = (getSecondaryCamera() || (rx === vw && ry === vh)) ? "none" : "block"
+    
+}, [getResolution, getViewportSize, getSecondaryCamera])
 
 createEffect(() => {
     const canvas = getRenderer().domElement
-    container.appendChild(canvas)
-    container.appendChild(outline)
+    rootContainer.appendChild(canvas)
     Object.assign(canvas.style, { position: "absolute", left: "0px", top: "0px" })
     return () => {
-        container.removeChild(canvas)
+        rootContainer.removeChild(canvas)
     }
 }, [getRenderer])
 

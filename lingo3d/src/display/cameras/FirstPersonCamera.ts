@@ -1,26 +1,29 @@
 import CharacterCamera from "../core/CharacterCamera"
 import { scaleUp, scaleDown } from "../../engine/constants"
-import scene from "../../engine/scene"
 import { quaternion, vector3 } from "../utils/reusables"
-import { characterCameraDefaults } from "../../interface/ICharacterCamera"
-import SimpleObjectManager from "../core/SimpleObjectManager"
 
 export default class FirstPersonCamera extends CharacterCamera {
     public static override componentName = "firstPersonCamera"
-    public static override defaults = characterCameraDefaults
 
     public constructor() {
         super()
 
         const cam = this.camera
-
-        scene.attach(cam)
-        this.then(() => scene.remove(cam))
-
         this.loop(() => {
             cam.position.copy(this.object3d.getWorldPosition(vector3))
             cam.quaternion.copy(this.object3d.getWorldQuaternion(quaternion))
         })
+        
+        this.createEffect(() => {
+            const target = this.targetState.get()
+            if (!target || !("height" in target) || this._innerY !== undefined) return
+
+            this.innerY = target.height * 0.4
+
+            return () => {
+                this.innerY = 0
+            }
+        }, [this.targetState.get])
     }
 
     private _innerY?: number
@@ -29,13 +32,5 @@ export default class FirstPersonCamera extends CharacterCamera {
     }
     public override set innerY(val: number) {
         this._innerY = this.object3d.position.y = val * scaleDown
-    }
-
-    public override get target() {
-        return this.targetState.get()
-    }
-    public override set target(target: SimpleObjectManager | undefined) {
-        target && this._innerY === undefined && (this.innerY = target.height * 0.4)
-        super.target = target
     }
 }

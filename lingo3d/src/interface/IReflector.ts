@@ -1,23 +1,25 @@
-import IObjectManager, { objectManagerDefaults, objectManagerSchema } from "./IObjectManager"
+import IPlane, { planeDefaults, planeSchema } from "./IPlane"
 import { ExtractProps } from "./utils/extractProps"
 
-export type ReflectorShape = "plane" | "circle"
-
-export default interface IReflector extends IObjectManager {
-    shape?: ReflectorShape
-    contrast: number
+export default interface IReflector extends IPlane {
+    resolution: number
     blur: number
+    contrast: number
+    mirror: number
 }
 
 export const reflectorSchema: Required<ExtractProps<IReflector>> = {
-    ...objectManagerSchema,
-    shape: String,
+    ...planeSchema,
+    resolution: Number,
+    blur: Number,
     contrast: Number,
-    blur: Number
+    mirror: Number
 }
 
 export const reflectorDefaults: IReflector = {
-    ...objectManagerDefaults,
-    contrast: 0.5,
-    blur: 2
+    ...planeDefaults,
+    resolution: 512,
+    blur: 1024,
+    contrast: 1.5,
+    mirror: 1
 }

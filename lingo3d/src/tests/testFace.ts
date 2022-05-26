@@ -1,4 +1,4 @@
-import { PointLight, SkyLight, settings, Sky, rendering, GroundReflector } from ".."
+import { PointLight, SkyLight, settings, Sky, Reflector } from ".."
 //@ts-ignore
 import faceSrc from "../../assets-local/face.glb"
 import Model from "../display/Model"
@@ -29,17 +29,15 @@ light3.innerZ = 500
 light3.rotationY = 45
 light3.intensity = 0.5
 
-settings.fillWindow = true
-
 const sky = new Sky()
 
 // settings.performance = "quality"
 settings.defaultOrbitControls = true
-rendering.ambientOcclusion = true
-rendering.bloom = true
-rendering.bloomStrength = 0.1
+settings.ambientOcclusion = true
+settings.bloom = true
+settings.bloomStrength = 0.1
 
-const reflector = new GroundReflector()
+const reflector = new Reflector()
 
 // const cube = new Cube()
 // cube.height = 20
