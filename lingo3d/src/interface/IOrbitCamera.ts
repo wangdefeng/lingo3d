@@ -1,65 +1,32 @@
-import ICameraMixin, { cameraMixinDefaults, cameraMixinSchema } from "./ICameraMixin"
-import IPositioned, { positionedDefaults, positionedSchema } from "./IPositioned"
+import ICameraBase, { cameraBaseDefaults, cameraBaseSchema } from "./ICameraBase"
+import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
+import Nullable from "./utils/Nullable"
 
-export default interface IOrbitCamera extends IPositioned, ICameraMixin {
-    targetX: number
-    targetY: number
-    targetZ: number
+export default interface IOrbitCamera extends ICameraBase {
+    targetId: Nullable<string>
 
-    enableDamping: boolean
-    enablePan: boolean
     enableZoom: boolean
-    autoRotate: boolean
-    autoRotateSpeed: number
-
-    minAzimuthAngle: number
-    maxAzimuthAngle: number
-
-    azimuthAngle: number
-    polarAngle: number
+    autoRotate: boolean | number
 }
 
 export const orbitCameraSchema: Required<ExtractProps<IOrbitCamera>> = {
-    ...positionedSchema,
-    ...cameraMixinSchema,
+    ...cameraBaseSchema,
 
-    targetX: Number,
-    targetY: Number,
-    targetZ: Number,
+    targetId: String,
 
-    enableDamping: Boolean,
-    enablePan: Boolean,
     enableZoom: Boolean,
-    autoRotate: Boolean,
-    autoRotateSpeed: Number,
-
-    minAzimuthAngle: Number,
-    maxAzimuthAngle: Number,
-
-    azimuthAngle: Number,
-    polarAngle: Number
+    autoRotate: [Boolean, Number]
 }
 
-export const orbitCameraDefaults: IOrbitCamera = {
-    ...positionedDefaults,
-    ...cameraMixinDefaults,
+export const orbitCameraDefaults: Defaults<IOrbitCamera> = {
+    ...cameraBaseDefaults,
 
-    targetX: 0,
-    targetY: 0,
-    targetZ: 0,
+    innerZ: 500,
+    mouseControl: "drag",
+
+    targetId: undefined,
     
-    z: 500,
-
-    enableDamping: false,
-    enablePan: false,
     enableZoom: false,
-    autoRotate: false,
-    autoRotateSpeed: 2,
-
-    minAzimuthAngle: -Infinity,
-    maxAzimuthAngle: Infinity,
-
-    azimuthAngle: 0,
-    polarAngle: 0
+    autoRotate: false
 }

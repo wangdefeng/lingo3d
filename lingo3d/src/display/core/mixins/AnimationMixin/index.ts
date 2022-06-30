@@ -1,9 +1,10 @@
-import { AnimationData } from "../../../utils/serializer/types"
-import IAnimation, { Animation, AnimationValue } from "../../../../interface/IAnimation"
+import { AnimationData } from "../../../../api/serializer/types"
+import IAnimationMixin, { Animation, AnimationValue } from "../../../../interface/IAnimationMixin"
 import { debounce } from "@lincode/utils"
 import { Resolvable } from "@lincode/promiselikes"
 import AnimationManager, { PlayOptions } from "./AnimationManager"
 import EventLoopItem from "../../../../api/core/EventLoopItem"
+import Nullable from "../../../../interface/utils/Nullable"
 
 const buildAnimationTracks = debounce((val: AnimationValue) => {
     const entries = Object.entries(val)
@@ -22,13 +23,13 @@ const buildAnimationTracks = debounce((val: AnimationValue) => {
 
 }, 0, "trailingPromise")
 
-export default abstract class AnimationMixin extends EventLoopItem implements IAnimation {
+export default abstract class AnimationMixin extends EventLoopItem implements IAnimationMixin {
     public animationManagers?: Record<string, AnimationManager>
     
     public get animations() {
         return this.animationManagers ??= {}
     }
-    public set animations(val: Record<string, AnimationManager>) {
+    public set animations(val) {
         this.animationManagers = val
     }
 
@@ -66,15 +67,33 @@ export default abstract class AnimationMixin extends EventLoopItem implements IA
     }
 
     protected loadingAnims?: Array<Resolvable>
-    private animationManager?: AnimationManager
-
-    public async playAnimation(name?: string | number, o?: PlayOptions) {
-        await Promise.resolve()
+    private async loadingAnimsAsync() {
+        await new Promise(resolve => setTimeout(resolve))
+        
         if (this.loadingAnims) {
             await Promise.all(this.loadingAnims)
             this.loadingAnims = undefined
         }
+    }
 
+    private animationManager?: AnimationManager
+
+    public get animationPaused() {
+        return this.animationManager?.getPaused()
+    }
+    public set animationPaused(value) {
+        this.loadingAnimsAsync().then(() => {
+            if (this.done) return
+            this.animationManager?.setPaused(!!value)
+        })
+    }
+    
+    public animationRepeat: Nullable<boolean>
+    
+    public onAnimationFinish: Nullable<() => void>
+
+    public async playAnimation(name?: string | number, o?: PlayOptions) {
+        await this.loadingAnimsAsync()
         if (this.done) return
 
         this.animationManager = typeof name === "string"
@@ -84,39 +103,26 @@ export default abstract class AnimationMixin extends EventLoopItem implements IA
         this.animationManager?.play(o)
     }
 
-    public stopAnimation() {
+    public async stopAnimation() {
+        await this.loadingAnimsAsync()
+        if (this.done) return
+
         this.animationManager?.stop()
-    }
-
-    public get animationPaused() {
-        return !!this.animationManager?.getPaused()
-    }
-    public set animationPaused(value: boolean) {
-        (async () => {
-            await Promise.resolve()
-            if (this.loadingAnims)
-                await Promise.all(this.loadingAnims)
-
-            if (this.done) return
-
-            this.animationManager?.setPaused(value)
-        })()
     }
 
     protected animationName?: string | number
     private setAnimation(val?: string | number | boolean | AnimationValue, o?: PlayOptions) {
+        this._animation = val
+
         if (typeof val === "string" || typeof val === "number") {
             this.animationName = val
             this.playAnimation(val, o)
-            this._animation = undefined
             return
         }
         if (typeof val === "boolean") {
             val ? this.playAnimation(undefined, o) : this.stopAnimation()
-            this._animation = undefined
             return
         }
-        this._animation = val
 
         if (!val) {
             this.stopAnimation()
@@ -135,7 +141,13 @@ export default abstract class AnimationMixin extends EventLoopItem implements IA
             let currentIndex = 0
             const o = {
                 onFinish: () => {
-                    if (++currentIndex >= val.length) currentIndex = 0
+                    if (++currentIndex >= val.length) {
+                        if (this.animationRepeat === false) {
+                            this.onAnimationFinish?.()
+                            return
+                        }
+                        currentIndex = 0
+                    }
                     this.setAnimation(val[currentIndex], o)
                 },
                 repeat: false
@@ -143,6 +155,8 @@ export default abstract class AnimationMixin extends EventLoopItem implements IA
             this.setAnimation(val[0], o)
             return
         }
-        this.queueMicrotask(() => this.setAnimation(val))
+        this.queueMicrotask(() => this.setAnimation(val, {
+            repeat: this.animationRepeat, onFinish: this.onAnimationFinish
+        }))
     }
 }

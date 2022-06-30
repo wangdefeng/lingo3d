@@ -1,26 +1,26 @@
 import CameraBase from "."
-import { getCamera } from "../../../states/useCamera"
 import { container } from "../../../engine/renderLoop/renderSetup"
 import { PerspectiveCamera } from "three"
-import { getPointerLockCamera, setPointerLockCamera } from "../../../states/usePointLockCamera"
+import { getCameraPointerLock, setCameraPointerLock } from "../../../states/useCameraPointerLock"
 import { mouseEvents } from "../../../api/mouse"
 import { setPickingMode } from "../../../states/usePickingMode"
+import { getCameraRendered } from "../../../states/useCameraRendered"
 
 export default function (this: CameraBase<PerspectiveCamera>) {
     if (this.done) return
 
     this.createEffect(() => {
-        if (this.mouseControlState.get() !== true || getCamera() !== this.camera) return
+        if (this.mouseControlState.get() !== true || getCameraRendered() !== this.camera) return
         setPickingMode("camera")
         return () => {
             setPickingMode("mouse")
         }
-    }, [this.mouseControlState.get, getCamera])
+    }, [this.mouseControlState.get, getCameraRendered])
 
     this.createEffect(() => {
-        if (getCamera() !== this.camera || !this.mouseControlState.get()) return
+        if (getCameraRendered() !== this.camera || !this.mouseControlState.get()) return
 
-        if (getPointerLockCamera() === this.camera) {
+        if (getCameraPointerLock() === this.camera) {
             const handleMove = (e: MouseEvent) => this.gyrate(e.movementX, e.movementY)
             document.addEventListener("mousemove", handleMove)
 
@@ -30,20 +30,18 @@ export default function (this: CameraBase<PerspectiveCamera>) {
         }
 
         let started = false
-        let [xOld, yOld] = [0, 0]
+        let xOld: number | undefined
+        let yOld: number | undefined
         
-        const handle0 = mouseEvents.on("down", e => (started = true, [xOld, yOld] = [e.clientX, e.clientY]))
+        const handle0 = mouseEvents.on("down", () => (started = true, [xOld, yOld] = [undefined, undefined]))
         const handle1 = mouseEvents.on("up", () => started = false)
 
         const handleMove = (e: PointerEvent) => {
-            //hack for ios safari 14.7.1
-            if (e.movementX === undefined) {
-                const [movementX, movementY] = [e.clientX - xOld, e.clientY - yOld]
-                ;[xOld, yOld] = [e.clientX, e.clientY]
-                started && this.gyrate(movementX * 2, movementY * 2)
-                return
-            }
-            started && this.gyrate(e.movementX * 2, e.movementY * 2)
+            xOld === undefined && (xOld = e.clientX)
+            yOld === undefined && (yOld = e.clientY)
+            const [movementX, movementY] = [e.clientX - xOld, e.clientY - yOld]
+            ;[xOld, yOld] = [e.clientX, e.clientY]
+            started && this.gyrate(movementX / window.innerWidth * 3000, movementY / window.innerHeight * 3000)
         }
         container.addEventListener("pointermove", handleMove)
 
@@ -53,18 +51,18 @@ export default function (this: CameraBase<PerspectiveCamera>) {
             container.removeEventListener("pointermove", handleMove)
             started = false
         }
-    }, [this.mouseControlState.get, getCamera, getPointerLockCamera])
+    }, [this.mouseControlState.get, getCameraRendered, getCameraPointerLock])
 
     this.createEffect(() => {
-        const camera = getCamera()
+        const camera = getCameraRendered()
         if (this.mouseControlState.get() !== true || camera !== this.camera) return
 
         const onClick = () => container.requestPointerLock?.()
         const onPointerLockChange = () => {
             if (document.pointerLockElement === container)
-                setPointerLockCamera(camera)
+                setCameraPointerLock(camera)
             else
-                setPointerLockCamera(undefined)
+                setCameraPointerLock(undefined)
         }
         container.addEventListener("click", onClick)
         document.addEventListener("pointerlockchange", onPointerLockChange)
@@ -73,7 +71,7 @@ export default function (this: CameraBase<PerspectiveCamera>) {
             container.removeEventListener("click", onClick)
             document.removeEventListener("pointerlockchange", onPointerLockChange)
             document.exitPointerLock()
-            setPointerLockCamera(undefined)
+            setCameraPointerLock(undefined)
         }
-    }, [this.mouseControlState.get, getCamera])
+    }, [this.mouseControlState.get, getCameraRendered])
 }

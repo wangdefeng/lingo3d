@@ -11,10 +11,10 @@ import { useSelectionTarget, useTransformControlsMode, useTransformControlsSpace
 import CursorIcon from "./icons/CursorIcon"
 import Separator from "./Separator"
 import ExportIcon from "./icons/ExportIcon"
-import serialize from "../../display/utils/serializer/serialize"
+import serialize from "../../api/serializer/serialize"
 import OpenIcon from "./icons/OpenIcont"
 import { fileOpen } from "browser-fs-access"
-import deserialize from "../../display/utils/serializer/deserialize"
+import deserialize from "../../api/serializer/deserialize"
 import { appendableRoot } from "../../api/core/Appendable"
 import ReactIcon from "./icons/ReactIcon"
 import VueIcon from "./icons/VueIcon"
@@ -22,9 +22,8 @@ import saveTextFile from "./saveTextFile"
 import serializeReact from "./serializeReact"
 import serializeVue from "./serializeVue"
 import SimpleObjectManager from "../../display/core/SimpleObjectManager"
-import { useLayoutEffect } from "preact/hooks"
-import StaticObjectManager from "../../display/core/StaticObjectManager"
-import { isPositionedItem } from "../../api/core/PositionedItem"
+import { useEffect, useLayoutEffect } from "preact/hooks"
+import { emitEditorMountChange } from "../../events/onEditorMountChange"
 
 preventTreeShake(h)
 
@@ -63,10 +62,18 @@ const Toolbar = () => {
     useLayoutEffect(() => {
         // if (isStatic)
             // setMode("select")
-        if (isPositioned && (mode === "rotate" || mode === "scale"))
+        if (isPositioned && (mode === "scale"))
             setMode("translate")
 
     }, [isPositioned])
+
+    useEffect(() => {
+        emitEditorMountChange()
+
+        return () => {
+            emitEditorMountChange()
+        }
+    }, [])
 
     return (
         <div
@@ -92,7 +99,7 @@ const Toolbar = () => {
                 <IconButton active={mode === "translate"} onClick={() => setMode("translate")}>
                     <TranslateIcon />
                 </IconButton>
-                <IconButton active={mode === "rotate"} disabled={isPositioned} onClick={() => setMode("rotate")}>
+                <IconButton active={mode === "rotate"} onClick={() => setMode("rotate")}>
                     <RotateIcon />
                 </IconButton>
                 <IconButton active={mode === "scale"} disabled={isPositioned} onClick={() => setMode("scale")}>

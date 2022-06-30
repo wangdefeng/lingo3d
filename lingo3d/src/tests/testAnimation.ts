@@ -1,18 +1,8 @@
-import settings from "../api/settings"
 import Cube from "../display/primitives/Cube"
 
 export default {}
 
 const box = new Cube()
-
-// box.texture = [
-//     require("../../assets-local/f1.png"),
-//     require("../../assets-local/f2.png"),
-//     require("../../assets-local/f3.png"),
-//     require("../../assets-local/f4.png"),
-//     require("../../assets-local/f5.png"),
-//     require("../../assets-local/f6.png")
-// ]
 
 box.animation = {
     rotationX: [0, 45, 0]
@@ -58,5 +48,3 @@ box.animation = {
 
 // const cube = new Cube()
 // cube.animation.rotationX = [0, 30, 0, 30, 0, 30, 0, 30, 0, 30, 0, 30]
-
-settings.texture = require("../../assets-local/bg.jpg")

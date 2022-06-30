@@ -1,11 +1,10 @@
 import settings from "../api/settings"
+import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 
 export default interface ISetup extends Partial<typeof settings> {}
 
 export const setupSchema: Required<ExtractProps<ISetup>> = {
-    pixelRatio: Number,
-    performance: String,
     skybox: [String, Array],
     defaultLight: [String, Boolean],
     defaultLightScale: Number,
@@ -15,10 +14,10 @@ export const setupSchema: Required<ExtractProps<ISetup>> = {
     gridHelperSize: Number,
     gravity: Number,
     repulsion: Number,
-    wasmPath: String,
     autoMount: [Boolean, String],
+    antiAlias: [Boolean, String],
     logarithmicDepth: Boolean,
-    encoding: String,
+    pixelRatio: Number,
     exposure: Number,
     pbr: Boolean,
     bloom: Boolean,
@@ -35,10 +34,12 @@ export const setupSchema: Required<ExtractProps<ISetup>> = {
     lensDistortion: Boolean,
     lensIor: Number,
     lensBand: Number,
+    motionBlur: Boolean,
+    motionBlurStrength: Number,
     texture: String,
     color: String
 }
 
-export const setupDefaults: ISetup = {
+export const setupDefaults: Defaults<ISetup> = {
     ...settings
 }

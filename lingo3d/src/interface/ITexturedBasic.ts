@@ -1,21 +1,20 @@
+import { Point } from "@lincode/math"
+import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
-
-type Vector2 = { x: number, y: number }
+import Nullable from "./utils/Nullable"
 
 export default interface ITexturedBasic {
     color: string
-    vertexColors: boolean
     fog: boolean
     opacity: number
-    texture?: string | HTMLVideoElement
-    videoTexture?: string | HTMLVideoElement
-    alphaMap?: string
-    textureRepeat?: Vector2 | number
+    texture: Nullable<string | HTMLVideoElement>
+    videoTexture: Nullable<string | HTMLVideoElement>
+    alphaMap: Nullable<string>
+    textureRepeat: Nullable<Point | number>
 }
 
 export const texturedBasicSchema: Required<ExtractProps<ITexturedBasic>> = {
     color: String,
-    vertexColors: Boolean,
     fog: Boolean,
     opacity: Number,
     texture: [String, Object],
@@ -24,9 +23,12 @@ export const texturedBasicSchema: Required<ExtractProps<ITexturedBasic>> = {
     textureRepeat: [Object, Number]
 }
 
-export const texturedBasicDefaults: ITexturedBasic = {
+export const texturedBasicDefaults: Defaults<ITexturedBasic> = {
     color: "#ffffff",
-    vertexColors: false,
     fog: true,
-    opacity: 1
+    opacity: 1,
+    texture: undefined,
+    videoTexture: undefined,
+    alphaMap: undefined,
+    textureRepeat: [undefined, { x: 1, y: 1 }]
 }

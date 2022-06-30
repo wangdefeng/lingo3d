@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { World, Editor, SceneGraph, Toolbar, Library, Cube } from "."
+import { World, Cube, HTML, Stats, LingoEditor, Dummy, Find, OrbitCamera, UI } from "."
+
+
 </script>
 
 <template>
   <World>
-    <Toolbar />
-    <SceneGraph />
-    <Editor mouse="enabled" />
-    <Library />
-    <Cube><Cube /></Cube>
+    <Cube />
+    <UI>
+      <button>click me!</button>
+    </UI>
+    <LingoEditor />
   </World>
   
 </template>

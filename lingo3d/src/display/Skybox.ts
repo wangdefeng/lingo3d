@@ -1,4 +1,3 @@
-import { Group } from "three"
 import { getSkyboxStack, pullSkyboxStack, pushSkyboxStack, setSkyboxStack } from "../states/useSkyboxStack"
 import ISkybox, { skyboxDefaults, skyboxSchema } from "../interface/ISkybox"
 import EventLoopItem from "../api/core/EventLoopItem"
@@ -9,11 +8,12 @@ export default class Skybox extends EventLoopItem implements ISkybox {
     public static schema = skyboxSchema
 
     public constructor() {
-        super(new Group())
+        super()
         pushSkyboxStack(this)
     }
 
     public override dispose() {
+        if (this.done) return this
         super.dispose()
         pullSkyboxStack(this)
         return this
@@ -23,7 +23,7 @@ export default class Skybox extends EventLoopItem implements ISkybox {
     public get texture() {
         return this._texture
     }
-    public set texture(value: string | Array<string> | undefined) {
+    public set texture(value) {
         this._texture = value
         setSkyboxStack([...getSkyboxStack()])
     }

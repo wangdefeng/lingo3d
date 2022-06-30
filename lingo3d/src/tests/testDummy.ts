@@ -1,34 +1,36 @@
 
-import { ThirdPersonCamera, Dummy, Reflector, keyboard } from ".."
-import { setGridHelper } from "../states/useGridHelper"
-//@ts-ignore
-import roughnessSrc from "../../assets-local/roughness.png"
-//@ts-ignore
-import normalSrc from "../../assets-local/normal.jpg"
-//@ts-ignore
-// import cbpunkSrc from "../../assets-local/cbpunk.glb"
+import { ThirdPersonCamera, Dummy, Reflector, keyboard, settings, mouse, Line, Sphere } from ".."
+import createProxy from "../api/createProxy"
 
 export default {}
 
-setGridHelper(true)
+settings.gridHelper = true
 
 const reflector = new Reflector()
 reflector.scale = 100
 reflector.physics = "map"
-reflector.roughnessMap = roughnessSrc
-reflector.normalMap = normalSrc
+reflector.roughnessMap = "roughness.png"
+reflector.normalMap = "normal.jpg"
 reflector.roughness = 5
 
 const dummy = new Dummy()
-dummy.y = 50
+dummy.y = 170 * 0.5
 dummy.preset = "rifle"
 dummy.physics = "character"
 dummy.strideMove = true
+// dummy.strideMode = "free"
 
 const cam = new ThirdPersonCamera()
 cam.append(dummy)
 cam.activate()
+cam.transition = true
 cam.mouseControl = true
+// cam.lockTargetRotation = "dynamic-lock"
+cam.innerX = 50
+cam.innerY = 50
+
+const dummyProxy = createProxy<Dummy>()
+dummy.proxy = dummyProxy
 
 // const map = new Model()
 // map.scale = 200
@@ -39,19 +41,27 @@ cam.mouseControl = true
 
 keyboard.onKeyPress = (_, pressed) => {
     if (pressed.has("w"))
-        dummy.strideForward = -5
+        dummyProxy.strideForward = -5
     else if (pressed.has("s"))
-        dummy.strideForward = 5
+        dummyProxy.strideForward = 5
     else
-        dummy.strideForward = 0
+        dummyProxy.strideForward = 0
 
     if (pressed.has("a"))
-        dummy.strideRight = 5
+        dummyProxy.strideRight = 5
     else if (pressed.has("d"))
-        dummy.strideRight = -5
+        dummyProxy.strideRight = -5
     else
-        dummy.strideRight = 0
+        dummyProxy.strideRight = 0
 
     if (pressed.has("Space"))
-        dummy.jump(10)
+        dummyProxy.jump(10)
+}
+
+mouse.onClick = () => {
+    const line = new Line()
+    line.from = { x: dummy.x, y: dummy.y, z: dummy.z }
+    const pt = cam.pointAt(10000)
+    line.to = { x: pt.x, y: pt.y, z: pt.z }
+    line.bloom = true
 }

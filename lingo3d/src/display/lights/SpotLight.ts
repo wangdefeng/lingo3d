@@ -11,19 +11,20 @@ class SpotLight extends LightBase<ThreeSpotLight> implements ISpotLight {
 
     public constructor() {
         super(new ThreeSpotLight(), SpotLightHelper)
+        this.innerY = 0
     }
 
     public get angle() {
         return this.object3d.angle
     }
-    public set angle(val: number) {
+    public set angle(val) {
         this.object3d.angle = val
     }
 
     public get penumbra() {
         return this.object3d.penumbra
     }
-    public set penumbra(val: number) {
+    public set penumbra(val) {
         this.object3d.penumbra = val
     }
 }

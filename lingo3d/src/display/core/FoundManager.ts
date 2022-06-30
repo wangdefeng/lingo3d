@@ -8,7 +8,7 @@ import { Cancellable } from "@lincode/promiselikes"
 import { appendableRoot } from "../../api/core/Appendable"
 import Model from "../Model"
 
-class FoundManager extends StaticObjectManager<Object3D> implements IFound {
+class FoundManager extends StaticObjectManager implements IFound {
     public static componentName = "find"
     public static defaults = foundDefaults
     public static schema = foundSchema
@@ -42,21 +42,22 @@ class FoundManager extends StaticObjectManager<Object3D> implements IFound {
     }
 
     public override dispose() {
+        if (this.done) return this
         super.dispose()
         this.material.dispose()
         return this
     }
 
     private managerSet?: boolean
-    protected override addToRaycastSet(set: Set<Object3D>, handle: Cancellable) {
+    protected override addToRaycastSet(set: Set<Object3D>) {
         if (!this.managerSet) {
             this.managerSet = true
             this.object3d.traverse(child => child.userData.manager = this)
         }
         set.add(this.object3d)
-        handle.then(() => set.delete(this.object3d))
+        return new Cancellable(() => set.delete(this.object3d))
     }
 }
-interface FoundManager extends StaticObjectManager<Object3D>, TexturedBasicMixin, TexturedStandardMixin {}
+interface FoundManager extends StaticObjectManager, TexturedBasicMixin, TexturedStandardMixin {}
 applyMixins(FoundManager, [TexturedStandardMixin, TexturedBasicMixin])
 export default FoundManager

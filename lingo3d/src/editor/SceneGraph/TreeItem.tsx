@@ -1,7 +1,7 @@
 import { h } from "preact"
 import { useState, useEffect, useRef, useMemo } from "preact/hooks"
-import { preventTreeShake, upperFirst } from "@lincode/utils"
-import Appendable from "../../api/core/Appendable"
+import { preventTreeShake } from "@lincode/utils"
+import Appendable, { hiddenAppendables } from "../../api/core/Appendable"
 import CubeIcon from "./icons/CubeIcon"
 import ExpandIcon from "./icons/ExpandIcon"
 import CollapseIcon from "./icons/CollapseIcon"
@@ -15,8 +15,8 @@ import { isPositionedItem } from "../../api/core/PositionedItem"
 import { Object3D } from "three"
 import { setSceneGraphTarget } from "../../states/useSceneGraphTarget"
 import { getSelectionTarget } from "../../states/useSelectionTarget"
-import { setCamera } from "../../states/useCamera"
-import mainCamera from "../../engine/mainCamera"
+import mainOrbitCamera from "../../engine/mainOrbitCamera"
+import getComponentName from "../getComponentName"
 
 preventTreeShake(h)
 
@@ -29,7 +29,7 @@ export type TreeItemProps = {
 export const makeTreeItemCallbacks = (target: Appendable | Object3D, parent?: Appendable) => {
     const setClickEl = useClick(e => {
         e.stopPropagation()
-        setCamera(mainCamera)
+        mainOrbitCamera.activate()
         isPositionedItem(parent) && getSelectionTarget() !== parent && emitSelectionTarget(parent)
         if (target instanceof Object3D)
             queueMicrotask(() => setSceneGraphTarget(target))
@@ -52,9 +52,12 @@ export const makeTreeItemCallbacks = (target: Appendable | Object3D, parent?: Ap
 export const draggingItemPtr: [Appendable | undefined] = [undefined]
 
 const TreeItem = ({ appendable, level, children }: TreeItemProps) => {
-    //@ts-ignore
-    const name = appendable.name || upperFirst(appendable.constructor.componentName)
-    const appendableChildren = appendable.children ? [...appendable.children] : undefined
+    const name = getComponentName(appendable)
+    
+    const appendableChildren = useMemo(() => {
+        return appendable.children ? [...appendable.children].filter(item => !hiddenAppendables.has(item)) : undefined
+    }, [appendable.children?.size])
+
     const expandIconStyle = { opacity: (appendableChildren?.length || children) ? 0.5 : 0.05, cursor: "pointer" }
 
     const [dragOver, setDragOver] = useState(false)
@@ -147,7 +150,7 @@ const TreeItem = ({ appendable, level, children }: TreeItemProps) => {
             </div>
             {expanded && appendableChildren?.map(childAppendable => (
                 childAppendable instanceof Model ? (
-                    <ModelTreeItem appendable={childAppendable} level={level + 1} />
+                    <ModelTreeItem key={childAppendable.uuid} appendable={childAppendable} level={level + 1} />
                 ) : (
                     <TreeItem key={childAppendable.uuid} appendable={childAppendable} level={level + 1} />
                 )

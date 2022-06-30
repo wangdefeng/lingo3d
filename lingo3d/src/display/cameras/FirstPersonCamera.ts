@@ -1,36 +1,41 @@
 import CharacterCamera from "../core/CharacterCamera"
-import { scaleUp, scaleDown } from "../../engine/constants"
-import { quaternion, vector3 } from "../utils/reusables"
+import SimpleObjectManager from "../core/SimpleObjectManager"
+import { Reactive } from "@lincode/reactivity"
+import getWorldPosition from "../utils/getWorldPosition"
+import getWorldQuaternion from "../utils/getWorldQuaternion"
+import { onBeforeRender } from "../../events/onBeforeRender"
 
 export default class FirstPersonCamera extends CharacterCamera {
-    public static override componentName = "firstPersonCamera"
+    public static componentName = "firstPersonCamera"
 
     public constructor() {
         super()
 
         const cam = this.camera
-        this.loop(() => {
-            cam.position.copy(this.object3d.getWorldPosition(vector3))
-            cam.quaternion.copy(this.object3d.getWorldQuaternion(quaternion))
-        })
-        
+
+        this.watch(onBeforeRender(() => {
+            cam.position.copy(getWorldPosition(this.object3d))
+            cam.quaternion.copy(getWorldQuaternion(this.object3d))
+        }))
+
         this.createEffect(() => {
             const target = this.targetState.get()
-            if (!target || !("height" in target) || this._innerY !== undefined) return
-
-            this.innerY = target.height * 0.4
+            const innerYSet = this.innerYSetState.get()
+            if (!target || !(target instanceof SimpleObjectManager) || innerYSet) return
+            super.innerY = target.height * 0.4
 
             return () => {
-                this.innerY = 0
+                super.innerY = 0
             }
-        }, [this.targetState.get])
+        }, [this.targetState.get, this.innerYSetState.get])
     }
 
-    private _innerY?: number
+    private innerYSetState = new Reactive(false)
     public override get innerY() {
-        return this.object3d.position.y * scaleUp
+        return super.innerY
     }
-    public override set innerY(val: number) {
-        this._innerY = this.object3d.position.y = val * scaleDown
+    public override set innerY(val) {
+        super.innerY = val
+        this.innerYSetState.set(true)
     }
 }

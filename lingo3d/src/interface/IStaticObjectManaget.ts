@@ -1,17 +1,21 @@
-import IAnimation, { animationDefaults, animationSchema } from "./IAnimation"
+import IAnimationMixin, { animationMixinDefaults, animationMixinSchema } from "./IAnimationMixin"
 import IEventLoop, { eventLoopDefaults, eventLoopSchema } from "./IEventLoop"
-import { MouseInteractionPayload } from "./IMouse"
+import { LingoMouseEvent } from "./IMouse"
+import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
+import Nullable from "./utils/Nullable"
 
-export default interface IStaticObjectManager extends IEventLoop, IAnimation {
-    onClick?: (e: MouseInteractionPayload) => void
-    onMouseDown?: (e: MouseInteractionPayload) => void
-    onMouseUp?: (e: MouseInteractionPayload) => void
-    onMouseOver?: (e: MouseInteractionPayload) => void
-    onMouseOut?: (e: MouseInteractionPayload) => void
-    onMouseMove?: (e: MouseInteractionPayload) => void
+export default interface IStaticObjectManager extends IEventLoop, IAnimationMixin {
+    onClick: Nullable<(e: LingoMouseEvent) => void>
+    onMouseDown: Nullable<(e: LingoMouseEvent) => void>
+    onMouseUp: Nullable<(e: LingoMouseEvent) => void>
+    onMouseOver: Nullable<(e: LingoMouseEvent) => void>
+    onMouseOut: Nullable<(e: LingoMouseEvent) => void>
+    onMouseMove: Nullable<(e: LingoMouseEvent) => void>
+    onLookToEnd: Nullable<() => void>
     
     name: string
+    id: Nullable<string>
 
     bloom: boolean
     reflection: boolean
@@ -20,9 +24,12 @@ export default interface IStaticObjectManager extends IEventLoop, IAnimation {
     visible: boolean
     frustumCulled: boolean
 
-    metalnessFactor: number
-    roughnessFactor: number
-    environmentFactor: number
+    metalnessFactor: Nullable<number>
+    roughnessFactor: Nullable<number>
+    opacityFactor: Nullable<number>
+    emissiveIntensityFactor: Nullable<number>
+    emissiveColorFactor: Nullable<string>
+    colorFactor: Nullable<string>
 
     toon: boolean
     pbr: boolean
@@ -30,7 +37,7 @@ export default interface IStaticObjectManager extends IEventLoop, IAnimation {
 
 export const staticObjectManagerSchema: Required<ExtractProps<IStaticObjectManager>> = {
     ...eventLoopSchema,
-    ...animationSchema,
+    ...animationMixinSchema,
 
     onClick: Function,
     onMouseDown: Function,
@@ -38,8 +45,10 @@ export const staticObjectManagerSchema: Required<ExtractProps<IStaticObjectManag
     onMouseOver: Function,
     onMouseOut: Function,
     onMouseMove: Function,
+    onLookToEnd: Function,
 
     name: String,
+    id: String,
 
     bloom: Boolean,
     reflection: Boolean,
@@ -50,17 +59,29 @@ export const staticObjectManagerSchema: Required<ExtractProps<IStaticObjectManag
 
     metalnessFactor: Number,
     roughnessFactor: Number,
-    environmentFactor: Number,
+    opacityFactor: Number,
+    emissiveIntensityFactor: Number,
+    emissiveColorFactor: String,
+    colorFactor: String,
 
     toon: Boolean,
     pbr: Boolean
 }
 
-export const staticObjectManagerDefaults: IStaticObjectManager = {
+export const staticObjectManagerDefaults: Defaults<IStaticObjectManager> = {
     ...eventLoopDefaults,
-    ...animationDefaults,
+    ...animationMixinDefaults,
+
+    onClick: undefined,
+    onMouseDown: undefined,
+    onMouseUp: undefined,
+    onMouseOver: undefined,
+    onMouseOut: undefined,
+    onMouseMove: undefined,
+    onLookToEnd: undefined,
 
     name: "",
+    id: undefined,
 
     bloom: false,
     reflection: false,
@@ -69,9 +90,12 @@ export const staticObjectManagerDefaults: IStaticObjectManager = {
     visible: true,
     frustumCulled: true,
 
-    metalnessFactor: 0,
-    roughnessFactor: 1,
-    environmentFactor: 1,
+    metalnessFactor: [undefined, 0],
+    roughnessFactor: [undefined, 1],
+    opacityFactor: [undefined, 1],
+    emissiveIntensityFactor: [undefined, 1],
+    emissiveColorFactor: [undefined, "#000000"],
+    colorFactor: [undefined, "#ffffff"],
 
     toon: false,
     pbr: false

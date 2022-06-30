@@ -1,16 +1,18 @@
-import { endPoint, rad2Deg, rotatePoint } from "@lincode/math"
+import { endPoint, Point3d, rad2Deg, rotatePoint } from "@lincode/math"
 import store, { Reactive } from "@lincode/reactivity"
+import { Vector3 } from "three"
 import { interpret } from "xstate"
-import Point3d from "../../api/Point3d"
-import { loop } from "../../engine/eventLoop"
 import { onBeforeRender } from "../../events/onBeforeRender"
-import IDummy, { dummyDefaults, dummySchema } from "../../interface/IDummy"
+import { onRender } from "../../events/onRender"
+import { DUMMY_URL, YBOT_URL } from "../../globals"
+import IDummy, { dummyDefaults, dummySchema, StrideMode } from "../../interface/IDummy"
 import FoundManager from "../core/FoundManager"
+import AnimationManager from "../core/mixins/AnimationMixin/AnimationManager"
 import Model from "../Model"
 import { point2Vec } from "../utils/vec2Point"
 import poseMachine from "./poseMachine"
 
-const url = "https://unpkg.com/lingo3d-dummy@1.0.1/assets/"
+export const dummyTypeMap = new WeakMap<Dummy, "dummy" | "readyplayerme">()
 
 export default class Dummy extends Model implements IDummy {
     public static override componentName = "dummy"
@@ -23,34 +25,104 @@ export default class Dummy extends Model implements IDummy {
         super()
         this.width = 20
         this.depth = 20
+        this.scale = 1.7
         this.pbr = true
+        this.frustumCulled = false
+
+        const [setType, getType] = store<"mixamo" | "readyplayerme" | undefined>(undefined)
+        const [setSpine, getSpine] = store<FoundManager | undefined>(undefined)
 
         this.createEffect(() => {
-            super.src = this.srcState.get()
+            const spineName = this.spineNameState.get()
+            const src = super.src = this.srcState.get()
+            
+            setSpine(undefined)
+            setType(undefined)
+            dummyTypeMap.delete(this)
+
+            const handle = this.loaded.then(loaded => {
+                if (spineName) {
+                    setSpine(this.find(spineName, true))
+
+                    if (spineName === "mixamorigSpine") {
+                        setType("mixamo")
+                        src === YBOT_URL && dummyTypeMap.set(this, "dummy")
+                    }
+                    else if (spineName === "Spine" && loaded.getObjectByName("Wolf3D_Body")) {
+                        setType("readyplayerme")
+                        dummyTypeMap.set(this, "readyplayerme")
+                    }
+                    return
+                }
+                if (loaded.getObjectByName("Wolf3D_Body")) {
+                    setSpine(this.find("Spine", true))
+                    setType("readyplayerme")
+                    dummyTypeMap.set(this, "readyplayerme")
+                    return
+                }
+                const spine = this.find("mixamorigSpine", true)
+                setSpine(spine)
+                if (spine) {
+                    setType("mixamo")
+                    src === YBOT_URL && dummyTypeMap.set(this, "dummy")
+                }
+            })
+            return () => {
+                handle.cancel()
+            }
+        }, [this.srcState.get, this.spineNameState.get])
+
+        const [setPose, getPose] = store("idle")
+
+        this.createEffect(() => {
+            const type = getType()
+            if (!type) return
 
             const preset = this.presetState.get()
             const prefix = preset === "rifle" ? "rifle-" : ""
 
-            this.animations = {
-                idle: url + prefix + "idle.fbx",
-                running: url + prefix + "running.fbx",
-                runningBackwards: url + prefix + "running-backwards.fbx",
-                jumping: url + prefix + "falling.fbx"
-            }
-            this.animation = "idle"
+            const parts = this.srcState.get().split("/")
+            parts.pop()
+            let url = parts.join("/") + "/"
 
-        }, [this.presetState.get, this.srcState.get])
+            let done = false
+            ;(async () => {
+                const res = await fetch(url + prefix + "idle.fbx", { method: "HEAD" })
+                if (done) return
+
+                if (!res.ok) {
+                    if (type === "readyplayerme")
+                        url = DUMMY_URL + "readyplayerme/"
+                    else
+                        return
+                }
+
+                super.animations = {
+                    idle: url + prefix + "idle.fbx",
+                    running: url + prefix + "running.fbx",
+                    runningBackwards: url + prefix + "running-backwards.fbx",
+                    jumping: url + prefix + "falling.fbx",
+                    death: url + "death.fbx",
+                    ...this.animationsState.get()
+                }
+                this.animation = getPose()
+            })()
+            
+            return () => {
+                done = true
+                this.animation = undefined
+                super.animations = {}
+            }
+        }, [this.presetState.get, this.srcState.get, getType, this.animationsState.get])
         
         const { poseService } = this
-
-        const [setPose, getPose] = store("idle")
         this.createEffect(() => {
             const pose = this.animation = getPose()
             if (pose !== "jumping") return
 
             this.velocity.y = this.jumpHeight
 
-            const handle = loop(() => {
+            const handle = onBeforeRender(() => {
                 this.velocity.y === 0 && poseService.send("JUMP_STOP")
             })
             return () => {
@@ -60,41 +132,51 @@ export default class Dummy extends Model implements IDummy {
         poseService.onTransition(state => state.changed && setPose(state.value as string)).start()
         this.then(() => poseService.stop())
 
-        const [setSpine, getSpine] = store<FoundManager | undefined>(undefined)
-        this.loadedResolvable.then(() => setSpine(this.find("mixamorigSpine", true)))
+        let groupVecOld: Vector3 | undefined
+
+        const computeAngle = (angle: number) => {
+            const thisPoint = this.pointAt(1000)
+            const centerPoint = this.getWorldPosition()
+            const rotated = rotatePoint({ x: thisPoint.x, y: thisPoint.z }, { x: centerPoint.x, y: centerPoint.z }, angle)
+            return point2Vec(new Point3d(rotated.x, thisPoint.y, rotated.y))
+        }
 
         this.createEffect(() => {
             const spine = getSpine()
             if (!spine) return
 
+            const spineQuaternion = spine.outerObject3d.quaternion.clone()
+            const loadedGroupQuaternion = this.loadedGroup.quaternion.clone()
+
             const { strideForward, strideRight, strideMove } = this
             if (!strideForward && !strideRight) {
-                const thisPoint = this.pointAt(1000)
-                this.loadedGroup.lookAt(point2Vec(thisPoint))
                 poseService.send("RUN_STOP")
+                this.strideMode === "aim" && (groupVecOld = undefined)
                 return
             }
 
-            const backwards = strideForward > 0
+            const backwards = this.strideMode === "aim" ? strideForward > 0 : false
 
             const sf = backwards ? -strideForward : strideForward
             const sr = backwards ? -strideRight : strideRight
-            const angle = 90 - Math.atan2(-sf, -sr) * rad2Deg
+            const angle = 90 - (Math.atan2(-sf, -sr) * rad2Deg)
 
-            const handle = onBeforeRender(() => {
+            const handle = onRender(() => {
                 poseService.send(backwards ? "RUN_BACKWARDS_START" : "RUN_START")
 
-                const thisPoint = this.pointAt(1000)
-                this.loadedGroup.lookAt(point2Vec(thisPoint))
-
-                const spinePoint = spine.pointAt(1000)
+                let spinePoint: Point3d | undefined
+                if (this.strideMode === "aim") {
+                    this.loadedGroup.quaternion.copy(loadedGroupQuaternion)
+                    spine.outerObject3d.quaternion.copy(spineQuaternion)
+                    spinePoint = spine.pointAt(1000)
+                }
                 
-                const centerPoint = this.getWorldPosition()
-                const rotated = rotatePoint({ x: thisPoint.x, y: thisPoint.z }, { x: centerPoint.x, y: centerPoint.z }, angle)
-                const groupPoint = new Point3d(rotated.x, thisPoint.y, rotated.y)
-                this.loadedGroup.lookAt(point2Vec(groupPoint))
+                const groupVecNew = computeAngle(angle)
+                const groupVec = (groupVecOld ?? computeAngle(0)).lerp(groupVecNew, 0.1)
+                this.loadedGroup.lookAt(groupVec)
+                groupVecOld = groupVec
 
-                spine.lookAt(spinePoint)
+                spinePoint && spine.lookAt(spinePoint)
 
                 if (!strideMove) return
 
@@ -104,16 +186,36 @@ export default class Dummy extends Model implements IDummy {
             })
             return () => {
                 handle.cancel()
+                if (this.strideMode === "aim") {
+                    spine.outerObject3d.quaternion.copy(spineQuaternion)
+                    this.loadedGroup.quaternion.copy(loadedGroupQuaternion)
+                }
             }
         }, [this.strideMoveState.get, this.strideForwardState.get, this.strideRightState.get, getSpine])
     }
+    
+    private spineNameState = new Reactive<string | undefined>(undefined)
+    public get spineName() {
+        return this.spineNameState.get()
+    }
+    public set spineName(val) {
+        this.spineNameState.set(val)
+    }
 
-    private srcState = new Reactive(url + "ybot.fbx")
+    private srcState = new Reactive(YBOT_URL)
     public override get src() {
         return this.srcState.get()
     }
     public override set src(val) {
         this.srcState.set(val)
+    }
+
+    private animationsState = new Reactive({})
+    public override get animations(): Record<string, AnimationManager> {
+        return super.animations
+    }
+    public override set animations(val: Record<string, string | AnimationManager>) {
+        this.animationsState.set(val)
     }
 
     private presetState = new Reactive<"default" | "rifle">("default")
@@ -147,6 +249,8 @@ export default class Dummy extends Model implements IDummy {
     public set strideMove(val) {
         this.strideMoveState.set(val)
     }
+
+    public strideMode: StrideMode = "aim"
 
     private jumpHeight = 10
     public jump(height = 10) {

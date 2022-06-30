@@ -1,9 +1,9 @@
 import { Fragment, h } from "preact"
 import { useLayoutEffect, useMemo, useState } from "preact/hooks"
 import register from "preact-custom-element"
-import { preventTreeShake } from "@lincode/utils"
-import { onSceneChange } from "../../events/onSceneChange"
-import { appendableRoot } from "../../api/core/Appendable"
+import { last, preventTreeShake } from "@lincode/utils"
+import { onSceneGraphChange } from "../../events/onSceneGraphChange"
+import { appendableRoot, hiddenAppendables } from "../../api/core/Appendable"
 import TreeItem from "./TreeItem"
 import Model from "../../display/Model"
 import ModelTreeItem from "./ModelTreeItem"
@@ -11,7 +11,7 @@ import { multipleSelectionGroupManagers } from "../../states/useMultipleSelectio
 import GroupIcon from "./icons/GroupIcon"
 import DeleteIcon from "./icons/DeleteIcon"
 import TitleBarButton from "./TitleBarButton"
-import { useCamera, useMultipleSelectionTargets, useSceneGraphTarget, useSelectionTarget } from "../states"
+import { useCameraStack, useMultipleSelectionTargets, useSceneGraphTarget, useSelectionTarget } from "../states"
 import deleteSelected from "../Editor/deleteSelected"
 import { emitEditorGroupItems } from "../../events/onEditorGroupItems"
 import { emitSelectionTarget } from "../../events/onSelectionTarget"
@@ -20,25 +20,37 @@ import FindIcon from "./icons/FindIcon"
 import ObjectManager from "../../display/core/ObjectManager"
 import mainCamera from "../../engine/mainCamera"
 import ContextMenu from "./ContextMenu"
+import { emitEditorMountChange } from "../../events/onEditorMountChange"
+import { onSceneGraphNameChange } from "../../events/onSceneGraphNameChange"
+import retargetBones from "./retargetBones"
 
-preventTreeShake(h)
+preventTreeShake([h, retargetBones])
 
 const SceneGraph = () => {
     const [r, render] = useState({})
 
     useLayoutEffect(() => {
-        const handle = onSceneChange(() => render({}))
+        const cb = () => render({})
+        const handle0 = onSceneGraphChange(cb)
+        const handle1 = onSceneGraphNameChange(cb)
+        emitEditorMountChange()
+
         return () => {
-            handle.cancel()
+            handle0.cancel()
+            handle1.cancel()
+            emitEditorMountChange()
         }
     }, [])
 
-    const appendables = useMemo(() => [...appendableRoot].filter(item => !multipleSelectionGroupManagers.has(item)), [r])
+    const appendables = useMemo(() => [...appendableRoot].filter(item => (
+        !multipleSelectionGroupManagers.has(item)) && !hiddenAppendables.has(item)
+    ), [r])
 
     const [multipleSelectionTargets] = useMultipleSelectionTargets()
     const [selectionTarget] = useSelectionTarget()
     const [sceneGraphTarget] = useSceneGraphTarget()
-    const [camera] = useCamera()
+    const [cameraStack] = useCameraStack()
+    const camera = last(cameraStack)
 
     const handleFind = () => {
         if (sceneGraphTarget?.name && selectionTarget instanceof ObjectManager)
@@ -83,7 +95,7 @@ const SceneGraph = () => {
             <div style={{ overflow: "scroll", opacity: camera === mainCamera ? 1 : 0.5 }} className="lingo3d-ui">
                 {appendables.map(appendable => (
                     appendable instanceof Model ? (
-                        <ModelTreeItem appendable={appendable} level={0} />
+                        <ModelTreeItem key={appendable.uuid} appendable={appendable} level={0} />
                     ) : (
                         <TreeItem key={appendable.uuid} appendable={appendable} level={0} />
                     )

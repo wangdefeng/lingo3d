@@ -1,13 +1,13 @@
 import { event } from "@lincode/events"
-import { Group } from "three"
 import IKeyboard, { keyboardDefaults, keyboardSchema } from "../interface/IKeyboard"
-import { loop } from "../engine/eventLoop"
 import EventLoopItem from "./core/EventLoopItem"
 import { createEffect } from "@lincode/reactivity"
 import { getSelectionBlockKeyboard } from "../states/useSelectionBlockKeyboard"
 import { appendableRoot } from "./core/Appendable"
 import { getEditorActive } from "../states/useEditorActive"
 import { onKeyClear } from "../events/onKeyClear"
+import Nullable from "../interface/utils/Nullable"
+import { onBeforeRender } from "../events/onBeforeRender"
 
 const [emitDown, onDown] = event<string>()
 const [emitUp, onUp] = event<string>()
@@ -24,7 +24,7 @@ const processKey = (str: string) => {
 createEffect(() => {
     if (getEditorActive() && getSelectionBlockKeyboard()) return
 
-    const handle = loop(() => isPressed.size > 0 && emitPress())
+    const handle = onBeforeRender(() => isPressed.size > 0 && emitPress())
 
     const handleKeyDown = (e: KeyboardEvent): void => {
         const key = processKey(e.key)
@@ -62,12 +62,12 @@ export class Keyboard extends EventLoopItem implements IKeyboard {
     public static defaults = keyboardDefaults
     public static schema = keyboardSchema
 
-    public onKeyPress?: (key: string, keys: Set<string>) => void
-    public onKeyUp?: (key: string, keys: Set<string>) => void
-    public onKeyDown?: (key: string, keys: Set<string>) => void
+    public onKeyPress: Nullable<(key: string, keys: Set<string>) => void>
+    public onKeyUp: Nullable<(key: string, keys: Set<string>) => void>
+    public onKeyDown: Nullable<(key: string, keys: Set<string>) => void>
 
     public constructor() {
-        super(new Group())
+        super()
 
         this.watch(onPress(() => {
             if (!this.onKeyPress) return

@@ -1,13 +1,18 @@
 import { preventTreeShake } from "@lincode/utils"
-import { h } from "preact"
+import { Fragment, h } from "preact"
 import { useEffect, useState } from "preact/hooks"
 import { Object3D } from "three"
 import Appendable from "../../api/core/Appendable"
-import Model from "../../display/Model"
+import Loaded from "../../display/core/Loaded"
+import { isMeshItem } from "../../display/core/MeshItem"
+import Dummy, { dummyTypeMap } from "../../display/Dummy"
 import { onSelectionTarget } from "../../events/onSelectionTarget"
+import { DUMMY_URL, YBOT_URL } from "../../globals"
 import { setSceneGraphExpanded } from "../../states/useSceneGraphExpanded"
 import { setSceneGraphTarget } from "../../states/useSceneGraphTarget"
-import { getSelectionTarget } from "../../states/useSelectionTarget"
+import { addSelectionFrozen, clearSelectionFrozen } from "../../states/useSelectionFrozen"
+import downloadBlob from "../../utils/downloadBlob"
+import { useSelectionFrozen, useSelectionTarget } from "../states"
 
 preventTreeShake(h)
 
@@ -17,17 +22,19 @@ const traverseUp = (obj: Object3D, expandedSet: Set<Object3D>) => {
     nextParent && traverseUp(nextParent, expandedSet)
 }
 
-const search = (n: string) => {
-    const model = getSelectionTarget()
-    if (!(model instanceof Model)) return
-    
+const search = (n: string, target: Loaded | Appendable) => {
     const name = n.toLowerCase()
     let found: Object3D | undefined
-    //@ts-ignore
-    model.loadedGroup.traverse(item => {
-        if (found) return
-        item.name.toLowerCase().includes(name) && (found = item)
-    })
+    if (target instanceof Loaded)
+        target.loadedGroup.traverse(item => {
+            if (found) return
+            item.name.toLowerCase().includes(name) && (found = item)
+        })
+    else
+        target.outerObject3d.traverse(item => {
+            if (found) return
+            item.name.toLowerCase().includes(name) && (found = item)
+        })
     if (!found) return
     
     const expandedSet = new Set<Object3D>()
@@ -36,9 +43,37 @@ const search = (n: string) => {
     setSceneGraphTarget(found)
 }
 
+type MenuItemProps = {
+    disabled?: boolean
+    onClick: () => void
+    children: string
+}
+
+const MenuItem = ({ disabled, onClick, children }: MenuItemProps) => {
+    const [hover, setHover] = useState(false)
+
+    return (
+        <div
+         style={{
+            padding: 6,
+            whiteSpace: "nowrap",
+            background: !disabled && hover ? "rgba(255, 255, 255, 0.1)" : undefined,
+            opacity: disabled ? 0.5 : 1
+        }}
+         onClick={disabled ? undefined : onClick}
+         onMouseEnter={disabled ? undefined : () => setHover(true)}
+         onMouseLeave={disabled? undefined : () => setHover(false)}
+        >
+            {children}
+        </div>
+    )
+}
+
 const ContextMenu = () => {
-    const [data, setData] = useState<{ x: number, y: number, target: Appendable } | undefined>(undefined)
+    const [data, setData] = useState<{ x: number, y: number, target: Appendable | undefined } | undefined>(undefined)
     const [showSearch, setShowSearch] = useState(false)
+    const [selectionTarget] = useSelectionTarget()
+    const [[selectionFrozen]] = useSelectionFrozen()
 
     useEffect(() => {
         let [clientX, clientY] = [0, 0]
@@ -46,13 +81,17 @@ const ContextMenu = () => {
         document.addEventListener("mousemove", cb)
 
         const handle = onSelectionTarget(({ target, rightClick }) => {
-            rightClick && target && setData({ x: clientX, y: clientY, target })
+            rightClick && setData({ x: clientX, y: clientY, target })
         })
         return () => {
             handle.cancel()
             document.removeEventListener("mousemove", cb)
         }
     }, [])
+
+    useEffect(() => {
+        !data && setShowSearch(false)
+    }, [data])
 
     if (!data) return null
 
@@ -75,21 +114,62 @@ const ContextMenu = () => {
             }}>
                 {showSearch ? (
                     <input
-                    ref={el => el?.focus()}
-                    style={{ all: "unset", padding: 6 }}
-                    onKeyDown={e => {
-                        e.stopPropagation()
-                        if (e.key !== "Enter" && e.key !== "Escape") return
-                        e.key === "Enter" && search((e.target as HTMLInputElement).value)
-                        setShowSearch(false)
-                        setData(undefined)
-                    }}
+                     ref={el => el?.focus()}
+                     style={{ all: "unset", padding: 6 }}
+                     onKeyDown={e => {
+                         e.stopPropagation()
+                         if (e.key !== "Enter" && e.key !== "Escape") return
+                         e.key === "Enter" && selectionTarget && search((e.target as HTMLInputElement).value, selectionTarget)
+                         setData(undefined)
+                     }}
                     />
-                ) : (
-                    <div style={{ padding: 6, whiteSpace: "nowrap" }} onClick={() => setShowSearch(true)}>
-                        Search children
-                    </div>
-                )}
+                ) : <Fragment>
+                    {data.target && (
+                        <Fragment>
+                            <MenuItem onClick={() => setShowSearch(true)}>
+                                Search children
+                            </MenuItem>
+
+                            {/* {selectionTarget instanceof Dummy && (
+                                <MenuItem onClick={() => {
+                                    setRetargetBones(selectionTarget)
+                                    setSelectionLocked(true)
+                                    setData(undefined)
+                                }}>
+                                    Convert to Mixamo
+                                </MenuItem>
+                            )} */}
+
+                            <MenuItem onClick={() => {
+                                isMeshItem(selectionTarget) && addSelectionFrozen(selectionTarget)
+                                setData(undefined)
+                            }}>
+                                Freeze selection
+                            </MenuItem>
+
+                            {selectionTarget instanceof Dummy && dummyTypeMap.has(selectionTarget) && (
+                                <MenuItem onClick={async () => {
+                                    setData(undefined)
+
+                                    const url = dummyTypeMap.get(selectionTarget) === "dummy"
+                                        ? YBOT_URL
+                                        : DUMMY_URL + "readyplayerme/reference.fbx"
+
+                                    const res = await fetch(url)
+                                    downloadBlob("model.fbx", await res.blob())
+                                }}>
+                                    Download for Mixamo
+                                </MenuItem>
+                            )}
+                        </Fragment>
+                    )}
+                    <MenuItem disabled={!selectionFrozen.size} onClick={() => {
+                        clearSelectionFrozen()
+                        setData(undefined)
+                    }}>
+                        Unfreeze all
+                    </MenuItem>
+                </Fragment>}
             </div>
         </div>
     )

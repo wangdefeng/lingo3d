@@ -1,10 +1,12 @@
 import IPositioned, { positionedDefaults, positionedSchema } from "./IPositioned"
+import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
+import Nullable from "./utils/Nullable"
 
 export default interface ITrigger extends IPositioned {
-    onEnter: (() => void) | undefined
-    onExit: (() => void) | undefined
-    targetIds?: string | Array<string>
+    onEnter: Nullable<() => void>
+    onExit: Nullable<() => void>
+    targetIds: Nullable<string | Array<string>>
     pad: boolean
     radius: number
     interval: number
@@ -22,10 +24,11 @@ export const triggerSchema: Required<ExtractProps<ITrigger>> = {
     helper: Boolean
 }
 
-export const triggerDefaults: ITrigger ={
+export const triggerDefaults: Defaults<ITrigger> ={
     ...positionedDefaults,
     onEnter: undefined,
     onExit: undefined,
+    targetIds: undefined,
     pad: false,
     radius: 50,
     interval: 300,

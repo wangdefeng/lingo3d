@@ -20,6 +20,7 @@ class SvgMesh extends Loaded<SVGResult> implements ISvgMesh {
     protected material = new MeshStandardMaterial()
 
     public override dispose() {
+        if (this.done) return this
         super.dispose()
         this.material.dispose()
         return this
@@ -74,9 +75,7 @@ class SvgMesh extends Loaded<SVGResult> implements ISvgMesh {
         !this.heightSet && (this.object3d.scale.y = size.y)
         !this.depthSet && (this.object3d.scale.z = size.z)
 
-        this.loadedGroup.add(loadedObject3d)
-
-        this.loadedResolvable.resolve(loadedObject3d)
+        return loadedObject3d
     }
 }
 interface SvgMesh extends Loaded<SVGResult>, TexturedBasicMixin, TexturedStandardMixin {}

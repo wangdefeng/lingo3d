@@ -1,9 +1,9 @@
 import { createEffect } from "@lincode/reactivity"
 import { BoxHelper } from "three"
-import { getCamera } from "../states/useCamera"
+import { onBeforeRender } from "../events/onBeforeRender"
+import { getCameraRendered } from "../states/useCameraRendered"
 import { getMultipleSelectionTargets } from "../states/useMultipleSelectionTargets"
 import { getSelectionTarget } from "../states/useSelectionTarget"
-import { loop } from "./eventLoop"
 import mainCamera from "./mainCamera"
 import scene from "./scene"
 
@@ -11,23 +11,23 @@ export default {}
 
 createEffect(() => {
     const target = getSelectionTarget()
-    if (!target || getCamera() !== mainCamera) return
+    if (!target || getCameraRendered() !== mainCamera) return
 
     //@ts-ignore
     const boxHelper = new BoxHelper(target.object3d ?? target.outerObject3d)
     const frame = requestAnimationFrame(() => scene.add(boxHelper))
-    const handle = loop(() => boxHelper.update())
+    const handle = onBeforeRender(() => boxHelper.update())
 
     return () => {
         cancelAnimationFrame(frame)
         scene.remove(boxHelper)
         handle.cancel()
     }
-}, [getSelectionTarget, getCamera])
+}, [getSelectionTarget, getCameraRendered])
 
 createEffect(() => {
     const targets = getMultipleSelectionTargets()
-    if (!targets.length || getCamera() !== mainCamera) return
+    if (!targets.length || getCameraRendered() !== mainCamera) return
 
     const boxHelpers: Array<BoxHelper> = []
     for (const target of targets) {
@@ -36,7 +36,7 @@ createEffect(() => {
         boxHelpers.push(boxHelper)
     }
 
-    const handle = loop(() => {
+    const handle = onBeforeRender(() => {
         for (const boxHelper of boxHelpers)
             boxHelper.update()
     })
@@ -47,4 +47,4 @@ createEffect(() => {
             
         handle.cancel()
     }
-}, [getMultipleSelectionTargets, getCamera])
+}, [getMultipleSelectionTargets, getCameraRendered])

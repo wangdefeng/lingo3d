@@ -1,9 +1,8 @@
 import { createEffect } from "@lincode/reactivity"
-import { EffectComposer, Pass } from "three/examples/jsm/postprocessing/EffectComposer"
+import { Pass } from "three/examples/jsm/postprocessing/EffectComposer"
 import { getBloom } from "../../../states/useBloom"
 import { getBokeh } from "../../../states/useBokeh"
 import { getAmbientOcclusion } from "../../../states/useAmbientOcclusion"
-import { getResolution } from "../../../states/useResolution"
 import { getSelectiveBloom } from "../../../states/useSelectiveBloom"
 import bloomPass from "./bloomPass"
 import bokehPass from "./bokehPass"
@@ -12,67 +11,62 @@ import selectiveBloomPass from "./selectiveBloomPass"
 import saoPass from "./saoPass"
 import ssrPass from "./ssrPass"
 import { getSSR } from "../../../states/useSSR"
-import { getRenderer } from "../../../states/useRenderer"
-import { getPixelRatio } from "../../../states/usePixelRatio"
 import outlinePass from "./outlinePass"
 import { getOutline } from "../../../states/useOutline"
-import smaaPass from "./smaaPass"
 import lensDistortionPass from "./lensDistortionPass"
 import { getLensDistortion } from "../../../states/useLensDistortion"
-import isSafari from "../../../api/utils/isSafari"
-import { WebGLRenderTarget } from "three"
-import { WIDTH, HEIGHT } from "../../../globals"
+import { getEffectComposer } from "../../../states/useEffectComposer"
+import { getAntiAlias } from "../../../states/useAntiAlias"
+import { setEffectComposerPassCount } from "../../../states/useEffectComposerPassCount"
+import smaaPass from "./smaaPass"
+import motionBlurPass from "./motionBlurPass"
+import { getMotionBlur } from "../../../states/useMotionBlur"
 
-const effectComposer = (() => {
-    if (isSafari)
-        return new EffectComposer(getRenderer())
-
-    //@ts-ignore
-    const msaaRenderTarget = new WebGLRenderTarget(WIDTH, HEIGHT, { samples: 4 })
-    getResolution(([w, h]) => msaaRenderTarget.setSize(w, h))
-    return new EffectComposer(getRenderer(), msaaRenderTarget)
-})()
-export default effectComposer
+export default {}
 
 createEffect(() => {
-    effectComposer.renderer = getRenderer()
-    const [w, h] = getResolution()
-    effectComposer.setSize(w, h)
-    effectComposer.setPixelRatio(getPixelRatio())
+    const effectComposer = getEffectComposer()
+    if (!effectComposer) return
 
-}, [getRenderer, getResolution, getPixelRatio])
-
-createEffect(() => {
     const passes: Array<Pass> = [renderPass]
 
-    if (getSSR())
-        passes.push(ssrPass)
+    if (getSSR()) passes.push(ssrPass)
 
-    if (getAmbientOcclusion())
-        passes.push(saoPass)
+    if (getAmbientOcclusion()) passes.push(saoPass)
 
-    if (getBloom())
-        passes.push(bloomPass)
+    if (getBloom()) passes.push(bloomPass)
 
-    if (getSelectiveBloom())
-        passes.push(selectiveBloomPass)
+    if (getSelectiveBloom()) passes.push(selectiveBloomPass)
 
-    if (getBokeh())
-        passes.push(bokehPass)
+    if (getBokeh()) passes.push(bokehPass)
 
-    if (getOutline())
-        passes.push(outlinePass)
+    if (getOutline()) passes.push(outlinePass)
 
-    if (getLensDistortion())
-        passes.push(lensDistortionPass)
+    if (getLensDistortion()) passes.push(lensDistortionPass)
 
-    isSafari && passes.push(smaaPass)
+    if (getAntiAlias() === "SSAA" || getAntiAlias() === "SMAA")
+        passes.push(smaaPass)
 
-    for (const pass of passes)
-        effectComposer.addPass(pass)
+    if (getMotionBlur()) for (const pass of motionBlurPass) passes.push(pass)
+
+    for (const pass of passes) effectComposer.addPass(pass)
+
+    setEffectComposerPassCount(passes.length - 1)
 
     return () => {
-        for (const pass of passes)
-            effectComposer.removePass(pass)
+        for (const pass of passes) effectComposer.removePass(pass)
+
+        setEffectComposerPassCount(0)
     }
-}, [getSSR, getAmbientOcclusion, getBloom, getSelectiveBloom, getBokeh, getOutline, getLensDistortion])
+}, [
+    getEffectComposer,
+    getSSR,
+    getAmbientOcclusion,
+    getBloom,
+    getSelectiveBloom,
+    getBokeh,
+    getOutline,
+    getLensDistortion,
+    getAntiAlias,
+    getMotionBlur
+])

@@ -1,39 +1,35 @@
 import { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader"
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader"
-import { LinearEncoding, sRGBEncoding } from "three"
+import { Bone, LinearEncoding } from "three"
 import { forceGet } from "@lincode/utils"
 import cloneSkinnedMesh from "../cloneSkinnedMesh"
 import { decreaseLoadingCount, increaseLoadingCount } from "../../../states/useLoadingCount"
-import settings from "../../../api/settings"
 import { handleProgress } from "./bytesLoaded"
-import { getEncoding } from "../../../states/useEncoding"
+import { getWasmPath } from "../../../states/useWasmPath"
 
-const cache = new Map<string, Promise<GLTF>>()
+const cache = new Map<string, Promise<[GLTF, boolean]>>()
 const loader = new GLTFLoader()
 
 const dracoLoader = new DRACOLoader()
-dracoLoader.setDecoderPath(settings.wasmPath)
+getWasmPath(wasmPath => dracoLoader.setDecoderPath(wasmPath))
 loader.setDRACOLoader(dracoLoader)
 
 export default async (url: string, clone: boolean) => {
-    const gltf = await forceGet(cache, url, () => new Promise<GLTF>((resolve, reject) => {
+    const [gltf, noBone] = await forceGet(cache, url, () => new Promise<[GLTF, boolean]>((resolve, reject) => {
         increaseLoadingCount()
         loader.load(url, gltf => {
             decreaseLoadingCount()
     
+            let noBone = true
             for (const scene of gltf.scenes)
-                getEncoding() === "linear"
-                    ? scene.traverse((child: any) => {
-                        child.material?.map && (child.material.map.encoding = LinearEncoding)
-                        // child.castShadow = true
-                        // child.receiveShadow = true
-                    })
-                    : scene.traverse((child: any) => {
-                        child.material?.map && (child.material.map.encoding = sRGBEncoding)
-                        // child.castShadow = true
-                        // child.receiveShadow = true
-                    })
-            resolve(gltf)
+                scene.traverse((child: any) => {
+                    noBone && child instanceof Bone && (noBone = false)
+
+                    child.material?.map && (child.material.map.encoding = LinearEncoding)
+                    // child.castShadow = true
+                    // child.receiveShadow = true
+                })
+            resolve([gltf, noBone])
         },
         handleProgress,
         () => {
@@ -42,7 +38,7 @@ export default async (url: string, clone: boolean) => {
         })
     }))
     if (clone)
-        return cloneSkinnedMesh(gltf.scene, gltf.animations)
+        return cloneSkinnedMesh(gltf.scene, noBone, gltf.animations)
 
     return gltf.scene
 }

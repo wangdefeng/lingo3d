@@ -1,8 +1,8 @@
 import { preventTreeShake, upperFirst } from "@lincode/utils"
 import { h } from "preact"
 import clientToWorld from "../../display/utils/clientToWorld"
-import createObject from "../../display/utils/serializer/createObject"
-import { GameObjectType } from "../../display/utils/serializer/types"
+import createObject from "../../api/serializer/createObject"
+import { GameObjectType } from "../../api/serializer/types"
 import { container } from "../../engine/renderLoop/renderSetup"
 import { emitSelectionTarget } from "../../events/onSelectionTarget"
 import { getSelection } from "../../states/useSelection"
@@ -40,7 +40,7 @@ const ObjectIcon = ({ name, iconName = name }: ObjectIconProps) => {
             paddingBottom: 20,
          }}
         >
-            <img style={{ width: 50 }} src={`https://unpkg.com/lingo3d-editor@1.0.1/assets/${iconName}.png`} />
+            <img style={{ width: 50, height: 50 }} src={`https://unpkg.com/lingo3d-editor@1.0.2/assets/${iconName}.png`} />
             <div style={{ marginTop: 6, opacity: 0.75, overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
                 {upperFirst(name)}
             </div>

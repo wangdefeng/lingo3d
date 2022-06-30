@@ -1,25 +1,23 @@
-import { Color, Group, RectAreaLight } from "three"
+import { Color, RectAreaLight } from "three"
 import { RectAreaLightHelper } from "three/examples/jsm/helpers/RectAreaLightHelper"
 import IAreaLight, { areaLightDefaults, areaLightSchema } from "../../interface/IAreaLight"
 import { lazy } from "@lincode/utils"
 import ObjectManager from "../core/ObjectManager"
-import { getCamera } from "../../states/useCamera"
 import mainCamera from "../../engine/mainCamera"
 import scene from "../../engine/scene"
 import { scaleDown } from "../../engine/constants"
 import { getTransformControlsMode } from "../../states/useTransformControlsMode"
 import { onTransformControls } from "../../events/onTransformControls"
 import { Reactive } from "@lincode/reactivity"
-import PositionedItem from "../../api/core/PositionedItem"
 import { getSelectionTarget } from "../../states/useSelectionTarget"
-import StaticObjectManager from "../core/StaticObjectManager"
+import { getCameraRendered } from "../../states/useCameraRendered"
 
 const lazyInit = lazy(async () => {
     const { RectAreaLightUniformsLib } = await import("three/examples/jsm/lights/RectAreaLightUniformsLib.js")
     RectAreaLightUniformsLib.init()
 })
 
-export default class extends ObjectManager<Group> implements IAreaLight {
+export default class AreaLight extends ObjectManager implements IAreaLight {
     public static componentName = "areaLight"
     public static defaults = areaLightDefaults
     public static schema = areaLightSchema
@@ -27,7 +25,7 @@ export default class extends ObjectManager<Group> implements IAreaLight {
     private light?: RectAreaLight
 
     public constructor() {
-        super(new Group())
+        super()
 
         ;(async () => {
             await lazyInit()
@@ -49,8 +47,6 @@ export default class extends ObjectManager<Group> implements IAreaLight {
 
                 const handle = onTransformControls(() => {
                     const { x, y } = this.outerObject3d.scale
-                    console.log(x, y)
-
                     this.scaleX = x
                     this.scaleY = y
                 })
@@ -60,7 +56,7 @@ export default class extends ObjectManager<Group> implements IAreaLight {
             }, [getTransformControlsMode, getSelectionTarget])
             
             this.createEffect(() => {
-                if (getCamera() !== mainCamera || !this.helperState.get()) return
+                if (getCameraRendered() !== mainCamera || !this.helperState.get()) return
     
                 const helper = new RectAreaLightHelper(light)
                 scene.add(helper)
@@ -69,7 +65,7 @@ export default class extends ObjectManager<Group> implements IAreaLight {
                     helper.dispose()
                     scene.remove(helper)
                 }
-            }, [getCamera, this.helperState.get])
+            }, [getCameraRendered, this.helperState.get])
         })()
     }
 
@@ -81,61 +77,56 @@ export default class extends ObjectManager<Group> implements IAreaLight {
         this.helperState.set(val)
     }
 
-    public override lookAt(target: PositionedItem | StaticObjectManager | { x: number, y: number, z: number }) {
-        super.lookAt(target)
-        this.rotationY += 180
-    }
-
     private _color?: string
     public get color() {
-        return this._color ?? areaLightDefaults.color
+        return this._color ?? "#ffffff"
     }
-    public set color(val: string) {
+    public set color(val) {
         this._color = val
         this.light && (this.light.color = new Color(val))
     }
 
     private _intensity?: number
     public get intensity() {
-        return this._intensity ?? areaLightDefaults.intensity
+        return this._intensity ?? 1
     }
-    public set intensity(val: number) {
+    public set intensity(val) {
         this._intensity = val
         this.light && (this.light.intensity = val)
     }
 
     private _width?: number
     public override get width() {
-        return this._width ?? areaLightDefaults.width
+        return this._width ?? 100
     }
-    public override set width(val: number) {
+    public override set width(val) {
         this._width = val
         this.light && (this.light.width = val * this.scaleX * scaleDown)
     }
 
     private _height?: number
     public override get height() {
-        return this._height ?? areaLightDefaults.height
+        return this._height ?? 100
     }
-    public override set height(val: number) {
+    public override set height(val) {
         this._height = val
         this.light && (this.light.height = val * this.scaleY * scaleDown)
     }
 
     private _scaleX?: number
     public override get scaleX() {
-        return this._scaleX ?? areaLightDefaults.scaleX
+        return this._scaleX ?? 1
     }
-    public override set scaleX(val: number) {
+    public override set scaleX(val) {
         this._scaleX = val
         this.light && (this.light.width = val * this.width * scaleDown)
     }
 
     private _scaleY?: number
     public override get scaleY() {
-        return this._scaleY ?? areaLightDefaults.scaleY
+        return this._scaleY ?? 1
     }
-    public override set scaleY(val: number) {
+    public override set scaleY(val) {
         this._scaleY = val
         this.light && (this.light.height = val * this.height * scaleDown)
     }
@@ -149,9 +140,5 @@ export default class extends ObjectManager<Group> implements IAreaLight {
         return 0
     }
     public override set scaleZ(_) {
-    }
-
-    public override getCenter() {
-        return this.getWorldPosition()
     }
 }

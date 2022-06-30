@@ -1,10 +1,9 @@
 import { Cancellable, Disposable } from "@lincode/promiselikes"
 import { Object3D, AnimationMixer, AnimationClip, NumberKeyframeTrack, AnimationAction, LoopRepeat, LoopOnce } from "three"
-import { AnimationData } from "../../../utils/serializer/types"
+import { AnimationData } from "../../../../api/serializer/types"
 import { forceGet } from "@lincode/utils"
-import clockDelta from "../../../utils/clockDelta"
-import { loop } from "../../../../engine/eventLoop"
 import EventLoopItem from "../../../../api/core/EventLoopItem"
+import { onBeforeRender } from "../../../../events/onBeforeRender"
 
 const targetMixerMap = new WeakMap<EventLoopItem | Object3D, AnimationMixer>()
 const mixerActionMap = new WeakMap<AnimationMixer, [AnimationAction, boolean]>()
@@ -15,6 +14,8 @@ export type PlayOptions = {
     repeat?: boolean
     onFinish?: () => void
 }
+
+const dt = 1 / 60
 
 export default class AnimationManager extends Disposable {
     private clip?: AnimationClip
@@ -46,6 +47,7 @@ export default class AnimationManager extends Disposable {
     }
 
     public override dispose() {
+        if (this.done) return this
         super.dispose()
         this.stop()
         return this
@@ -78,7 +80,7 @@ export default class AnimationManager extends Disposable {
         }
 
         mixerHandleMap.get(this.mixer)?.cancel()
-        const handle = this.watch(loop(() => this.mixer.update(clockDelta[0])))
+        const handle = this.watch(onBeforeRender(() => this.mixer.update(dt)))
         mixerHandleMap.set(this.mixer, handle)
 
         const { action } = this

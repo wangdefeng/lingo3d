@@ -1,6 +1,7 @@
 import { getEditorActive } from "../../../../states/useEditorActive"
 import ThirdPersonCamera from "../../../cameras/ThirdPersonCamera"
-import { vector3, vector3_, quaternion } from "../../../utils/reusables"
+import getWorldPosition from "../../../utils/getWorldPosition"
+import getWorldQuaternion from "../../../utils/getWorldQuaternion"
 import { bvhCameraSet, onBeforeCameraLoop } from "./bvh/bvhCameraLoop"
 
 function setVisible(this: ThirdPersonCamera, visible: boolean) {
@@ -19,24 +20,39 @@ export default function(this: ThirdPersonCamera) {
     if (this.done) return
 
     const cam = this.camera
+    
     bvhCameraSet.add(cam)
     this.then(() => bvhCameraSet.delete(cam))
 
-    let tooCloseOld = false
+    
+    this.createEffect(() => {
+        const target = this.targetState.get()
+        if (!target) return
 
-    this.watch(onBeforeCameraLoop(() => {
-        const origin = this.outerObject3d.getWorldPosition(vector3)
-        const camPos = this.object3d.getWorldPosition(vector3_)
-        const dist = camPos.distanceTo(origin)
+        let tooCloseOld = true
+        setVisible.call(this, !tooCloseOld)
 
-        cam.position.lerp(camPos, 0.1)
-        const ratio = cam.position.distanceTo(origin) / dist
-        cam.position.lerpVectors(origin, camPos, ratio)
+        let first = true
 
-        cam.quaternion.copy(this.object3d.getWorldQuaternion(quaternion))
+        const handle = onBeforeCameraLoop(() => {
+            const origin = getWorldPosition(this.outerObject3d)
+            const camPos = getWorldPosition(this.object3d)
+            const dist = camPos.distanceTo(origin)
+    
+            cam.position.lerp(camPos, first ? 1 : 0.1)
+            const ratio = first ? 1 : cam.position.distanceTo(origin) / dist
+            cam.position.lerpVectors(origin, camPos, ratio)
 
-        const tooClose = getEditorActive() ? false : ratio < 0.35
-        tooClose !== tooCloseOld && setVisible.call(this, !tooClose)
-        tooCloseOld = tooClose
-    }))
+            cam.quaternion.copy(getWorldQuaternion(this.object3d))
+    
+            const tooClose = getEditorActive() ? false : ratio < 0.35
+            tooClose !== tooCloseOld && setVisible.call(this, !tooClose)
+            tooCloseOld = tooClose
+
+            first = false
+        })
+        return () => {
+            handle.cancel()
+        }
+    }, [this.targetState.get])
 }

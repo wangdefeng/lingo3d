@@ -1,25 +1,21 @@
-import { deg2Rad } from "@lincode/math"
-import { Cancellable } from "@lincode/promiselikes"
-import { Reactive } from "@lincode/reactivity"
-import { Quaternion } from "three"
-import PositionedItem from "../../api/core/PositionedItem"
-import { loop } from "../../engine/eventLoop"
+import { PerspectiveCamera } from "three"
+import { camNear, camFar } from "../../engine/constants"
 import scene from "../../engine/scene"
-import { onSceneChange } from "../../events/onSceneChange"
+import { onBeforeRender } from "../../events/onBeforeRender"
 import ICharacterCamera, { characterCameraDefaults, characterCameraSchema, LockTargetRotationValue } from "../../interface/ICharacterCamera"
 import { getSelectionTarget } from "../../states/useSelectionTarget"
 import { getTransformControlsDragging } from "../../states/useTransformControlsDragging"
 import { getTransformControlsMode } from "../../states/useTransformControlsMode"
-import Camera from "../cameras/Camera"
-import { euler, quaternion, quaternion_ } from "../utils/reusables"
-import SimpleObjectManager from "./SimpleObjectManager"
+import OrbitCameraBase from "./OrbitCameraBase"
+import { euler, quaternion } from "../utils/reusables"
+import MeshItem from "./MeshItem"
 
-export default class CharacterCamera extends Camera implements ICharacterCamera {
-    public static override defaults = characterCameraDefaults
-    public static override schema = characterCameraSchema
+export default class CharacterCamera extends OrbitCameraBase implements ICharacterCamera {
+    public static defaults = characterCameraDefaults
+    public static schema = characterCameraSchema
 
     public constructor() {
-        super()
+        super(new PerspectiveCamera(75, 1, camNear, camFar))
 
         const cam = this.camera
         scene.attach(cam)
@@ -32,49 +28,71 @@ export default class CharacterCamera extends Camera implements ICharacterCamera 
             if ("frustumCulled" in target)
                 target.frustumCulled = false
 
-            const handle = onSceneChange(() => target.parent !== this && this.targetState.set(undefined))
-            
-            return () => {
-                handle.cancel()
-            }
         }, [this.targetState.get])
 
-        const followTarget = (target: PositionedItem) => {
+        const followTarget = (target: MeshItem, slerp: boolean) => {
             euler.setFromQuaternion(target.outerObject3d.quaternion)
             euler.y += Math.PI
-            this.outerObject3d.setRotationFromEuler(euler)
-            this.updatePolarAngle()
+            
+            if (slerp) {
+                quaternion.setFromEuler(euler)
+                this.outerObject3d.quaternion.slerp(quaternion, 0.1)
+            }
+            else this.outerObject3d.setRotationFromEuler(euler)
+
+            this.updateAngle()
         }
+
+        const lockTarget = (target: MeshItem, slerp: boolean) => {
+            euler.setFromQuaternion(this.outerObject3d.quaternion)
+            euler.x = 0
+            euler.z = 0
+            euler.y += Math.PI
+
+            if (slerp) {
+                quaternion.setFromEuler(euler)
+                target.outerObject3d.quaternion.slerp(quaternion, 0.1)
+            }
+            else target.outerObject3d.setRotationFromEuler(euler)
+        }
+
         let transformControlRotating = false
 
         this.createEffect(() => {
             const target = this.targetState.get()
             if (!target) return
 
-            followTarget(target)
-            let targetRotated = false
-            //@ts-ignore
-            target.onRotationY = () => targetRotated = true
+            followTarget(target, false)
 
-            const handle = loop(() => {
+            let targetMoved = false
+            let [x, y, z] = [0, 0, 0]
+            const handle0 = onBeforeRender(() => {
+                const { x: x0, y: y0, z: z0 } = target.outerObject3d.position
+                targetMoved = x0 !== x || y0 !== y || z0 !== z
+                ;[x, y, z] = [x0, y0, z0]
+            })
+
+            const handle1 = onBeforeRender(() => {
                 this.outerObject3d.position.copy(target.outerObject3d.position)
                 if (!this.lockTargetRotation) return
 
-                if (this.lockTargetRotation === "follow" || transformControlRotating || targetRotated) {
-                    targetRotated = false
-                    followTarget(target)
+                if (this.lockTargetRotation === "follow" || transformControlRotating) {
+                    followTarget(target, false)
                     return
                 }
-                euler.setFromQuaternion(this.outerObject3d.quaternion)
-                euler.x = 0
-                euler.z = 0
-                euler.y += Math.PI
-                target.outerObject3d.setRotationFromEuler(euler)
+                if (this.lockTargetRotation === "dynamic-lock") {
+                    targetMoved && lockTarget(target, true)
+                    return
+                }
+                if (this.lockTargetRotation === "dynamic-follow") {
+                    targetMoved && followTarget(target, true)
+                    return
+                }
+                lockTarget(target, false)
             })
             return () => {
-                handle.cancel()
-                //@ts-ignore
-                target.onRotationY = undefined
+                handle0.cancel()
+                handle1.cancel()
             }
         }, [this.targetState.get])
 
@@ -96,60 +114,4 @@ export default class CharacterCamera extends Camera implements ICharacterCamera 
     }
 
     public lockTargetRotation: LockTargetRotationValue = true
-
-    protected targetState = new Reactive<PositionedItem | SimpleObjectManager | undefined>(undefined)
-    public override append(object: PositionedItem) {
-        if (this.targetState.get()) {
-            super.append(object)
-            return
-        }
-        this._append(object)
-        this.outerObject3d.parent?.add(object.outerObject3d)
-        this.targetState.set(object)
-    }
-    
-    public override attach(object: PositionedItem) {
-        if (this.targetState.get()) {
-            super.attach(object)
-            return
-        }
-        this._append(object)
-        this.outerObject3d.parent?.attach(object.outerObject3d)
-        this.targetState.set(object)
-    }
-    
-    private gyroControlHandle?: Cancellable
-    private _gyroControl?: boolean
-    public get gyroControl() {
-        return !!this._gyroControl
-    }
-    public set gyroControl(val: boolean) {
-        if (this._gyroControl === val) return
-        this._gyroControl
-
-        this.gyroControlHandle?.cancel()
-
-        const deviceEuler = euler
-        const deviceQuaternion = quaternion
-        const screenTransform = quaternion_
-        const worldTransform = new Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5))
-
-        const quat = this.object3d.getWorldQuaternion(quaternion).clone()
-        const orient = 0
-
-        const cb = (e: DeviceOrientationEvent) => {
-            this.object3d.quaternion.copy(quat)
-            deviceEuler.set((e.beta ?? 0) * deg2Rad, (e.alpha ?? 0) * deg2Rad, -(e.gamma ?? 0) * deg2Rad, "YXZ")
-
-            this.object3d.quaternion.multiply(deviceQuaternion.setFromEuler(deviceEuler))
-
-            const minusHalfAngle = -orient * 0.5
-            screenTransform.set(0, Math.sin(minusHalfAngle), 0, Math.cos(minusHalfAngle))
-
-            this.object3d.quaternion.multiply(screenTransform)
-            this.object3d.quaternion.multiply(worldTransform)
-        }
-        window.addEventListener("deviceorientation", cb)
-        this.gyroControlHandle = this.cancellable(() => window.removeEventListener("deviceorientation", cb))
-    }
 }

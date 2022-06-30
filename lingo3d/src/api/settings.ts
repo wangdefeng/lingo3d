@@ -1,7 +1,5 @@
-import { getPixelRatio, setPixelRatio } from "../states/usePixelRatio"
 import { getDefaultFog, setDefaultFog } from "../states/useDefaultFog"
 import { getDefaultLight, setDefaultLight } from "../states/useDefaultLight"
-import { getPerformance, setPerformance } from "../states/usePerformance"
 import { getOrbitControls, setOrbitControls } from "../states/useOrbitControls"
 import { getGravity, setGravity } from "../states/useGravity"
 import { getRepulsion, setRepulsion } from "../states/useRepulsion"
@@ -13,7 +11,6 @@ import { getBloom, setBloom } from "../states/useBloom"
 import { getBloomRadius, setBloomRadius } from "../states/useBloomRadius"
 import { getBloomStrength, setBloomStrength } from "../states/useBloomStrength"
 import { getBloomThreshold, setBloomThreshold } from "../states/useBloomThreshold"
-import { getEncoding, setEncoding } from "../states/useEncoding"
 import { getExposure, setExposure } from "../states/useExposure"
 import { getLensBand, setLensBand } from "../states/useLensBand"
 import { getLensDistortion, setLensDistortion } from "../states/useLensDistortion"
@@ -30,26 +27,16 @@ import { getBackgroundColor, setBackgroundColor } from "../states/useBackgroundC
 import { getBackgroundImage, setBackgroundImage } from "../states/useBackgroundImage"
 import Skybox from "../display/Skybox"
 import { appendableRoot } from "./core/Appendable"
+import { getAutoMount, setAutoMount } from "../states/useAutoMount"
+import { getPixelRatio, setPixelRatio } from "../states/usePixelRatio"
+import { getAntiAlias, setAntiAlias } from "../states/useAntiAlias"
+import { getMotionBlur, setMotionBlur } from "../states/useMotionBlur"
+import { getMotionBlurStrength, setMotionBlurStrength } from "../states/useMotionBlurStrength"
 
 const defaultSkybox = new Skybox()
 appendableRoot.delete(defaultSkybox)
 
 export default {
-    //general
-    get pixelRatio() {
-        return getPixelRatio()
-    },
-    set pixelRatio(value: number) {
-        setPixelRatio(value)
-    },
-    
-    get performance() {
-        return getPerformance()
-    },
-    set performance(value) {
-        setPerformance(value)
-    },
-
     get defaultFog() {
         return getDefaultFog()
     },
@@ -74,7 +61,7 @@ export default {
     get skybox() {
         return defaultSkybox.texture
     },
-    set skybox(value: string | Array<string> | undefined) {
+    set skybox(value) {
         defaultSkybox.texture = value
     },
 
@@ -112,24 +99,33 @@ export default {
     set repulsion(value) {
         setRepulsion(value)
     },
-
-    wasmPath: "https://unpkg.com/lingo3d-wasm@1.0.0/assets/",
   
-    autoMount: false as boolean | string,
+    get autoMount() {
+        return getAutoMount()
+    },
+    set autoMount(value) {
+        setAutoMount(value)
+    },
 
-    //rendering
+    get antiAlias() {
+        return getAntiAlias()
+    },
+    set antiAlias(value) {
+        setAntiAlias(value)
+    },
+
+    get pixelRatio() {
+        return getPixelRatio()
+    },
+    set pixelRatio(value) {
+        setPixelRatio(value)
+    },
+
     get logarithmicDepth() {
         return getLogarithmicDepth()
     },
     set logarithmicDepth(value) {
         setLogarithmicDepth(value)
-    },
-
-    get encoding() {
-        return getEncoding()
-    },
-    set encoding(val) {
-        setEncoding(val)
     },
 
     get exposure() {
@@ -244,18 +240,31 @@ export default {
         setLensBand(val)
     },
 
-    //background
+    get motionBlur() {
+        return getMotionBlur()
+    },
+    set motionBlur(val) {
+        setMotionBlur(val)
+    },
+
+    get motionBlurStrength() {
+        return getMotionBlurStrength()
+    },
+    set motionBlurStrength(val) {
+        setMotionBlurStrength(val)
+    },
+
     get texture() {
         return getBackgroundImage()
     },
-    set texture(value: string | undefined) {
+    set texture(value) {
         setBackgroundImage(value)
     },
 
     get color() {
         return getBackgroundColor()
     },
-    set color(value: string) {
+    set color(value) {
         setBackgroundColor(value)
     }
 }

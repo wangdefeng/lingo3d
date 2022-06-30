@@ -17,11 +17,12 @@ import ISkyLight from "lingo3d/lib/interface/ISkyLight"
 import ISpotLight from "lingo3d/lib/interface/ISpotLight"
 import IReflector from "lingo3d/lib/interface/IReflector"
 import ISprite from "lingo3d/lib/interface/ISprite"
-import ISound from "lingo3d/lib/interface/ISound"
 import IAmbientLight from "lingo3d/lib/interface/IAmbientLight"
 import IDirectionalLight from "lingo3d/lib/interface/IDirectionalLight"
 import IFound from "lingo3d/lib/interface/IFound"
 import ITrigger from "lingo3d/lib/interface/ITrigger"
+import IAudio from "lingo3d/lib/interface/IAudio"
+import IEnvironment from "lingo3d/lib/interface/IEnvironment"
 
 type Children = React.ReactNode
 
@@ -49,6 +50,7 @@ export type SpotLightProps = Partial<ISpotLight> & { children?: Children }
 
 export type KeyboardProps = Partial<IKeyboard>
 export type MouseProps = Partial<IMouse>
-export type SoundProps = Partial<ISound>
 export type TriggerProps = Partial<ITrigger>
+export type AudioProps = Partial<IAudio>
 export type SkyboxProps = Partial<ISkybox>
+export type EnvironmentProps = Partial<IEnvironment>

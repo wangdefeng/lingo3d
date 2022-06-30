@@ -1,16 +1,17 @@
 import { Vector3 } from "three"
-import PositionedItem from "../../api/core/PositionedItem"
+import { onAfterRender } from "../../events/onAfterRender"
+import MeshItem, { getObject3d } from "../core/MeshItem"
 
-const cache = new WeakMap<PositionedItem, Vector3>()
+const cache = new WeakMap<MeshItem, Vector3>()
 
-export default (target: PositionedItem) => {
+export default (target: MeshItem) => {
     if (cache.has(target))
-        return cache.get(target)!
+        return cache.get(target)!.clone()
 
-    const result = (target.object3d ?? target.outerObject3d).scale.clone().multiply(target.outerObject3d.scale)
+    const result = getObject3d(target).scale.clone().multiply(target.outerObject3d.scale)
 
-    cache.set(target, result)
-    setTimeout(() => cache.delete(target))
+    cache.set(target, result.clone())
+    onAfterRender(() => cache.delete(target), true)
 
     return result
 }

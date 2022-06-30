@@ -38,13 +38,13 @@ const properties = [
     "toneMapped"
 ]
 
-export default (source: any, target: any) => {
+export default (from: any, to: any) => {
     for (const prop of properties) {
-        const value = source[prop]
-        value != null && (target[prop] = value)
+        const value = from[prop]
+        value != null && (to[prop] = value)
     }
 
-    const srcPlanes = source.clippingPlanes
+    const srcPlanes = from.clippingPlanes
     let dstPlanes = null
 
     if (srcPlanes) {
@@ -54,5 +54,5 @@ export default (source: any, target: any) => {
         for (let i = 0; i !== n; ++i)
             dstPlanes[i] = srcPlanes[i].clone()
     }
-    target.clippingPlanes = dstPlanes
+    to.clippingPlanes = dstPlanes
 }

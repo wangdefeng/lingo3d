@@ -2,12 +2,9 @@ import { createEffect } from "@lincode/reactivity"
 import { preventTreeShake } from "@lincode/utils"
 import SimpleObjectManager from "../../display/core/SimpleObjectManager"
 import Cube from "../../display/primitives/Cube"
-import { vector3 } from "../../display/utils/reusables"
 import { emitAfterRender } from "../../events/onAfterRender"
 import { emitBeforeRender } from "../../events/onBeforeRender"
-import { getCamera } from "../../states/useCamera"
 import { setOutline } from "../../states/useOutline"
-import { getPerformance } from "../../states/usePerformance"
 import { getRenderer } from "../../states/useRenderer"
 import { getResolution } from "../../states/useResolution"
 import { getSecondaryCamera } from "../../states/useSecondaryCamera"
@@ -16,21 +13,28 @@ import { setSSR } from "../../states/useSSR"
 import { getVR } from "../../states/useVR"
 import { loop } from "../eventLoop"
 import scene from "../scene"
-import effectComposer from "./effectComposer"
 import { outlinePtr } from "./effectComposer/outlinePass"
 import renderSelectiveBloom, { bloomPtr } from "./effectComposer/selectiveBloomPass/renderSelectiveBloom"
 import { ssrPtr } from "./effectComposer/ssrPass"
 import resize from "./resize"
+import effectComposer from "./effectComposer"
+import { getEffectComposer } from "../../states/useEffectComposer"
+import { getCameraRendered } from "../../states/useCameraRendered"
+import { emitRender } from "../../events/onRender"
+import { emitRender2 } from "../../events/onRender2"
+import getWorldPosition from "../../display/utils/getWorldPosition"
+import { setAntiAlias } from "../../states/useAntiAlias"
 
-preventTreeShake(resize)
+preventTreeShake([resize, effectComposer])
 
 export default {}
 
 createEffect(() => {
-    const vr = getVR()
-    const camera = getCamera()
-    const secondaryCamera = getSecondaryCamera()
     const renderer = getRenderer()
+    if (!renderer) return
+
+    const camera = getCameraRendered()
+    const secondaryCamera = getSecondaryCamera()
 
     if (secondaryCamera) {
         const [resX, resY] = getResolution()
@@ -43,6 +47,8 @@ createEffect(() => {
 
         const handle = loop(() => {
             emitBeforeRender()
+            emitRender()
+            emitRender2()
 
             renderer.setViewport(0, 0, width, height)
             renderer.setScissor(0, 0, width, height)
@@ -66,10 +72,14 @@ createEffect(() => {
             camera.updateProjectionMatrix()
         }
     }
+
+    const vr = getVR()
     
-    if (getPerformance() === "speed" || vr === "webxr") {
+    if (vr === "webxr") {
         const handle = loop(() => {
             emitBeforeRender()
+            emitRender()
+            emitRender2()
             renderer.render(scene, camera)
             emitAfterRender()
         })
@@ -97,12 +107,14 @@ createEffect(() => {
 
         const handle = loop(() => {
             emitBeforeRender()
+            emitRender()
+            emitRender2()
 
             renderer.setViewport(0, 0, width, height)
             renderer.setScissor(0, 0, width, height)
             renderer.setScissorTest(true)
 
-            focus.outerObject3d.position.copy(camera.getWorldPosition(vector3))
+            focus.outerObject3d.position.copy(getWorldPosition(camera))
             focus.outerObject3d.quaternion.copy(camera.quaternion)
             focus.translateZ(-focalDistannce)
 
@@ -146,12 +158,17 @@ createEffect(() => {
         }
     }
 
+    const effectComposer = getEffectComposer()
+    if (!effectComposer) return
+
     let selectiveBloomInitialized = false
     let ssrInitialized = false
     let outlineInitialized = false
 
     const handle = loop(() => {
         emitBeforeRender()
+        emitRender()
+        emitRender2()
 
         if (bloomPtr[0]) {
             if (!selectiveBloomInitialized) {
@@ -162,6 +179,7 @@ createEffect(() => {
         }
         if (ssrPtr[0] && !ssrInitialized) {
             setSSR(true)
+            setAntiAlias("SMAA")
             ssrInitialized = true
         }
         if (outlinePtr[0] && !outlineInitialized) {
@@ -175,4 +193,4 @@ createEffect(() => {
     return () => {
         handle.cancel()
     }
-}, [getPerformance, getVR, getCamera, getSecondaryCamera, getResolution, getRenderer])
+}, [getVR, getCameraRendered, getSecondaryCamera, getResolution, getRenderer, getEffectComposer])

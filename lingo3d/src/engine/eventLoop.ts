@@ -1,4 +1,5 @@
 import { Cancellable } from "@lincode/promiselikes"
+import { Clock } from "three"
 import { getPaused } from "../states/usePaused"
 import { getRenderer } from "../states/useRenderer"
 
@@ -16,16 +17,13 @@ export const timer = (time: number, repeat: number, cb: () => void) => {
     return new Cancellable(() => clearInterval(handle))
 }
 
-const callbacks = new Set<() => void>()
-
-let prevTime = Date.now()
 let count = 0
+const callbacks = new Set<() => void>()
+const clock = new Clock()
 
 getRenderer(renderer => {
-    renderer.setAnimationLoop(() => {
-        const time = Date.now()
-        const fps = 1000 / (time - prevTime)
-        prevTime = time
+    renderer?.setAnimationLoop(() => {
+        const fps = 1 / clock.getDelta()
 
         if (paused || ++count < Math.round(fps / 60)) return
         count = 0

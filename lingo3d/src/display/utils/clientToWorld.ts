@@ -1,6 +1,8 @@
 import { containerBounds } from "../../engine/renderLoop/renderSetup"
-import { getCamera } from "../../states/useCamera"
+import { MouseEventPayload } from "../../interface/IMouse"
+import { getCameraRendered } from "../../states/useCameraRendered"
 import { getPickingMode } from "../../states/usePickingMode"
+import getWorldPosition from "./getWorldPosition"
 import { vector3 } from "./reusables"
 
 export default (ev: { clientX: number, clientY: number }, forceMouse?: boolean) => {
@@ -9,16 +11,18 @@ export default (ev: { clientX: number, clientY: number }, forceMouse?: boolean) 
     const clientY = ev.clientY - rect.y
 
     if (getPickingMode() === "camera" && !forceMouse)
-        return { x: 0, y: 0, z: 0, clientX, clientY, xNorm: 0, yNorm: 0 }
+        return new MouseEventPayload(clientX, clientY)
 
     const xNorm = (clientX / rect.width) * 2 - 1
     const yNorm = -(clientY / rect.height) * 2 + 1
 
-    const camera = getCamera()
+    const camera = getCameraRendered()
     vector3.set(xNorm, yNorm, 0.5)
     vector3.unproject(camera)
-    vector3.sub(camera.position).normalize()
-    const { x, y, z } = camera.position.clone().add(vector3.multiplyScalar(5))
 
-    return { x, y, z, clientX, clientY, xNorm, yNorm }
+    const cameraPosition = getWorldPosition(camera)
+    vector3.sub(cameraPosition).normalize()
+    const { x, y, z } = cameraPosition.add(vector3.multiplyScalar(5))
+
+    return new MouseEventPayload(clientX, clientY, x, y, z, xNorm, yNorm)
 }

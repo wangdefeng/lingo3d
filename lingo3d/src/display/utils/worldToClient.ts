@@ -1,33 +1,30 @@
 import { Point } from "@lincode/math"
 import { Object3D } from "three"
-import Point3d from "../../api/Point3d"
-import { scaleDown } from "../../engine/constants"
 import { container } from "../../engine/renderLoop/renderSetup"
-import { getCamera } from "../../states/useCamera"
+import { onAfterRender } from "../../events/onAfterRender"
+import { getCameraRendered } from "../../states/useCameraRendered"
 import getCenter from "./getCenter"
-import { vector3 } from "./reusables"
 
-const cache = new WeakMap<Object3D | Point3d, Point>()
+const cache = new WeakMap<Object3D, Point>()
 
-export default (object3d: Object3D | Point3d) => {
+//todo: might need cloning for caching
+
+export default (object3d: Object3D) => {
     if (cache.has(object3d))
         return cache.get(object3d)!
 
-    if ("id" in object3d)
-        getCenter(object3d)
-    else
-        vector3.set(object3d.x * scaleDown, object3d.y * scaleDown, object3d.z * scaleDown)
+    const center = getCenter(object3d)
     
-    const camera = getCamera()
-    vector3.project(camera)
+    const camera = getCameraRendered()
+    center.project(camera)
     
-    const x = (vector3.x *  .5 + .5) * container.clientWidth
-    const y = (vector3.y * -.5 + .5) * container.clientHeight
+    const x = (center.x *  .5 + .5) * container.clientWidth
+    const y = (center.y * -.5 + .5) * container.clientHeight
 
     const result = { x, y }
 
     cache.set(object3d, result)
-    setTimeout(() => cache.delete(object3d))
+    onAfterRender(() => cache.delete(object3d), true)
 
     return result
 }

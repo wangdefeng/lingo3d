@@ -1,6 +1,6 @@
 {
 	"name": "lingo3d",
-	"version": "1.10.193",
+	"version": "1.11.3",
 	"description": "Lingo3D is a web-first 3d game development library with React integration",
 	"homepage": "https://github.com/lingo3d/lingo3d",
 	"author": "Lingo3D",
@@ -11,6 +11,12 @@
 		"game",
 		"react"
 	],
+	"scripts": {
+		"dev": "vite",
+		"build": "npm run clean && tsc --noEmit false --declaration --outDir lib",
+		"preview": "vite preview",
+		"clean": "node node_modules/rimraf/bin lib"
+	},
 	"dependencies": {
 		"@lincode/events": "*",
 		"@lincode/filetypes": "*",
@@ -18,54 +24,39 @@
 		"@lincode/promiselikes": "*",
 		"@lincode/reactivity": "*",
 		"@lincode/utils": "*",
-		"@tweakpane/core": "1",
-		"@types/three": "0.140.0",
-		"browser-fs-access": "0.29.5",
+		"@tweakpane/core": "^1.1.0",
+		"@types/three": "0.141.0",
+		"browser-fs-access": "0.29.6",
 		"cannon-es": "0.19.0",
-		"howler": "2",
-		"postprocessing": "6",
-		"preact": "10",
-		"preact-custom-element": "4",
-		"prettier": "2",
-		"three": "0.140.2",
-		"tweakpane": "3",
-		"xstate": "4"
+		"nipplejs": "^0.9.1",
+		"preact": "^10.8.2",
+		"preact-custom-element": "^4.2.1",
+		"prettier": "^2.7.1",
+		"three": "0.142.0",
+		"tweakpane": "^3.1.0",
+		"xstate": "*"
 	},
 	"devDependencies": {
-		"@babel/cli": "7",
-		"@babel/core": "7",
-		"@babel/plugin-proposal-decorators": "7",
-		"@babel/plugin-transform-react-jsx": "7",
-		"@babel/preset-env": "7",
-		"@babel/preset-typescript": "7",
-		"@babel/runtime": "7",
-		"@mediapipe/camera_utils": "^0.3.1632432234",
-		"@mediapipe/hands": "^0.4.1635986972",
+		"@babel/core": "^7.18.6",
+		"@preact/preset-vite": "^2.3.0",
 		"@types/howler": "^2.2.7",
 		"@types/preact-custom-element": "^4.0.1",
-		"@types/prettier": "^2.6.1",
+		"@types/prettier": "^2.6.3",
 		"@types/randomcolor": "^0.5.6",
-		"@types/react": "18",
-		"babel-loader": "8",
-		"content-loader": "*",
-		"core-js": "3",
-		"fork-ts-checker-webpack-plugin": "7",
-		"html-webpack-plugin": "5",
-		"randomcolor": "^0.6.2",
-		"typescript": "*",
-		"webpack": "5",
-		"webpack-bundle-analyzer": "*",
-		"webpack-cli": "4",
-		"webpack-dev-server": "4",
-		"webpack-notifier": "1"
-	},
-	"scripts": {
-		"build": "ambients clean && yarn webpack --mode production && yarn tsc",
-		"start": "yarn webpack-dev-server",
-		"dev": "yarn start"
+		"@types/react": "^18.0.14",
+		"randomcolor": "*",
+		"rimraf": "^3.0.2",
+		"typescript": "^4.7.4",
+		"vite": "^2.9.13"
 	},
 	"private": false,
 	"module": "lib/index.js",
 	"main": "lib/index.js",
-	"types": "lib/index.d.ts"
+	"types": "lib/index.d.ts",
+	"prettier": {
+		"trailingComma": "none",
+		"tabWidth": 4,
+		"semi": false,
+		"singleQuote": false
+	}
 }

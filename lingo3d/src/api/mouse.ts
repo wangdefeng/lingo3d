@@ -1,15 +1,15 @@
 import Events from "@lincode/events"
 import { container } from "../engine/renderLoop/renderSetup"
-import { Group } from "three"
-import IMouse, { mouseDefaults, MouseEventPayload, mouseSchema } from "../interface/IMouse"
+import IMouse, { mouseDefaults, MouseEventPayload, mouseSchema, SimpleMouseEvent } from "../interface/IMouse"
 import EventLoopItem from "./core/EventLoopItem"
 import { throttle } from "@lincode/utils"
-import { loop } from "../engine/eventLoop"
 import { getSelectionBlockMouse } from "../states/useSelectionBlockMouse"
 import { appendableRoot } from "./core/Appendable"
 import clientToWorld from "../display/utils/clientToWorld"
 import store from "@lincode/reactivity"
 import { getEditorActive } from "../states/useEditorActive"
+import Nullable from "../interface/utils/Nullable"
+import { onBeforeRender } from "../events/onBeforeRender"
 
 export type MouseEventName = "click" | "rightClick" | "move" | "down" | "up"
 export const mouseEvents = new Events<MouseEventPayload, MouseEventName>()
@@ -19,9 +19,14 @@ let downX = 0
 let downY = 0
 let rightClick = false
 
-container.addEventListener("contextmenu", () => {
+container.addEventListener("contextmenu", e => {
+    e.preventDefault()
     rightClick = true
 })
+container.addEventListener("touchstart", e => {
+    e.preventDefault()
+})
+
 mouseEvents.on("down", e => {
     downTime = Date.now()
     downX = e.clientX
@@ -69,23 +74,24 @@ export class Mouse extends EventLoopItem implements IMouse {
     public static defaults = mouseDefaults
     public static schema = mouseSchema
 
-    public onClick?: (e: MouseEventPayload) => void
-    public onMouseMove?: (e: MouseEventPayload) => void
-    public onMouseDown?: (e: MouseEventPayload) => void
-    public onMouseUp?: (e: MouseEventPayload) => void
-    public onMousePress?: (e: MouseEventPayload) => void
+    public onClick: Nullable<(e: SimpleMouseEvent) => void>
+    public onRightClick: Nullable<(e: SimpleMouseEvent) => void>
+    public onMouseMove: Nullable<(e: SimpleMouseEvent) => void>
+    public onMouseDown: Nullable<(e: SimpleMouseEvent) => void>
+    public onMouseUp: Nullable<(e: SimpleMouseEvent) => void>
+    public onMousePress: Nullable<(e: SimpleMouseEvent) => void>
 
     public constructor() {
-        super(new Group())
+        super()
 
-        let currentPayload: MouseEventPayload = { x: 0, y: 0, z: 0, clientX: 0, clientY: 0, xNorm: 0, yNorm: 0 }
+        let currentPayload = { clientX: 0, clientY: 0 }
         const [setDown, getDown] = store(false)
 
         this.createEffect(() => {
             const cb = this.onMousePress
             if (!getDown() || !cb) return
 
-            const handle = loop(() => cb(currentPayload))
+            const handle = onBeforeRender(() => cb(currentPayload))
 
             return () => {
                 handle.cancel()
@@ -103,13 +109,16 @@ export class Mouse extends EventLoopItem implements IMouse {
                 this.onClick?.(e)
                 currentPayload = e
             })
-            
-            const handle2 = mouseEvents.on("down", e => {
+            const handle2 = mouseEvents.on("rightClick", e => {
+                this.onRightClick?.(e)
+                currentPayload = e
+            })
+            const handle3 = mouseEvents.on("down", e => {
                 this.onMouseDown?.(e)
                 currentPayload = e
                 setDown(true)
             })
-            const handle3 = mouseEvents.on("up", e => {
+            const handle4 = mouseEvents.on("up", e => {
                 this.onMouseUp?.(e)
                 currentPayload = e
                 setDown(false)
@@ -120,6 +129,7 @@ export class Mouse extends EventLoopItem implements IMouse {
                 handle1.cancel()
                 handle2.cancel()
                 handle3.cancel()
+                handle4.cancel()
             }
         }, [getEditorActive, getSelectionBlockMouse])
     }

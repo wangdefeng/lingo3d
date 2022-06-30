@@ -1,18 +1,19 @@
 import { Disposable } from "@lincode/promiselikes"
 import { Object3D } from "three"
-import { emitSceneChange } from "../../events/onSceneChange"
+import { emitSceneGraphChange } from "../../events/onSceneGraphChange"
 
 export const appendableRoot = new Set<Appendable>()
+export const hiddenAppendables = new WeakSet<Appendable>()
 
 export default class Appendable extends Disposable {
     public constructor(
-        public outerObject3d: Object3D
+        public outerObject3d = new Object3D()
     ) {
         super()
         outerObject3d.userData.manager = this
 
         appendableRoot.add(this)
-        emitSceneChange()
+        emitSceneGraphChange()
     }
 
     public get uuid() {
@@ -24,7 +25,7 @@ export default class Appendable extends Disposable {
 
     protected _append(child: Appendable) {
         appendableRoot.delete(child)
-        emitSceneChange()
+        emitSceneGraphChange()
 
         child.parent?.children?.delete(child)
         child.parent = this
@@ -43,10 +44,11 @@ export default class Appendable extends Disposable {
     }
 
     public override dispose() {
+        if (this.done) return this
         super.dispose()
 
         appendableRoot.delete(this)
-        emitSceneChange()
+        emitSceneGraphChange()
 
         this.parent?.children?.delete(this)
         this.parent = undefined

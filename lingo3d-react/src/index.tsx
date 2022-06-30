@@ -1,7 +1,7 @@
 import type * as types from "lingo3d"
 export { types }
 
-export { screenshot, onAfterRender, keyboard, mouse } from "lingo3d"
+export { screenshot, onAfterRender, onBeforeRender, loop, mainOrbitCamera, keyboard, mouse, createProxy, serialize, deserialize, setWasmPath } from "lingo3d"
 
 export { default as World } from "./components/World"
 export { default as LingoEditor } from "./components/editor/LingoEditor"
@@ -13,8 +13,6 @@ export { default as Stats } from "./components/Stats"
 
 export { default as Keyboard } from "./components/api/Keyboard"
 export { default as Mouse } from "./components/api/Mouse"
-export { default as Sound } from "./components/api/Sound"
-export { default as Trigger } from "./components/api/Trigger"
 
 export { default as Group } from "./components/display/Group"
 export { default as Model } from "./components/display/Model"
@@ -22,7 +20,10 @@ export { default as Dummy } from "./components/display/Dummy"
 export { default as SvgMesh } from "./components/display/SvgMesh"
 export { default as Reflector } from "./components/display/Reflector"
 export { default as Skybox } from "./components/display/Skybox"
+export { default as Environment } from "./components/display/Environment"
 export { default as Sprite } from "./components/display/Sprite"
+export { default as Trigger } from "./components/display/Trigger"
+export { default as Audio } from "./components/display/Audio"
 
 export { default as Camera } from "./components/display/cameras/Camera"
 export { default as OrbitCamera } from "./components/display/cameras/OrbitCamera"
@@ -48,6 +49,7 @@ export { default as Torus } from "./components/display/primitives/Torus"
 
 export { default as Setup } from "./components/logical/Setup"
 export { default as HTML } from "./components/logical/HTML"
+export { default as UI } from "./components/logical/UI"
 export { default as Find } from "./components/logical/Find"
 
 export { default as useSpawn } from "./hooks/useSpawn"
@@ -58,7 +60,6 @@ export { default as useLoop } from "./hooks/useLoop"
 export { default as useMouse } from "./hooks/useMouse"
 export { default as useKeyboard } from "./hooks/useKeyboard"
 export { default as usePreload } from "./hooks/usePreload"
-export { default as useSound } from "./hooks/useSound"
 export { default as useTimer } from "./hooks/useTimer"
 export { default as useWindowSize } from "./hooks/useWindowSize"
 export { default as useDocumentScroll } from "./hooks/useDocumentScroll"

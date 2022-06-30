@@ -1,6 +1,10 @@
+import { Point3d } from "@lincode/math"
 import PhysicsMixin from "../display/core/mixins/PhysicsMixin"
 import cubeShape from "../display/core/mixins/PhysicsMixin/cannon/shapes/cubeShape"
+import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
+import { hideSchema } from "./utils/nonEditorSchemaSet"
+import Nullable from "./utils/Nullable"
 
 export type PhysicsGroupIndex = 0 | 1 | 2 | 3 | 4 | 5
 export type PhysicsOptions = boolean | "2d" | "map" | "map-debug" | "character"
@@ -15,13 +19,13 @@ export default interface IPhysics {
     maxVelocityY: number
     maxVelocityZ: number
 
-    velocity: { x: number, y: number, z: number }
+    velocity: Point3d
 
-    noTumble?: boolean
-    slippery?: boolean
-    mass?: number
-    physicsGroup?: PhysicsGroupIndex
-    ignorePhysicsGroups?: Array<PhysicsGroupIndex>
+    noTumble: Nullable<boolean>
+    slippery: Nullable<boolean>
+    mass: Nullable<number>
+    physicsGroup: Nullable<PhysicsGroupIndex>
+    ignorePhysicsGroups: Nullable<Array<PhysicsGroupIndex>>
 
     physics: PhysicsOptions
     physicsShape: PhysicsShape
@@ -48,7 +52,23 @@ export const physicsSchema: Required<ExtractProps<IPhysics>> = {
     physicsShape: Function
 }
 
-export const physicsDefaults: IPhysics = {
+hideSchema([
+    "maxAngularVelocityX",
+    "maxAngularVelocityY",
+    "maxAngularVelocityZ",
+    "maxVelocityX",
+    "maxVelocityY",
+    "maxVelocityZ",
+    "velocity",
+    "noTumble",
+    "slippery",
+    "mass",
+    "physicsGroup",
+    "ignorePhysicsGroups",
+    "physicsShape"
+])
+
+export const physicsDefaults: Defaults<IPhysics> = {
     maxAngularVelocityX: Infinity,
     maxAngularVelocityY: Infinity,
     maxAngularVelocityZ: Infinity,
@@ -58,6 +78,12 @@ export const physicsDefaults: IPhysics = {
     maxVelocityZ: Infinity,
 
     velocity: { x: 0, y: 0, z: 0 },
+
+    noTumble: [undefined, false],
+    slippery: [undefined, false],
+    mass: [undefined, 1],
+    physicsGroup: undefined,
+    ignorePhysicsGroups: undefined,
 
     physics: false,
     physicsShape: cubeShape

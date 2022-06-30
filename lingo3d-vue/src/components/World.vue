@@ -1,18 +1,12 @@
 <script setup lang="ts">
 import { PropType, ref, toRaw, watchEffect } from "vue"
-import { applySetup, rootContainer } from "lingo3d"
-import { setResolution } from "lingo3d/lib/states/useResolution"
-import { setViewportSize } from "lingo3d/lib/states/useViewportSize"
+import { applySetup, settings } from "lingo3d"
 import index from "lingo3d"
 import { preventTreeShake } from "@lincode/utils"
-import scene from "lingo3d/lib/engine/scene"
 import setupProps from "../props/setupProps"
 import htmlContainer from "./logical/HTML/htmlContainer"
 
 preventTreeShake(index)
-
-for (const child of [...scene.children])
-    child.userData.manager && scene.remove(child)
 
 const props = defineProps({
     ...setupProps,
@@ -25,18 +19,11 @@ watchEffect(onCleanUp => {
     const el = toRaw(divRef.value)
     if (!el) return
 
-    el.appendChild(rootContainer)
     el.appendChild(htmlContainer)
-
-    const resizeObserver = new ResizeObserver(() => {
-        const res: [number, number] = [el.clientWidth, el.clientHeight]
-        setResolution(res)
-        setViewportSize(res)
-    })
-    resizeObserver.observe(el)
+    settings.autoMount = el
 
     onCleanUp(() => {
-        resizeObserver.disconnect()
+        settings.autoMount = false
     })
 })
 
@@ -65,6 +52,6 @@ document.head.appendChild(style)
 <template>
     <div class="lingo3d" :style="{ position: props.position }">
         <div style="height: 100%;"><slot /></div>
-        <div ref="divRef" style="height: 100%; flex-grow: 1; position: relative; z-index: 0;" />
+        <div ref="divRef" style="height: 100%; flex-grow: 1; position: relative; overflow: hidden;" />
     </div>
 </template>

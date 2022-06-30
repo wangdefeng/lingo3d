@@ -2,10 +2,20 @@ import { h } from "preact"
 import register from "preact-custom-element"
 import { preventTreeShake } from "@lincode/utils"
 import ObjectGroup from "./ObjectGroup"
+import { useEffect } from "preact/hooks"
+import { emitEditorMountChange } from "../../events/onEditorMountChange"
 
 preventTreeShake(h)
 
 const Library = () => {
+    useEffect(() => {
+        emitEditorMountChange()
+
+        return () => {
+            emitEditorMountChange()
+        }
+    }, [])
+
     return (
         <div
          className="lingo3d-ui"
@@ -19,8 +29,11 @@ const Library = () => {
             <ObjectGroup names={[
                 "model",
                 "dummy",
+                // { "building": "cube" },
                 "svgMesh",
+                { "sprite": "plane" },
                 "trigger",
+                "audio",
                 "reflector",
                 "cube",
                 "sphere",
@@ -32,7 +45,6 @@ const Library = () => {
                 "plane",
                 "circle",
                 "areaLight",
-                "boxLight",
                 "ambientLight",
                 "skyLight",
                 "directionalLight",

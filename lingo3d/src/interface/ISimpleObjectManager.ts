@@ -1,17 +1,20 @@
-import SimpleObjectManager from "../display/core/SimpleObjectManager"
+import StaticObjectManager from "../display/core/StaticObjectManager"
 import IPhysics, { physicsDefaults, physicsSchema } from "./IPhysics"
 import IPositioned, { positionedDefaults, positionedSchema } from "./IPositioned"
 import IStaticObjectManager, { staticObjectManagerDefaults, staticObjectManagerSchema } from "./IStaticObjectManaget"
+import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
+import { hideSchema } from "./utils/nonEditorSchemaSet"
+import Nullable from "./utils/Nullable"
 
-export type OnIntersectValue = (target: SimpleObjectManager) => void
+export type OnIntersectValue = (target: StaticObjectManager) => void
 
 export default interface ISimpleObjectManager extends IStaticObjectManager, IPositioned, IPhysics {
-    onIntersect?: OnIntersectValue
-    onIntersectOut?: OnIntersectValue
+    onIntersect: Nullable<OnIntersectValue>
+    onIntersectOut: Nullable<OnIntersectValue>
+    onMoveToEnd: Nullable<() => void>
 
-    id?: string
-    intersectIds?: Array<string>
+    intersectIds: Nullable<Array<string>>
 
     width: number
     height: number
@@ -37,8 +40,8 @@ export const simpleObjectManagerSchema: Required<ExtractProps<ISimpleObjectManag
 
     onIntersect: Function,
     onIntersectOut: Function,
+    onMoveToEnd: Function,
 
-    id: String,
     intersectIds: Array,
 
     width: Number,
@@ -58,10 +61,18 @@ export const simpleObjectManagerSchema: Required<ExtractProps<ISimpleObjectManag
     innerVisible: Boolean
 }
 
-export const simpleObjectManagerDefaults: ISimpleObjectManager = {
+hideSchema(["intersectIds"])
+
+export const simpleObjectManagerDefaults: Defaults<ISimpleObjectManager> = {
     ...staticObjectManagerDefaults,
     ...positionedDefaults,
     ...physicsDefaults,
+
+    onIntersect: undefined,
+    onIntersectOut: undefined,
+    onMoveToEnd: undefined,
+
+    intersectIds: undefined,
 
     width: 100,
     height: 100,
