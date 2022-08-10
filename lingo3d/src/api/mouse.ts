@@ -1,38 +1,45 @@
 import Events from "@lincode/events"
 import { container } from "../engine/renderLoop/renderSetup"
-import IMouse, { mouseDefaults, MouseEventPayload, mouseSchema, SimpleMouseEvent } from "../interface/IMouse"
+import IMouse, {
+    LingoMouseEvent,
+    mouseDefaults,
+    mouseSchema,
+    SimpleMouseEvent
+} from "../interface/IMouse"
 import EventLoopItem from "./core/EventLoopItem"
 import { throttle } from "@lincode/utils"
-import { getSelectionBlockMouse } from "../states/useSelectionBlockMouse"
 import { appendableRoot } from "./core/Appendable"
-import clientToWorld from "../display/utils/clientToWorld"
+import pointerToWorld from "../display/utils/pointerToWorld"
 import store from "@lincode/reactivity"
-import { getEditorActive } from "../states/useEditorActive"
 import Nullable from "../interface/utils/Nullable"
 import { onBeforeRender } from "../events/onBeforeRender"
+import { getEditing } from "../states/useEditing"
+import { getEditorMounted } from "../states/useEditorMounted"
+import { getCameraRendered } from "../states/useCameraRendered"
+import mainCamera from "../engine/mainCamera"
 
 export type MouseEventName = "click" | "rightClick" | "move" | "down" | "up"
-export const mouseEvents = new Events<MouseEventPayload, MouseEventName>()
+export const mouseEvents = new Events<LingoMouseEvent, MouseEventName>()
 
 let downTime = 0
 let downX = 0
 let downY = 0
 let rightClick = false
 
-container.addEventListener("contextmenu", e => {
+container.addEventListener("contextmenu", (e) => {
     e.preventDefault()
     rightClick = true
 })
-container.addEventListener("touchstart", e => {
+container.addEventListener("touchstart", (e) => {
     e.preventDefault()
 })
 
-mouseEvents.on("down", e => {
+mouseEvents.on("down", (e) => {
     downTime = Date.now()
     downX = e.clientX
     downY = e.clientY
 })
-mouseEvents.on("up", e => {
+mouseEvents.on("up", (e) => {
     const upTime = Date.now()
 
     const deltaTime = upTime - downTime
@@ -49,13 +56,13 @@ mouseEvents.on("up", e => {
     rightClick = false
 })
 
-const computeMouse = throttle(clientToWorld, 0, "leading")
+const computeMouse = throttle(pointerToWorld, 0, "leading")
 
-container.addEventListener("pointermove", ev => {
+container.addEventListener("pointermove", (ev) => {
     mouseEvents.emit("move", computeMouse(ev))
 })
 let down = false
-container.addEventListener("pointerdown", ev => {
+container.addEventListener("pointerdown", (ev) => {
     down = true
     const payload = computeMouse(ev)
     mouseEvents.emit("down", payload)
@@ -99,26 +106,30 @@ export class Mouse extends EventLoopItem implements IMouse {
         }, [getDown])
 
         this.createEffect(() => {
-            if (getEditorActive() && getSelectionBlockMouse()) return
+            if (
+                getEditing() ||
+                (getEditorMounted() && getCameraRendered() === mainCamera)
+            )
+                return
 
-            const handle0 = mouseEvents.on("move", e => {
+            const handle0 = mouseEvents.on("move", (e) => {
                 this.onMouseMove?.(e)
                 currentPayload = e
             })
-            const handle1 = mouseEvents.on("click", e => {
+            const handle1 = mouseEvents.on("click", (e) => {
                 this.onClick?.(e)
                 currentPayload = e
             })
-            const handle2 = mouseEvents.on("rightClick", e => {
+            const handle2 = mouseEvents.on("rightClick", (e) => {
                 this.onRightClick?.(e)
                 currentPayload = e
             })
-            const handle3 = mouseEvents.on("down", e => {
+            const handle3 = mouseEvents.on("down", (e) => {
                 this.onMouseDown?.(e)
                 currentPayload = e
                 setDown(true)
             })
-            const handle4 = mouseEvents.on("up", e => {
+            const handle4 = mouseEvents.on("up", (e) => {
                 this.onMouseUp?.(e)
                 currentPayload = e
                 setDown(false)
@@ -131,7 +142,7 @@ export class Mouse extends EventLoopItem implements IMouse {
                 handle3.cancel()
                 handle4.cancel()
             }
-        }, [getEditorActive, getSelectionBlockMouse])
+        }, [getEditing, getEditorMounted, getCameraRendered])
     }
 }
 

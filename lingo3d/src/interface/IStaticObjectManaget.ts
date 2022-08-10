@@ -1,11 +1,12 @@
-import IAnimationMixin, { animationMixinDefaults, animationMixinSchema } from "./IAnimationMixin"
 import IEventLoop, { eventLoopDefaults, eventLoopSchema } from "./IEventLoop"
 import { LingoMouseEvent } from "./IMouse"
 import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
+import fn from "./utils/fn"
+import { hideSchema } from "./utils/nonEditorSchemaSet"
 import Nullable from "./utils/Nullable"
 
-export default interface IStaticObjectManager extends IEventLoop, IAnimationMixin {
+export default interface IStaticObjectManager extends IEventLoop {
     onClick: Nullable<(e: LingoMouseEvent) => void>
     onMouseDown: Nullable<(e: LingoMouseEvent) => void>
     onMouseUp: Nullable<(e: LingoMouseEvent) => void>
@@ -13,12 +14,14 @@ export default interface IStaticObjectManager extends IEventLoop, IAnimationMixi
     onMouseOut: Nullable<(e: LingoMouseEvent) => void>
     onMouseMove: Nullable<(e: LingoMouseEvent) => void>
     onLookToEnd: Nullable<() => void>
-    
+
+    lookAt: Function | Array<any>
+    lookTo: Function | Array<any>
+
     name: string
     id: Nullable<string>
 
     bloom: boolean
-    reflection: boolean
     outline: boolean
 
     visible: boolean
@@ -27,17 +30,15 @@ export default interface IStaticObjectManager extends IEventLoop, IAnimationMixi
     metalnessFactor: Nullable<number>
     roughnessFactor: Nullable<number>
     opacityFactor: Nullable<number>
-    emissiveIntensityFactor: Nullable<number>
-    emissiveColorFactor: Nullable<string>
-    colorFactor: Nullable<string>
+    adjustColor: Nullable<string>
 
     toon: boolean
-    pbr: boolean
 }
 
-export const staticObjectManagerSchema: Required<ExtractProps<IStaticObjectManager>> = {
+export const staticObjectManagerSchema: Required<
+    ExtractProps<IStaticObjectManager>
+> = {
     ...eventLoopSchema,
-    ...animationMixinSchema,
 
     onClick: Function,
     onMouseDown: Function,
@@ -47,11 +48,13 @@ export const staticObjectManagerSchema: Required<ExtractProps<IStaticObjectManag
     onMouseMove: Function,
     onLookToEnd: Function,
 
+    lookAt: [Function, Array],
+    lookTo: [Function, Array],
+
     name: String,
     id: String,
 
     bloom: Boolean,
-    reflection: Boolean,
     outline: Boolean,
 
     visible: Boolean,
@@ -60,17 +63,15 @@ export const staticObjectManagerSchema: Required<ExtractProps<IStaticObjectManag
     metalnessFactor: Number,
     roughnessFactor: Number,
     opacityFactor: Number,
-    emissiveIntensityFactor: Number,
-    emissiveColorFactor: String,
-    colorFactor: String,
+    adjustColor: String,
 
-    toon: Boolean,
-    pbr: Boolean
+    toon: Boolean
 }
+
+hideSchema(["lookAt", "lookTo"])
 
 export const staticObjectManagerDefaults: Defaults<IStaticObjectManager> = {
     ...eventLoopDefaults,
-    ...animationMixinDefaults,
 
     onClick: undefined,
     onMouseDown: undefined,
@@ -80,11 +81,13 @@ export const staticObjectManagerDefaults: Defaults<IStaticObjectManager> = {
     onMouseMove: undefined,
     onLookToEnd: undefined,
 
+    lookAt: fn,
+    lookTo: fn,
+
     name: "",
     id: undefined,
 
     bloom: false,
-    reflection: false,
     outline: false,
 
     visible: true,
@@ -93,10 +96,7 @@ export const staticObjectManagerDefaults: Defaults<IStaticObjectManager> = {
     metalnessFactor: [undefined, 0],
     roughnessFactor: [undefined, 1],
     opacityFactor: [undefined, 1],
-    emissiveIntensityFactor: [undefined, 1],
-    emissiveColorFactor: [undefined, "#000000"],
-    colorFactor: [undefined, "#ffffff"],
+    adjustColor: [undefined, "#ffffff"],
 
-    toon: false,
-    pbr: false
+    toon: false
 }

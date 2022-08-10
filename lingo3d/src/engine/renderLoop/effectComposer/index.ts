@@ -1,26 +1,25 @@
 import { createEffect } from "@lincode/reactivity"
 import { Pass } from "three/examples/jsm/postprocessing/EffectComposer"
 import { getBloom } from "../../../states/useBloom"
-import { getBokeh } from "../../../states/useBokeh"
-import { getAmbientOcclusion } from "../../../states/useAmbientOcclusion"
 import { getSelectiveBloom } from "../../../states/useSelectiveBloom"
 import bloomPass from "./bloomPass"
-import bokehPass from "./bokehPass"
 import renderPass from "./renderPass"
 import selectiveBloomPass from "./selectiveBloomPass"
-import saoPass from "./saoPass"
-import ssrPass from "./ssrPass"
-import { getSSR } from "../../../states/useSSR"
-import outlinePass from "./outlinePass"
-import { getOutline } from "../../../states/useOutline"
 import lensDistortionPass from "./lensDistortionPass"
 import { getLensDistortion } from "../../../states/useLensDistortion"
 import { getEffectComposer } from "../../../states/useEffectComposer"
-import { getAntiAlias } from "../../../states/useAntiAlias"
-import { setEffectComposerPassCount } from "../../../states/useEffectComposerPassCount"
-import smaaPass from "./smaaPass"
 import motionBlurPass from "./motionBlurPass"
 import { getMotionBlur } from "../../../states/useMotionBlur"
+import { getAmbientOcclusion } from "../../../states/useAmbientOcclusion"
+import saoPass from "./saoPass"
+import { getBokeh } from "../../../states/useBokeh"
+import bokehPass from "./bokehPass"
+import { getOutline } from "../../../states/useOutline"
+import outlinePass from "./outlinePass"
+import { getPixelRatioComputed } from "../../../states/usePixelRatioComputed"
+import { getAntiAlias } from "../../../states/useAntiAlias"
+import { getRenderer } from "../../../states/useRenderer"
+import smaaPass from "./smaaPass"
 
 export default {}
 
@@ -29,8 +28,6 @@ createEffect(() => {
     if (!effectComposer) return
 
     const passes: Array<Pass> = [renderPass]
-
-    if (getSSR()) passes.push(ssrPass)
 
     if (getAmbientOcclusion()) passes.push(saoPass)
 
@@ -44,29 +41,30 @@ createEffect(() => {
 
     if (getLensDistortion()) passes.push(lensDistortionPass)
 
-    if (getAntiAlias() === "SSAA" || getAntiAlias() === "SMAA")
-        passes.push(smaaPass)
-
     if (getMotionBlur()) for (const pass of motionBlurPass) passes.push(pass)
+
+    const antiAlias = getAntiAlias()
+    if (
+        (antiAlias === "MSAA" && !getRenderer()?.capabilities.isWebGL2) ||
+        antiAlias === "SSAA"
+    )
+        passes.push(smaaPass)
 
     for (const pass of passes) effectComposer.addPass(pass)
 
-    setEffectComposerPassCount(passes.length - 1)
-
     return () => {
         for (const pass of passes) effectComposer.removePass(pass)
-
-        setEffectComposerPassCount(0)
     }
 }, [
     getEffectComposer,
-    getSSR,
     getAmbientOcclusion,
     getBloom,
     getSelectiveBloom,
     getBokeh,
     getOutline,
     getLensDistortion,
+    getPixelRatioComputed,
+    getMotionBlur,
     getAntiAlias,
-    getMotionBlur
+    getRenderer
 ])

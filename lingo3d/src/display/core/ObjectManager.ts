@@ -1,16 +1,20 @@
 import { Object3D, PropertyBinding } from "three"
 import { deg2Rad, rad2Deg } from "@lincode/math"
 import scene from "../../engine/scene"
-import SimpleObjectManager from "./SimpleObjectManager"
 import { scaleDown, scaleUp } from "../../engine/constants"
 import IObjectManager from "../../interface/IObjectManager"
 import FoundManager from "./FoundManager"
+import PhysicsObjectManager from "./PhysicsObjectManager"
 
-export default abstract class ObjectManager<T extends Object3D = Object3D> extends SimpleObjectManager<T> implements IObjectManager {
-    public constructor(object3d = new Object3D() as T) {
+export default abstract class ObjectManager<T extends Object3D = Object3D>
+    extends PhysicsObjectManager<T>
+    implements IObjectManager
+{
+    public constructor(public object3d = new Object3D() as T) {
         super(object3d)
-        
-        const outerObject3d = this.outerObject3d = new Object3D()
+        this.nativeObject3d = object3d
+
+        const outerObject3d = (this.outerObject3d = new Object3D() as T)
         outerObject3d.userData.manager = this
 
         scene.add(outerObject3d)
@@ -66,21 +70,71 @@ export default abstract class ObjectManager<T extends Object3D = Object3D> exten
         this.object3d.position.z = val * scaleDown
     }
 
-    public find(name: string, hiddenFromSceneGraph?: boolean): FoundManager | undefined {
-        const child = this.outerObject3d.getObjectByName(PropertyBinding.sanitizeNodeName(name))
+    public get width() {
+        return this.object3d.scale.x * scaleUp
+    }
+    public set width(val) {
+        this.object3d.scale.x = val * scaleDown
+    }
+
+    public get height() {
+        return this.object3d.scale.y * scaleUp
+    }
+    public set height(val) {
+        this.object3d.scale.y = val * scaleDown
+    }
+
+    public get depth() {
+        return this.object3d.scale.z * scaleUp
+    }
+    public set depth(val) {
+        this.object3d.scale.z = val * scaleDown
+    }
+
+    public get innerVisible() {
+        return this.object3d.visible
+    }
+    public set innerVisible(val) {
+        this.object3d.visible = val
+    }
+
+    public find(
+        name: string,
+        hiddenFromSceneGraph?: boolean
+    ): FoundManager | undefined {
+        const child = this.outerObject3d.getObjectByName(
+            PropertyBinding.sanitizeNodeName(name)
+        )
         if (!child) return
 
-        const result = child.userData.manager ??= new FoundManager(child)
+        const result = (child.userData.manager ??= new FoundManager(child))
         !hiddenFromSceneGraph && this._append(result)
 
         return result
     }
 
-    public findAll(name: string): Array<FoundManager> {
+    public findAll(name?: string | RegExp): Array<FoundManager> {
         const result: Array<FoundManager> = []
-        this.outerObject3d.traverse(child => {
-            child.name === name && result.push(child.userData.manager ??= new FoundManager(child))
-        })
+        if (name === undefined)
+            this.outerObject3d.traverse((child) => {
+                result.push(
+                    (child.userData.manager ??= new FoundManager(child))
+                )
+            })
+        else if (typeof name === "string")
+            this.outerObject3d.traverse((child) => {
+                child.name === name &&
+                    result.push(
+                        (child.userData.manager ??= new FoundManager(child))
+                    )
+            })
+        else
+            this.outerObject3d.traverse((child) => {
+                name.test(child.name) &&
+                    result.push(
+                        (child.userData.manager ??= new FoundManager(child))
+                    )
+            })
         return result
     }
 }

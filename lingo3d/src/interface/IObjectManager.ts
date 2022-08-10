@@ -1,8 +1,11 @@
-import ISimpleObjectManager, { simpleObjectManagerDefaults, simpleObjectManagerSchema } from "./ISimpleObjectManager"
+import IPhysicsObjectManager, {
+    physicsObjectManagerDefaults,
+    physicsObjectManagerSchema
+} from "./IPhysicsObjectManager"
 import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 
-export default interface IObjectManager extends ISimpleObjectManager {
+export default interface IObjectManager extends IPhysicsObjectManager {
     innerRotationX: number
     innerRotationY: number
     innerRotationZ: number
@@ -11,10 +14,16 @@ export default interface IObjectManager extends ISimpleObjectManager {
     innerX: number
     innerY: number
     innerZ: number
+
+    width: number
+    height: number
+    depth: number
+
+    innerVisible: boolean
 }
 
 export const objectManagerSchema: Required<ExtractProps<IObjectManager>> = {
-    ...simpleObjectManagerSchema,
+    ...physicsObjectManagerSchema,
 
     innerRotationX: Number,
     innerRotationY: Number,
@@ -23,12 +32,18 @@ export const objectManagerSchema: Required<ExtractProps<IObjectManager>> = {
 
     innerX: Number,
     innerY: Number,
-    innerZ: Number
+    innerZ: Number,
+
+    width: Number,
+    height: Number,
+    depth: Number,
+
+    innerVisible: Boolean
 }
 
 export const objectManagerDefaults: Defaults<IObjectManager> = {
-    ...simpleObjectManagerDefaults,
-    
+    ...physicsObjectManagerDefaults,
+
     innerRotationX: 0,
     innerRotationY: 0,
     innerRotationZ: 0,
@@ -36,5 +51,11 @@ export const objectManagerDefaults: Defaults<IObjectManager> = {
 
     innerX: 0,
     innerY: 0,
-    innerZ: 0
+    innerZ: 0,
+
+    width: 100,
+    height: 100,
+    depth: 100,
+
+    innerVisible: true
 }

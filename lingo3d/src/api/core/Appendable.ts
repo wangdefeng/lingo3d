@@ -5,12 +5,15 @@ import { emitSceneGraphChange } from "../../events/onSceneGraphChange"
 export const appendableRoot = new Set<Appendable>()
 export const hiddenAppendables = new WeakSet<Appendable>()
 
-export default class Appendable extends Disposable {
-    public constructor(
-        public outerObject3d = new Object3D()
-    ) {
+export default class Appendable<
+    T extends Object3D = Object3D
+> extends Disposable {
+    public nativeObject3d: Object3D
+
+    public constructor(public outerObject3d: T = new Object3D() as T) {
         super()
         outerObject3d.userData.manager = this
+        this.nativeObject3d = outerObject3d
 
         appendableRoot.add(this)
         emitSceneGraphChange()
@@ -29,7 +32,6 @@ export default class Appendable extends Disposable {
 
         child.parent?.children?.delete(child)
         child.parent = this
-
         ;(this.children ??= new Set()).add(child)
     }
 
@@ -37,7 +39,7 @@ export default class Appendable extends Disposable {
         this._append(child)
         this.outerObject3d.add(child.outerObject3d)
     }
-    
+
     public attach(child: Appendable) {
         this._append(child)
         this.outerObject3d.attach(child.outerObject3d)
@@ -55,9 +57,7 @@ export default class Appendable extends Disposable {
 
         this.outerObject3d.parent?.remove(this.outerObject3d)
 
-        if (this.children)
-            for (const child of this.children)
-                child.dispose()
+        if (this.children) for (const child of this.children) child.dispose()
 
         return this
     }

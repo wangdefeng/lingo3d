@@ -7,142 +7,205 @@ import ScaleIcon from "./icons/ScaleIcon"
 import AbsoluteIcon from "./icons/AbsoluteIcon"
 import RelativeIcon from "./icons/RelativeIcon"
 import IconButton from "./IconButton"
-import { useSelectionTarget, useTransformControlsMode, useTransformControlsSpace } from "../states"
+import {
+    useSelectionTarget,
+    useEditorComputed,
+    useTransformControlsSpaceComputed
+} from "../states"
 import CursorIcon from "./icons/CursorIcon"
-import Separator from "./Separator"
 import ExportIcon from "./icons/ExportIcon"
-import serialize from "../../api/serializer/serialize"
 import OpenIcon from "./icons/OpenIcont"
-import { fileOpen } from "browser-fs-access"
-import deserialize from "../../api/serializer/deserialize"
-import { appendableRoot } from "../../api/core/Appendable"
 import ReactIcon from "./icons/ReactIcon"
 import VueIcon from "./icons/VueIcon"
-import saveTextFile from "./saveTextFile"
-import serializeReact from "./serializeReact"
-import serializeVue from "./serializeVue"
+import exportReact from "../../api/files/exportReact"
+import exportVue from "../../api/files/exportVue"
+import { useEffect } from "preact/hooks"
+import openJSON from "../../api/files/openJSON"
+import exportJSON from "../../api/files/exportJSON"
+import Section from "./Section"
+import useInit from "../utils/useInit"
+import { setEditorMode } from "../../states/useEditorMode"
+import { setTransformControlsSpace } from "../../states/useTransformControlsSpace"
+import { isPositionedItem } from "../../api/core/PositionedItem"
 import SimpleObjectManager from "../../display/core/SimpleObjectManager"
-import { useEffect, useLayoutEffect } from "preact/hooks"
-import { emitEditorMountChange } from "../../events/onEditorMountChange"
+import PlayIcon from "./icons/PlayIcon"
+import {
+    decreaseEditorMounted,
+    increaseEditorMounted
+} from "../../states/useEditorMounted"
+import MeshIcon from "./icons/MeshIcon"
+import PathIcon from "./icons/PathIcon"
 
 preventTreeShake(h)
 
-const handleSave = async () => {
-    const prettier = (await import("prettier/standalone")).default
-    const parser = (await import("prettier/parser-babel")).default
-
-    const code = prettier.format(JSON.stringify(serialize()), { parser: "json", plugins: [parser] })
-    saveTextFile("scene.json", code)
+type ButtonOptions = {
+    hidden?: boolean
+    onClick?: () => void
 }
 
-const handleOpen = async () => {
-    const blob = await fileOpen({
-        extensions: [".json"]
-    })
-    const text = await blob.text()
-
-    for (const child of appendableRoot)
-        child.dispose()
-
-    try {
-        deserialize(JSON.parse(text))
+interface ToolbarProps {
+    buttons?: {
+        openFolder?: ButtonOptions
+        openJSON?: ButtonOptions
+        exportJSON?: ButtonOptions
+        exportReact?: ButtonOptions
+        exportVue?: ButtonOptions
     }
-    catch {}
 }
 
-const Toolbar = () => {
-    const [mode, setMode] = useTransformControlsMode()
-    let [space, setSpace] = useTransformControlsSpace()
-    if (mode === "scale") space = "local"
+const Toolbar = ({ buttons }: ToolbarProps) => {
+    const elRef = useInit()
 
+    const [mode] = useEditorComputed()
+    const [space] = useTransformControlsSpaceComputed()
     const [target] = useSelectionTarget()
-    const isPositioned = target && !(target instanceof SimpleObjectManager)
-    // const isStatic = target && !isPositionedItem(target)
-
-    useLayoutEffect(() => {
-        // if (isStatic)
-            // setMode("select")
-        if (isPositioned && (mode === "scale"))
-            setMode("translate")
-
-    }, [isPositioned])
+    const translateOnly =
+        target &&
+        isPositionedItem(target) &&
+        !(target instanceof SimpleObjectManager)
 
     useEffect(() => {
-        emitEditorMountChange()
+        increaseEditorMounted()
 
         return () => {
-            emitEditorMountChange()
+            decreaseEditorMounted()
         }
     }, [])
 
     return (
         <div
-         className="lingo3d-ui"
-         style={{
-             width: 50,
-             height: "100%",
-             background: "rgb(40, 41, 46)",
-             borderRight: "1px solid rgba(255, 255, 255, 0.05)",
-             overflow: "hidden"
-         }}
+            ref={elRef}
+            className="lingo3d-ui lingo3d-bg"
+            style={{
+                width: 50,
+                height: "100%",
+                borderRight: "1px solid rgba(255, 255, 255, 0.05)",
+                overflow: "hidden"
+            }}
         >
-            <div style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                opacity: 0.75,
-                paddingTop: 12
-            }}>
-                <IconButton active={mode === "select"} onClick={() => setMode("select")}>
-                    <CursorIcon />
-                </IconButton>
-                <IconButton active={mode === "translate"} onClick={() => setMode("translate")}>
-                    <TranslateIcon />
-                </IconButton>
-                <IconButton active={mode === "rotate"} onClick={() => setMode("rotate")}>
-                    <RotateIcon />
-                </IconButton>
-                <IconButton active={mode === "scale"} disabled={isPositioned} onClick={() => setMode("scale")}>
-                    <ScaleIcon />
-                </IconButton>
+            <div
+                style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    opacity: 0.75,
+                    paddingTop: 12
+                }}
+            >
+                <Section>
+                    <IconButton
+                        active={mode === "select"}
+                        onClick={() => setEditorMode("select")}
+                    >
+                        <CursorIcon />
+                    </IconButton>
+                    <IconButton
+                        active={mode === "translate"}
+                        onClick={() => setEditorMode("translate")}
+                    >
+                        <TranslateIcon />
+                    </IconButton>
+                    <IconButton
+                        active={mode === "rotate"}
+                        disabled={translateOnly}
+                        onClick={() => setEditorMode("rotate")}
+                    >
+                        <RotateIcon />
+                    </IconButton>
+                    <IconButton
+                        active={mode === "scale"}
+                        disabled={translateOnly}
+                        onClick={() => setEditorMode("scale")}
+                    >
+                        <ScaleIcon />
+                    </IconButton>
+                    {/* <IconButton
+                        active={mode === "mesh"}
+                        onClick={() => setEditorMode("mesh")}
+                    >
+                        <MeshIcon />
+                    </IconButton> */}
+                    <IconButton
+                        active={mode === "path"}
+                        onClick={() => setEditorMode("path")}
+                    >
+                        <PathIcon />
+                    </IconButton>
+                    <IconButton
+                        active={mode === "play"}
+                        onClick={() => setEditorMode("play")}
+                    >
+                        <PlayIcon />
+                    </IconButton>
+                </Section>
 
-                <Separator />
+                <Section>
+                    <IconButton
+                        active={space === "world"}
+                        onClick={() => setTransformControlsSpace("world")}
+                        disabled={mode !== "translate" && mode !== "rotate"}
+                    >
+                        <AbsoluteIcon />
+                    </IconButton>
+                    <IconButton
+                        active={space === "local"}
+                        onClick={() => setTransformControlsSpace("local")}
+                        disabled={
+                            mode !== "translate" &&
+                            mode !== "rotate" &&
+                            mode !== "scale"
+                        }
+                    >
+                        <RelativeIcon />
+                    </IconButton>
+                </Section>
 
-                <IconButton
-                 active={space === "world"}
-                 onClick={() => setSpace("world")}
-                 disabled={mode === "scale" || mode === "select"}
-                >
-                    <AbsoluteIcon />
-                </IconButton>
-                <IconButton
-                 active={space === "local"}
-                 onClick={() => setSpace("local")}
-                 disabled={mode === "select"}
-                >
-                    <RelativeIcon />
-                </IconButton>
+                <Section>
+                    {/* {!buttons?.openFolder?.hidden && (
+                        <IconButton
+                            onClick={buttons?.openFolder?.onClick ?? openFolder}
+                        >
+                            <FolderIcon />
+                        </IconButton>
+                    )} */}
+                    {!buttons?.openJSON?.hidden && (
+                        <IconButton
+                            onClick={buttons?.openJSON?.onClick ?? openJSON}
+                        >
+                            <OpenIcon />
+                        </IconButton>
+                    )}
+                    {!buttons?.exportJSON?.hidden && (
+                        <IconButton
+                            onClick={buttons?.exportJSON?.onClick ?? exportJSON}
+                        >
+                            <ExportIcon />
+                        </IconButton>
+                    )}
+                </Section>
 
-                <Separator />
-
-                <IconButton onClick={handleOpen}>
-                    <OpenIcon />
-                </IconButton>
-                <IconButton onClick={handleSave}>
-                    <ExportIcon />
-                </IconButton>
-
-                <Separator />
-
-                <IconButton onClick={serializeReact}>
-                    <ReactIcon />
-                </IconButton>
-                <IconButton onClick={serializeVue}>
-                    <VueIcon />
-                </IconButton>
+                <Section>
+                    {!buttons?.exportReact?.hidden && (
+                        <IconButton
+                            onClick={
+                                buttons?.exportReact?.onClick ?? exportReact
+                            }
+                        >
+                            <ReactIcon />
+                        </IconButton>
+                    )}
+                    {!buttons?.exportVue?.hidden && (
+                        <IconButton
+                            onClick={buttons?.exportVue?.onClick ?? exportVue}
+                        >
+                            <VueIcon />
+                        </IconButton>
+                    )}
+                </Section>
             </div>
         </div>
     )
 }
+export default Toolbar
 
-register(Toolbar, "lingo3d-toolbar")
+register(Toolbar, "lingo3d-toolbar", ["buttons"])

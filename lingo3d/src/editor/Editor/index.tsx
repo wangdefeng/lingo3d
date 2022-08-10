@@ -4,11 +4,8 @@ import settings from "../../api/settings"
 import mainCamera from "../../engine/mainCamera"
 import { setGridHelper } from "../../states/useGridHelper"
 import { setOrbitControls } from "../../states/useOrbitControls"
-import { setSelection } from "../../states/useSelection"
-import { setSelectionBlockKeyboard } from "../../states/useSelectionBlockKeyboard"
-import { setSelectionBlockMouse } from "../../states/useSelectionBlockMouse"
 import { h } from "preact"
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks"
+import { useEffect, useLayoutEffect, useState } from "preact/hooks"
 import register from "preact-custom-element"
 import {
     useSelectionTarget,
@@ -16,7 +13,8 @@ import {
     useMultipleSelectionTargets,
     useCameraStack,
     useDefaultLight,
-    useDefaultFog
+    useNodeEditor,
+    useSetupStack
 } from "../states"
 import { Cancellable } from "@lincode/promiselikes"
 import { getSelectionTarget } from "../../states/useSelectionTarget"
@@ -35,13 +33,10 @@ import { emitSelectionTarget } from "../../events/onSelectionTarget"
 import deleteSelected from "./deleteSelected"
 import { onKeyClear } from "../../events/onKeyClear"
 import { nonEditorSettings } from "../../api/serializer/types"
-import { onApplySetup } from "../../events/onApplySetup"
-import ISetup, { setupDefaults } from "../../interface/ISetup"
+import { setupDefaults } from "../../interface/ISetup"
 import { isPositionedItem } from "../../api/core/PositionedItem"
-import { emitEditorMountChange } from "../../events/onEditorMountChange"
 import mainOrbitCamera from "../../engine/mainOrbitCamera"
-import getComponentName from "../getComponentName"
-import createElement from "../../utils/createElement"
+import getComponentName from "../utils/getComponentName"
 import addInputs, { setProgrammatic } from "./addInputs"
 import getParams from "./getParams"
 import splitObject from "./splitObject"
@@ -49,96 +44,56 @@ import { onTransformControls } from "../../events/onTransformControls"
 import assignIn from "./assignIn"
 import { emitSceneGraphNameChange } from "../../events/onSceneGraphNameChange"
 import { dummyDefaults } from "../../interface/IDummy"
+import useInit from "../utils/useInit"
+import {
+    decreaseEditorMounted,
+    increaseEditorMounted
+} from "../../states/useEditorMounted"
 
 preventTreeShake(h)
 
 Object.assign(setupDefaults, {
-    defaultLightEnabled: true,
-    defaultFogEnabled: false
+    defaultLightEnabled: true
 })
 
 Object.assign(dummyDefaults, {
     stride: { x: 0, y: 0 }
 })
 
-const style = createElement(`
-    <style>
-        .tp-rotv {
-            box-shadow: none !important;
-            background-color: transparent !important;
-        }
-        .tp-brkv {
-            border-left: none !important;
-        }
-    </style>
-`)
-document.head.appendChild(style)
-
-interface EditorProps {
-    mouse?: "enabled" | "disabled"
-    keyboard?: "enabled" | "disabled"
-}
-
-const Editor = ({ mouse, keyboard }: EditorProps) => {
-    const elRef = useRef<HTMLDivElement>(null)
-
-    useEffect(() => {
-        setSelectionBlockMouse(mouse !== "enabled")
-        setSelectionBlockKeyboard(keyboard !== "enabled")
-
-        return () => {
-            setSelectionBlockKeyboard(true)
-            setSelectionBlockMouse(true)
-        }
-    }, [mouse, keyboard])
-
-    const [renderDeps, render] = useState({})
+const Editor = () => {
+    const elRef = useInit()
 
     const [cameraStack] = useCameraStack()
     const camera = last(cameraStack)!
 
     useEffect(() => {
-        const currentCamera = camera!
-
-        const init = () => {
-            mainOrbitCamera.activate()
-            setOrbitControls(true)
-            setSelection(true)
-            setGridHelper(true)
-            render({})
-        }
-        init()
-
-        const handle0 = onApplySetup(init)
+        mainOrbitCamera.activate()
+        setOrbitControls(true)
+        setGridHelper(true)
 
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key !== "Shift" && e.key !== "Meta" && e.key !== "Control")
-                return
-            setMultipleSelection(true)
+            if (e.key === "Shift" || e.key === "Meta" || e.key === "Control")
+                setMultipleSelection(true)
         }
         const handleKeyUp = (e: KeyboardEvent) => {
-            if (e.key !== "Shift" && e.key !== "Meta" && e.key !== "Control")
-                return
-            setMultipleSelection(false)
+            if (e.key === "Shift" || e.key === "Meta" || e.key === "Control")
+                setMultipleSelection(false)
         }
         document.addEventListener("keydown", handleKeyDown)
         document.addEventListener("keyup", handleKeyUp)
         const handle1 = onKeyClear(() => setMultipleSelection(false))
 
-        emitEditorMountChange()
+        increaseEditorMounted()
 
         return () => {
-            currentCamera.userData.manager.activate()
             setOrbitControls(false)
-            setSelection(false)
             setGridHelper(false)
 
             document.removeEventListener("keydown", handleKeyDown)
             document.removeEventListener("keyup", handleKeyUp)
-            handle0.cancel()
             handle1.cancel()
 
-            emitEditorMountChange()
+            decreaseEditorMounted()
         }
     }, [])
 
@@ -152,7 +107,7 @@ const Editor = ({ mouse, keyboard }: EditorProps) => {
     useLayoutEffect(() => {
         if (!pane || !cameraFolder) return
 
-        const mainCameraName = "main camera"
+        const mainCameraName = "editor camera"
 
         const options = cameraList.reduce<Record<string, any>>(
             (acc, cam, i) => {
@@ -201,9 +156,7 @@ const Editor = ({ mouse, keyboard }: EditorProps) => {
 
     const [defaultLight, setDefaultLight] = useDefaultLight()
     const defaultLightEnabled = !!defaultLight
-
-    const [defaultFog, setDefaultFog] = useDefaultFog()
-    const defaultFogEnabled = !!defaultFog
+    const [setupStack] = useSetupStack()
 
     useEffect(() => {
         const el = elRef.current
@@ -214,24 +167,12 @@ const Editor = ({ mouse, keyboard }: EditorProps) => {
         setCameraFolder(pane.addFolder({ title: "camera" }))
 
         if (!selectionTarget) {
-            const omitted: Array<keyof ISetup> = [
-                "defaultFog",
-                "defaultLight",
-                "defaultLightScale"
-            ]
-
             const rest = Object.assign(
                 {
                     defaultLightEnabled,
-                    ...(defaultLightEnabled && {
-                        defaultLight,
-                        defaultLightScale: settings.defaultLightScale
-                    }),
-
-                    defaultFogEnabled,
-                    ...(defaultFogEnabled && { defaultFog })
+                    ...(defaultLightEnabled && { defaultLight })
                 },
-                omit(settings, [...nonEditorSettings, ...omitted])
+                omit(settings, nonEditorSettings)
             )
 
             const [editorParams, editorRest] = splitObject(rest, [
@@ -252,21 +193,22 @@ const Editor = ({ mouse, keyboard }: EditorProps) => {
                 "exposure",
                 "defaultLightEnabled",
                 "defaultLight",
-                "defaultLightScale",
-                "defaultFogEnabled",
-                "defaultFog",
-                "skybox"
+                "shadowDistance",
+                "shadowResolution",
+                "skybox",
+                "texture",
+                "color"
             ])
-            const {
-                defaultLightEnabled: defaultLightEnabledInput,
-                defaultFogEnabled: defaultFogEnabledInput
-            } = addInputs(pane, "lighting & environment", settings, setupDefaults, sceneParams)
+            const { defaultLightEnabled: defaultLightEnabledInput } = addInputs(
+                pane,
+                "lighting & environment",
+                settings,
+                setupDefaults,
+                sceneParams
+            )
 
             defaultLightEnabledInput.on("change", ({ value }) =>
                 setDefaultLight(value ? "default" : false)
-            )
-            defaultFogEnabledInput.on("change", ({ value }) =>
-                setDefaultFog(value ? "white" : undefined)
             )
 
             const [effectsParams, effectsRest] = splitObject(sceneRest, [
@@ -275,6 +217,10 @@ const Editor = ({ mouse, keyboard }: EditorProps) => {
                 "bloomStrength",
                 "bloomRadius",
                 "bloomThreshold",
+                "bokeh",
+                "bokehAperture",
+                "bokehFocus",
+                "bokehMaxBlur",
                 "lensDistortion",
                 "lensIor",
                 "lensBand",
@@ -291,16 +237,29 @@ const Editor = ({ mouse, keyboard }: EditorProps) => {
                 "outlineStrength",
                 "outlineThickness"
             ])
-            addInputs(pane, "outline effect", settings, setupDefaults, outlineParams)
+            addInputs(
+                pane,
+                "outline effect",
+                settings,
+                setupDefaults,
+                outlineParams
+            )
 
             const [physicsParams, physicsRest] = splitObject(outlineRest, [
                 "gravity",
-                "repulsion"
+                "repulsion",
+                "centripetal"
             ])
             addInputs(pane, "physics", settings, setupDefaults, physicsParams)
 
             Object.keys(physicsRest).length &&
-                addInputs(pane, "settings", settings, setupDefaults, physicsRest)
+                addInputs(
+                    pane,
+                    "settings",
+                    settings,
+                    setupDefaults,
+                    physicsRest
+                )
 
             return () => {
                 pane.dispose()
@@ -341,11 +300,10 @@ const Editor = ({ mouse, keyboard }: EditorProps) => {
                     "rotation",
                     "innerRotation",
                     "frustumCulled",
-                    "physics",
                     "minAzimuthAngle",
                     "maxAzimuthAngle"
                 ]),
-                ["name", "id"]
+                ["name", "id", "physics", "gravity"]
             )
             if (generalParams) {
                 const { name: nameInput } = addInputs(
@@ -355,7 +313,7 @@ const Editor = ({ mouse, keyboard }: EditorProps) => {
                     defaults,
                     generalParams
                 )
-                nameInput.on("change", () => emitSceneGraphNameChange())
+                nameInput?.on("change", () => emitSceneGraphNameChange())
             }
 
             const [transformParams0, transformRest] = splitObject(generalRest, [
@@ -427,14 +385,15 @@ const Editor = ({ mouse, keyboard }: EditorProps) => {
                 "visible",
                 "innerVisible"
             ])
-            displayParams && addInputs(pane, "display", target, defaults, displayParams)
+            displayParams &&
+                addInputs(pane, "display", target, defaults, displayParams)
 
             const [effectsParams, effectsRest] = splitObject(displayRest, [
                 "bloom",
-                "reflection",
                 "outline"
             ])
-            effectsParams && addInputs(pane, "effects", target, defaults, effectsParams)
+            effectsParams &&
+                addInputs(pane, "effects", target, defaults, effectsParams)
 
             const [animationParams, animationRest] = splitObject(effectsRest, [
                 "animation",
@@ -447,18 +406,21 @@ const Editor = ({ mouse, keyboard }: EditorProps) => {
             const [adjustMaterialParams, adjustMaterialRest] = splitObject(
                 animationRest,
                 [
-                    "toon",
-                    "pbr",
                     "metalnessFactor",
                     "roughnessFactor",
                     "opacityFactor",
-                    "emissiveIntensityFactor",
-                    "emissiveColorFactor",
-                    "colorFactor"
+                    "adjustColor",
+                    "toon"
                 ]
             )
             adjustMaterialParams &&
-                addInputs(pane, "adjust material", target, defaults, adjustMaterialParams)
+                addInputs(
+                    pane,
+                    "adjust material",
+                    target,
+                    defaults,
+                    adjustMaterialParams
+                )
 
             const [materialParams, materialRest] = splitObject(
                 adjustMaterialRest,
@@ -502,10 +464,19 @@ const Editor = ({ mouse, keyboard }: EditorProps) => {
                 ]
             )
             pbrMaterialParams &&
-                addInputs(pane, "pbr material", target, defaults, pbrMaterialParams)
+                addInputs(
+                    pane,
+                    "pbr material",
+                    target,
+                    defaults,
+                    pbrMaterialParams
+                )
 
             if (componentName === "dummy") {
-                pbrMaterialRest.stride = { x: target.strideRight, y: -target.strideForward }
+                pbrMaterialRest.stride = {
+                    x: target.strideRight,
+                    y: -target.strideForward
+                }
                 const { stride: strideInput } = addInputs(
                     pane,
                     componentName,
@@ -521,7 +492,13 @@ const Editor = ({ mouse, keyboard }: EditorProps) => {
                     pane.refresh()
                 })
             } else if (Object.keys(pbrMaterialRest).length)
-                addInputs(pane, componentName, target, defaults, pbrMaterialRest)
+                addInputs(
+                    pane,
+                    componentName,
+                    target,
+                    defaults,
+                    pbrMaterialRest
+                )
         }
 
         return () => {
@@ -532,24 +509,26 @@ const Editor = ({ mouse, keyboard }: EditorProps) => {
     }, [
         selectionTarget,
         multipleSelectionTargets,
-        renderDeps,
-        defaultFogEnabled,
+        setupStack,
         defaultLightEnabled
     ])
 
     return (
         <div
             ref={elRef}
-            onKeyDown={(e) => e.stopPropagation()}
-            onKeyUp={(e) => e.stopPropagation()}
-            className="lingo3d-ui"
-            style={{
-                width: 300,
-                height: "100%",
-                background: "rgb(40, 41, 46)"
-            }}
+            className="lingo3d-ui lingo3d-bg"
+            style={{ width: 300, height: "100%" }}
         />
     )
 }
 
-register(Editor, "lingo3d-editor", ["mouse", "keyboard"])
+const EditorParent = () => {
+    const [nodeEditor] = useNodeEditor()
+
+    if (nodeEditor) return null
+
+    return <Editor />
+}
+export default EditorParent
+
+register(EditorParent, "lingo3d-editor")

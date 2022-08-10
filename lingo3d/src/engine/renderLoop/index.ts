@@ -9,21 +9,19 @@ import { getRenderer } from "../../states/useRenderer"
 import { getResolution } from "../../states/useResolution"
 import { getSecondaryCamera } from "../../states/useSecondaryCamera"
 import { setSelectiveBloom } from "../../states/useSelectiveBloom"
-import { setSSR } from "../../states/useSSR"
 import { getVR } from "../../states/useVR"
 import { loop } from "../eventLoop"
 import scene from "../scene"
 import { outlinePtr } from "./effectComposer/outlinePass"
-import renderSelectiveBloom, { bloomPtr } from "./effectComposer/selectiveBloomPass/renderSelectiveBloom"
-import { ssrPtr } from "./effectComposer/ssrPass"
+import renderSelectiveBloom, {
+    bloomPtr
+} from "./effectComposer/selectiveBloomPass/renderSelectiveBloom"
 import resize from "./resize"
 import effectComposer from "./effectComposer"
 import { getEffectComposer } from "../../states/useEffectComposer"
 import { getCameraRendered } from "../../states/useCameraRendered"
 import { emitRender } from "../../events/onRender"
-import { emitRender2 } from "../../events/onRender2"
 import getWorldPosition from "../../display/utils/getWorldPosition"
-import { setAntiAlias } from "../../states/useAntiAlias"
 
 preventTreeShake([resize, effectComposer])
 
@@ -48,13 +46,12 @@ createEffect(() => {
         const handle = loop(() => {
             emitBeforeRender()
             emitRender()
-            emitRender2()
 
             renderer.setViewport(0, 0, width, height)
             renderer.setScissor(0, 0, width, height)
             renderer.setScissorTest(true)
             renderer.render(scene, secondaryCamera)
-            
+
             renderer.setViewport(0, height, width, height)
             renderer.setScissor(0, height, width, height)
             renderer.render(scene, camera)
@@ -67,19 +64,18 @@ createEffect(() => {
             renderer.setViewport(0, 0, resX, resY)
             renderer.setScissor(0, 0, resX, resY)
             renderer.setScissorTest(false)
-            
+
             camera.aspect = resX / resY
             camera.updateProjectionMatrix()
         }
     }
 
     const vr = getVR()
-    
+
     if (vr === "webxr") {
         const handle = loop(() => {
             emitBeforeRender()
             emitRender()
-            emitRender2()
             renderer.render(scene, camera)
             emitAfterRender()
         })
@@ -108,7 +104,6 @@ createEffect(() => {
         const handle = loop(() => {
             emitBeforeRender()
             emitRender()
-            emitRender2()
 
             renderer.setViewport(0, 0, width, height)
             renderer.setScissor(0, 0, width, height)
@@ -126,7 +121,7 @@ createEffect(() => {
             camManager.moveRight(-3)
             camera.lookAt(focus.outerObject3d.position)
             renderer.render(scene, camera)
-            
+
             focus.outerObject3d.position.copy(focalPosition)
             camera.quaternion.copy(quat)
             camera.position.copy(pos)
@@ -162,13 +157,11 @@ createEffect(() => {
     if (!effectComposer) return
 
     let selectiveBloomInitialized = false
-    let ssrInitialized = false
     let outlineInitialized = false
 
     const handle = loop(() => {
         emitBeforeRender()
         emitRender()
-        emitRender2()
 
         if (bloomPtr[0]) {
             if (!selectiveBloomInitialized) {
@@ -176,11 +169,6 @@ createEffect(() => {
                 selectiveBloomInitialized = true
             }
             renderSelectiveBloom()
-        }
-        if (ssrPtr[0] && !ssrInitialized) {
-            setSSR(true)
-            setAntiAlias("SMAA")
-            ssrInitialized = true
         }
         if (outlinePtr[0] && !outlineInitialized) {
             setOutline(true)
@@ -193,4 +181,11 @@ createEffect(() => {
     return () => {
         handle.cancel()
     }
-}, [getVR, getCameraRendered, getSecondaryCamera, getResolution, getRenderer, getEffectComposer])
+}, [
+    getVR,
+    getCameraRendered,
+    getSecondaryCamera,
+    getResolution,
+    getRenderer,
+    getEffectComposer
+])

@@ -3,16 +3,25 @@ import { boxGeometry } from "../primitives/Cube"
 import { wireframeMaterial } from "../utils/reusables"
 import ObjectManager from "./ObjectManager"
 import ILoaded from "../../interface/ILoaded"
-import { PhysicsOptions } from "../../interface/IPhysics"
-import { addOutline, deleteOutline } from "../../engine/renderLoop/effectComposer/outlinePass"
-import { addBloom, deleteBloom } from "../../engine/renderLoop/effectComposer/selectiveBloomPass/renderSelectiveBloom"
-import { addSSR, deleteSSR } from "../../engine/renderLoop/effectComposer/ssrPass"
+import {
+    addOutline,
+    deleteOutline
+} from "../../engine/renderLoop/effectComposer/outlinePass"
+import {
+    addBloom,
+    deleteBloom
+} from "../../engine/renderLoop/effectComposer/selectiveBloomPass/renderSelectiveBloom"
 import Reresolvable from "./utils/Reresolvable"
 import { Cancellable } from "@lincode/promiselikes"
+import toResolvable from "../utils/toResolvable"
+import MeshItem from "./MeshItem"
 
-export default abstract class Loaded<T = Object3D> extends ObjectManager<Mesh> implements ILoaded {
+export default abstract class Loaded<T = Object3D>
+    extends ObjectManager<Mesh>
+    implements ILoaded
+{
     public loadedGroup = new Group()
-    
+
     public constructor() {
         super(new Mesh(boxGeometry, wireframeMaterial))
         this.outerObject3d.add(this.loadedGroup)
@@ -25,29 +34,25 @@ export default abstract class Loaded<T = Object3D> extends ObjectManager<Mesh> i
     protected abstract resolveLoaded(data: T): Group
 
     protected _src?: string
-    private srcCount = 0
     public get src() {
         return this._src
     }
     public set src(val) {
-        if (this._src === val) return
         this._src = val
-
-        const srcCount = ++this.srcCount
-
         this.loaded.done && this.loadedGroup.clear()
 
-        if (!val) return
+        this.cancelHandle(
+            "src",
+            val &&
+                (() =>
+                    toResolvable(this.load(val)).then((loaded) => {
+                        const loadedObject3d = this.resolveLoaded(loaded)
+                        this.loadedGroup.add(loadedObject3d)
+                        this.loaded.resolve(loadedObject3d)
 
-        this.load(val).then(loaded => {
-            if (srcCount !== this.srcCount || this.done) return
-            
-            const loadedObject3d = this.resolveLoaded(loaded)
-            this.loadedGroup.add(loadedObject3d)
-            this.loaded.resolve(loadedObject3d)
-
-            this.object3d.visible = !!this._boxVisible
-        })
+                        this.object3d.visible = !!this._boxVisible
+                    }))
+        )
     }
 
     private _onLoad?: () => void
@@ -56,7 +61,10 @@ export default abstract class Loaded<T = Object3D> extends ObjectManager<Mesh> i
     }
     public set onLoad(cb) {
         this._onLoad = cb
-        this.cancelHandle("onLoad", cb && (() => this.loaded.then(cb)))
+        this.cancelHandle(
+            "onLoad",
+            cb && (() => this.loaded.then(() => void cb()))
+        )
     }
 
     protected widthSet?: boolean
@@ -147,10 +155,12 @@ export default abstract class Loaded<T = Object3D> extends ObjectManager<Mesh> i
     public override set frustumCulled(val) {
         if (this.outerObject3d.frustumCulled === val) return
         this.outerObject3d.frustumCulled = val
-        
-        this.cancelHandle("frustumCulled", () => this.loaded.then(() => {
-            super.frustumCulled = val
-        }))
+
+        this.cancelHandle("frustumCulled", () =>
+            this.loaded.then(() => {
+                super.frustumCulled = val
+            })
+        )
     }
 
     public override get physics() {
@@ -160,9 +170,11 @@ export default abstract class Loaded<T = Object3D> extends ObjectManager<Mesh> i
         if (this._physics === val) return
         this._physics = val
 
-        const handle = this.cancelHandle("physics", () => this.loaded.then(() => {
-            this.initPhysics(val, handle!)
-        }))
+        const handle = this.cancelHandle("physics", () =>
+            this.loaded.then(() => {
+                this.initPhysics(val, handle!)
+            })
+        )
     }
 
     private _boxVisible?: boolean
@@ -182,14 +194,16 @@ export default abstract class Loaded<T = Object3D> extends ObjectManager<Mesh> i
         if (this._outline === val) return
         this._outline = val
 
-        this.cancelHandle("outline", () => this.loaded.then(loaded => {
-            if (!val) return
+        this.cancelHandle("outline", () =>
+            this.loaded.then((loaded) => {
+                if (!val) return
 
-            addOutline(loaded)
-            return () => {
-                deleteOutline(loaded)
-            }
-        }))
+                addOutline(loaded)
+                return () => {
+                    deleteOutline(loaded)
+                }
+            })
+        )
     }
 
     private _bloom?: boolean
@@ -200,32 +214,16 @@ export default abstract class Loaded<T = Object3D> extends ObjectManager<Mesh> i
         if (this._bloom === val) return
         this._bloom = val
 
-        this.cancelHandle("bloom", () => this.loaded.then(loaded => {
-            if (!val) return
+        this.cancelHandle("bloom", () =>
+            this.loaded.then((loaded) => {
+                if (!val) return
 
-            addBloom(loaded)
-            return () => {
-                deleteBloom(loaded)
-            }
-        }))
-    }
-
-    private _reflection?: boolean
-    public override get reflection() {
-        return !!this._reflection
-    }
-    public override set reflection(val) {
-        if (this._reflection === val) return
-        this._reflection = val
-
-        this.cancelHandle("reflection", () => this.loaded.then(loaded => {
-            if (!val) return
-
-            addSSR(loaded)
-            return () => {
-                deleteSSR(loaded)
-            }
-        }))
+                addBloom(loaded)
+                return () => {
+                    deleteBloom(loaded)
+                }
+            })
+        )
     }
 
     private managerSet?: boolean
@@ -236,23 +234,34 @@ export default abstract class Loaded<T = Object3D> extends ObjectManager<Mesh> i
             if (handle.done) return
 
             if (this._physics === "map" || this._physics === "map-debug")
-                handle.watch(this.loaded.then(loaded => {
-                    if (!this.managerSet) {
-                        this.managerSet = true
-                        loaded.traverse(child => child.userData.manager ??= this)
-                    }
-                    set.add(loaded)
-                    return () => {
-                        set.delete(loaded)
-                    }
-                }))
-            else
-                handle.watch(super.addToRaycastSet(set))
+                handle.watch(
+                    this.loaded.then((loaded) => {
+                        if (!this.managerSet) {
+                            this.managerSet = true
+                            loaded.traverse(
+                                (child) => (child.userData.manager ??= this)
+                            )
+                        }
+                        set.add(loaded)
+                        return () => {
+                            set.delete(loaded)
+                        }
+                    })
+                )
+            else handle.watch(super.addToRaycastSet(set))
         })
         return handle
     }
 
     protected override refreshFactors() {
-        this.cancelHandle("refreshFactors", () => this.loaded.then(() => super.refreshFactors()))
+        this.cancelHandle("refreshFactorsLoaded", () =>
+            this.loaded.then(() => void super.refreshFactors())
+        )
     }
+}
+
+export const getLoadedObject = (item: Loaded | MeshItem) => {
+    if ("loadedGroup" in item) return item.loadedGroup
+    if ("object3d" in item) return item.object3d
+    return item.outerObject3d
 }

@@ -1,59 +1,87 @@
-import { PerspectiveCamera } from "three"
+import { Object3D, PerspectiveCamera, Quaternion } from "three"
 import { camNear, camFar } from "../../engine/constants"
 import scene from "../../engine/scene"
 import { onBeforeRender } from "../../events/onBeforeRender"
-import ICharacterCamera, { characterCameraDefaults, characterCameraSchema, LockTargetRotationValue } from "../../interface/ICharacterCamera"
+import ICharacterCamera, {
+    characterCameraDefaults,
+    characterCameraSchema,
+    LockTargetRotationValue
+} from "../../interface/ICharacterCamera"
 import { getSelectionTarget } from "../../states/useSelectionTarget"
 import { getTransformControlsDragging } from "../../states/useTransformControlsDragging"
-import { getTransformControlsMode } from "../../states/useTransformControlsMode"
 import OrbitCameraBase from "./OrbitCameraBase"
-import { euler, quaternion } from "../utils/reusables"
+import { euler, halfPi, quaternion } from "../utils/reusables"
 import MeshItem from "./MeshItem"
+import { getLoadedObject } from "./Loaded"
+import getWorldQuaternion from "../utils/getWorldQuaternion"
+import { getEditorModeComputed } from "../../states/useEditorModeComputed"
 
-export default class CharacterCamera extends OrbitCameraBase implements ICharacterCamera {
+const dirObj = new Object3D()
+
+export default class CharacterCamera
+    extends OrbitCameraBase
+    implements ICharacterCamera
+{
     public static defaults = characterCameraDefaults
     public static schema = characterCameraSchema
 
     public constructor() {
         super(new PerspectiveCamera(75, 1, camNear, camFar))
 
+        const midObject3d = (this.midObject3d = new Object3D())
+        this.outerObject3d.add(midObject3d)
+        midObject3d.add(this.object3d)
+
         const cam = this.camera
         scene.attach(cam)
         this.then(() => scene.remove(cam))
-        
+
         this.createEffect(() => {
             const target = this.targetState.get()
             if (!target) return
 
-            if ("frustumCulled" in target)
-                target.frustumCulled = false
-
+            if ("frustumCulled" in target) target.frustumCulled = false
         }, [this.targetState.get])
 
-        const followTarget = (target: MeshItem, slerp: boolean) => {
+        const followTargetRotation = (target: MeshItem, slerp: boolean) => {
             euler.setFromQuaternion(target.outerObject3d.quaternion)
             euler.y += Math.PI
-            
+
             if (slerp) {
                 quaternion.setFromEuler(euler)
-                this.outerObject3d.quaternion.slerp(quaternion, 0.1)
-            }
-            else this.outerObject3d.setRotationFromEuler(euler)
+                midObject3d.quaternion.slerp(quaternion, 0.1)
+            } else midObject3d.setRotationFromEuler(euler)
 
             this.updateAngle()
         }
 
-        const lockTarget = (target: MeshItem, slerp: boolean) => {
-            euler.setFromQuaternion(this.outerObject3d.quaternion)
+        const lockTargetRotation = (
+            target: MeshItem,
+            slerp: boolean,
+            quat: Quaternion | undefined
+        ) => {
+            euler.setFromQuaternion(this.midObject3d.quaternion)
             euler.x = 0
             euler.z = 0
             euler.y += Math.PI
 
+            if (quat) {
+                const innerObject = getLoadedObject(target)
+                quaternion.copy(target.outerObject3d.quaternion)
+                const innerRotationY = innerObject.rotation.y
+
+                target.outerObject3d.quaternion.copy(quat)
+                innerObject.rotation.y = euler.y
+                euler.setFromQuaternion(getWorldQuaternion(innerObject))
+
+                innerObject.rotation.y = innerRotationY
+                target.outerObject3d.quaternion.copy(quaternion)
+            }
+
             if (slerp) {
                 quaternion.setFromEuler(euler)
                 target.outerObject3d.quaternion.slerp(quaternion, 0.1)
-            }
-            else target.outerObject3d.setRotationFromEuler(euler)
+            } else target.outerObject3d.setRotationFromEuler(euler)
         }
 
         let transformControlRotating = false
@@ -62,37 +90,50 @@ export default class CharacterCamera extends OrbitCameraBase implements ICharact
             const target = this.targetState.get()
             if (!target) return
 
-            followTarget(target, false)
+            followTargetRotation(target, false)
 
-            let targetMoved = false
-            let [x, y, z] = [0, 0, 0]
-            const handle0 = onBeforeRender(() => {
-                const { x: x0, y: y0, z: z0 } = target.outerObject3d.position
-                targetMoved = x0 !== x || y0 !== y || z0 !== z
-                ;[x, y, z] = [x0, y0, z0]
-            })
+            let [xOld, yOld, zOld] = [0, 0, 0]
+            const targetMoved = () => {
+                const { x, y, z } = target.outerObject3d.position
+                const result = x !== xOld || y !== yOld || z !== zOld
+                ;[xOld, yOld, zOld] = [x, y, z]
+                return result
+            }
 
-            const handle1 = onBeforeRender(() => {
+            const handle = onBeforeRender(() => {
                 this.outerObject3d.position.copy(target.outerObject3d.position)
+
+                //@ts-ignore
+                const dir = target.bvhDir
+                let quat: Quaternion | undefined
+                if (dir) {
+                    dirObj.lookAt(dir)
+                    dirObj.rotateX(halfPi)
+                    quat = dirObj.quaternion
+                    this.outerObject3d.quaternion.copy(quat)
+                }
+
                 if (!this.lockTargetRotation) return
 
-                if (this.lockTargetRotation === "follow" || transformControlRotating) {
-                    followTarget(target, false)
+                if (
+                    this.lockTargetRotation === "follow" ||
+                    transformControlRotating
+                ) {
+                    followTargetRotation(target, false)
                     return
                 }
                 if (this.lockTargetRotation === "dynamic-lock") {
-                    targetMoved && lockTarget(target, true)
+                    targetMoved() && lockTargetRotation(target, true, quat)
                     return
                 }
                 if (this.lockTargetRotation === "dynamic-follow") {
-                    targetMoved && followTarget(target, true)
+                    targetMoved() && followTargetRotation(target, true)
                     return
                 }
-                lockTarget(target, false)
+                lockTargetRotation(target, false, quat)
             })
             return () => {
-                handle0.cancel()
-                handle1.cancel()
+                handle.cancel()
             }
         }, [this.targetState.get])
 
@@ -100,17 +141,26 @@ export default class CharacterCamera extends OrbitCameraBase implements ICharact
             const target = this.targetState.get()
             const selectionTarget = getSelectionTarget()
             const dragging = getTransformControlsDragging()
-            const mode = getTransformControlsMode()
+            const mode = getEditorModeComputed()
 
-            const rotating = target && target === selectionTarget && dragging && mode === "rotate"
+            const rotating =
+                target &&
+                target === selectionTarget &&
+                dragging &&
+                mode === "rotate"
             if (!rotating) return
-            
+
             transformControlRotating = true
 
             return () => {
                 transformControlRotating = false
             }
-        }, [this.targetState.get, getSelectionTarget, getTransformControlsDragging, getTransformControlsMode])
+        }, [
+            this.targetState.get,
+            getSelectionTarget,
+            getTransformControlsDragging,
+            getEditorModeComputed
+        ])
     }
 
     public lockTargetRotation: LockTargetRotationValue = true

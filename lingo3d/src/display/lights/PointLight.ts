@@ -1,18 +1,43 @@
-import { applyMixins } from "@lincode/utils"
-import { PointLight as ThreePointLight, PointLightHelper } from "three"
-import IPointLight, { pointLightDefaults, pointLightSchema } from "../../interface/IPointLight"
+import { PointLight as ThreePointLight } from "three"
+import IPointLight, {
+    pointLightDefaults,
+    pointLightSchema
+} from "../../interface/IPointLight"
 import LightBase from "../core/LightBase"
-import PointLightMixin from "../core/mixins/PointLightMixin"
 
-class PointLight extends LightBase<ThreePointLight> implements IPointLight {
+export default class PointLight
+    extends LightBase<typeof ThreePointLight>
+    implements IPointLight
+{
     public static componentName = "pointLight"
     public static defaults = pointLightDefaults
     public static schema = pointLightSchema
 
     public constructor() {
-        super(new ThreePointLight(), PointLightHelper)
+        super(ThreePointLight)
+    }
+
+    public get decay() {
+        const light = this.lightState.get()
+        if (!light) return 1
+
+        return light.decay
+    }
+    public set decay(val) {
+        this.cancelHandle("decay", () =>
+            this.lightState.get((light) => light && (light.decay = val))
+        )
+    }
+
+    public get distance() {
+        const light = this.lightState.get()
+        if (!light) return 0
+
+        return light.distance
+    }
+    public set distance(val) {
+        this.cancelHandle("distance", () =>
+            this.lightState.get((light) => light && (light.distance = val))
+        )
     }
 }
-interface PointLight extends LightBase<ThreePointLight>, PointLightMixin<ThreePointLight> {}
-applyMixins(PointLight, [PointLightMixin])
-export default PointLight

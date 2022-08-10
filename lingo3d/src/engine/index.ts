@@ -6,10 +6,28 @@ import gridHelper from "./gridHelper"
 import referencePlane from "./referencePlane"
 import skyShader from "./skyShader"
 import render from "./renderLoop"
+import background from "./background"
+import defaultLight from "./defaultLight"
 import { preventTreeShake } from "@lincode/utils"
+import { setDebug } from "../states/useDebug"
+import applySetup from "./applySetup"
 
-preventTreeShake([render, skyShader, referencePlane, gridHelper, transformControls, mainOrbitControls, boxHelper, skeletonHelper])
+preventTreeShake([
+    render,
+    skyShader,
+    referencePlane,
+    gridHelper,
+    transformControls,
+    mainOrbitControls,
+    boxHelper,
+    skeletonHelper,
+    background,
+    defaultLight,
+    applySetup
+])
 
 export default {}
 
-"__THREE__" in window && ((window as any).__THREE__ += " - Lingo3D Beta")
+const w = window as any
+"__THREE__" in w && (w.__THREE__ += " - Lingo3D Beta")
+w.setDebug = setDebug

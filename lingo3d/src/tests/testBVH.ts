@@ -3,33 +3,32 @@ import Model from "../display/Model"
 
 import ThirdPersonCamera from "../display/cameras/ThirdPersonCamera"
 import settings from "../api/settings"
+import Dummy from "../display/Dummy"
 
 export default {}
 
-const player = new Model()
+const player = new Dummy()
 player.src = "person.glb"
-player.width = 20
-player.depth = 20
 player.z = -100
 player.y = 210.59
 player.physics = "character"
-player.animations = { running: "running 2.fbx", idle: "idle 2.fbx" }
-player.animation = "idle"
 player.rotationY = 90
+player.strideMove = true
 
-keyboard.onKeyPress = (k) => {
-    if (k === "w") {
-        player.moveForward(-5)
-        player.animation = "running"
-    }
-    if (k === "s") player.moveForward(5)
-    if (k === "a") player.moveRight(5)
-    if (k === "d") player.moveRight(-5)
-    if (k === "Space") player.velocity.y = 5
-}
+keyboard.onKeyPress = (_, key) => {
+    if (key.has("w"))
+        player.strideForward = -5
+    else if (key.has("s"))
+        player.strideForward = 5
+    else
+        player.strideForward = 0
 
-keyboard.onKeyUp = () => {
-    player.animation = "idle"
+    if (key.has("a"))
+        player.strideRight = 5
+    else if (key.has("d"))
+        player.strideRight = -5
+    else
+        player.strideRight = 0
 }
 
 const cam = new ThirdPersonCamera()
@@ -37,10 +36,11 @@ cam.transition = true
 cam.append(player)
 cam.mouseControl = true
 cam.active = true
+cam.lockTargetRotation = "dynamic-lock"
 
 const map = new Model()
 map.src = "fairy.glb"
-map.scale = 20
+map.scale = 30
 map.physics = "map"
 
 settings.skybox = [

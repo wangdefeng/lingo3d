@@ -29,17 +29,24 @@ export const deleteOutline = (target: Object3D) => {
     pull(outlineSelects, target)
 }
 
-const outlinePass = new OutlinePass(new Vector2(), scene, getCameraRendered(), outlineSelects)
+const outlinePass = new OutlinePass(
+    new Vector2(),
+    scene,
+    getCameraRendered(),
+    outlineSelects
+)
 export default outlinePass
 
-getCameraRendered(camera => outlinePass.renderCamera = camera)
+getCameraRendered((camera) => (outlinePass.renderCamera = camera))
+getOutlinePulse((pulse) => (outlinePass.pulsePeriod = pulse * 0.001))
+getOutlineStrength((strength) => (outlinePass.edgeStrength = strength))
+getOutlineThickness((thickness) => (outlinePass.edgeThickness = thickness))
 
 createEffect(() => {
     const color = getOutlineColor()
     const hiddenColor = getOutlineHiddenColor() ?? color
     outlinePass.visibleEdgeColor = new Color(color)
     outlinePass.hiddenEdgeColor = new Color(hiddenColor)
-
 }, [getOutlineColor, getOutlineHiddenColor])
 
 createEffect(() => {
@@ -53,7 +60,3 @@ createEffect(() => {
         outlinePass.usePatternTexture = false
     }
 }, [getOutlinePattern])
-
-getOutlinePulse(pulse => outlinePass.pulsePeriod = pulse * 0.001)
-getOutlineStrength(strength => outlinePass.edgeStrength = strength)
-getOutlineThickness(thickness => outlinePass.edgeThickness = thickness)

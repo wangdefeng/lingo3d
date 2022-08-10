@@ -4,7 +4,10 @@ import { bokehDefault } from "../states/useBokeh"
 import { bokehApertureDefault } from "../states/useBokehAperture"
 import { bokehFocusDefault } from "../states/useBokehFocus"
 import { bokehMaxBlurDefault } from "../states/useBokehMaxBlur"
-import IObjectManager, { objectManagerDefaults, objectManagerSchema } from "./IObjectManager"
+import IObjectManager, {
+    objectManagerDefaults,
+    objectManagerSchema
+} from "./IObjectManager"
 import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 import Nullable from "./utils/Nullable"
@@ -13,7 +16,7 @@ export type MouseControl = boolean | "drag"
 
 export default interface ICameraBase extends IObjectManager {
     mouseControl: MouseControl
-    
+
     fov: number
     zoom: number
     near: number
@@ -31,6 +34,9 @@ export default interface ICameraBase extends IObjectManager {
 
     minAzimuthAngle: number
     maxAzimuthAngle: number
+
+    polarAngle: Nullable<number>
+    azimuthAngle: Nullable<number>
 
     enableDamping: boolean
 }
@@ -58,12 +64,15 @@ export const cameraBaseSchema: Required<ExtractProps<ICameraBase>> = {
     minAzimuthAngle: Number,
     maxAzimuthAngle: Number,
 
+    polarAngle: Number,
+    azimuthAngle: Number,
+
     enableDamping: Boolean
 }
 
 export const cameraBaseDefaults: Defaults<ICameraBase> = {
     ...objectManagerDefaults,
-    
+
     mouseControl: false,
 
     fov: 75,
@@ -72,7 +81,7 @@ export const cameraBaseDefaults: Defaults<ICameraBase> = {
     far: camFar,
     active: false,
     transition: [undefined, false],
-    
+
     bokeh: bokehDefault,
     bokehFocus: bokehFocusDefault,
     bokehMaxBlur: bokehMaxBlurDefault,
@@ -80,9 +89,12 @@ export const cameraBaseDefaults: Defaults<ICameraBase> = {
 
     minPolarAngle: MIN_POLAR_ANGLE,
     maxPolarAngle: MAX_POLAR_ANGLE,
-    
+
     minAzimuthAngle: [-Infinity, -999999999],
     maxAzimuthAngle: [Infinity, 999999999],
+
+    polarAngle: [undefined, 0],
+    azimuthAngle: [undefined, 0],
 
     enableDamping: false
 }

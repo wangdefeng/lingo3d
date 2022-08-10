@@ -1,7 +1,28 @@
 import type * as types from "lingo3d"
 export { types }
 
-export { screenshot, onAfterRender, onBeforeRender, loop, mainOrbitCamera, keyboard, mouse, createProxy, serialize, deserialize, setWasmPath } from "lingo3d"
+export {
+  screenshot,
+  onAfterRender,
+  onBeforeRender,
+  loop,
+  mainOrbitCamera,
+  keyboard,
+  mouse,
+  createProxy,
+  serialize,
+  deserialize,
+  downloadBlob,
+  downloadText,
+  exportJSON,
+  exportReact,
+  exportVue,
+  openJSON,
+  setWasmPath,
+  clientToWorld
+} from "lingo3d"
+
+export { default as globalState } from "./globalState"
 
 export { default as World } from "./components/World"
 export { default as LingoEditor } from "./components/editor/LingoEditor"
@@ -9,6 +30,8 @@ export { default as Editor } from "./components/editor/Editor"
 export { default as SceneGraph } from "./components/editor/SceneGraph"
 export { default as Toolbar } from "./components/editor/Toolbar"
 export { default as Library } from "./components/editor/Library"
+export { default as TweakPane } from "./components/editor/TweakPane"
+export { default as PaneInput } from "./components/editor/TweakPane/PaneInput"
 export { default as Stats } from "./components/Stats"
 
 export { default as Keyboard } from "./components/api/Keyboard"
@@ -21,6 +44,7 @@ export { default as SvgMesh } from "./components/display/SvgMesh"
 export { default as Reflector } from "./components/display/Reflector"
 export { default as Skybox } from "./components/display/Skybox"
 export { default as Environment } from "./components/display/Environment"
+export { default as Setup } from "./components/display/Setup"
 export { default as Sprite } from "./components/display/Sprite"
 export { default as Trigger } from "./components/display/Trigger"
 export { default as Audio } from "./components/display/Audio"
@@ -47,10 +71,14 @@ export { default as Sphere } from "./components/display/primitives/Sphere"
 export { default as Tetrahedron } from "./components/display/primitives/Tetrahedron"
 export { default as Torus } from "./components/display/primitives/Torus"
 
-export { default as Setup } from "./components/logical/Setup"
+export { default as Joystick } from "./components/ui/Joystick"
+export { default as Reticle } from "./components/ui/Reticle"
+
 export { default as HTML } from "./components/logical/HTML"
 export { default as UI } from "./components/logical/UI"
 export { default as Find } from "./components/logical/Find"
+export { default as FindAll } from "./components/logical/FindAll"
+export { default as Frame } from "./components/logical/Frame"
 
 export { default as useSpawn } from "./hooks/useSpawn"
 export { default as useSpring } from "./hooks/useSpring"
@@ -65,6 +93,4 @@ export { default as useWindowSize } from "./hooks/useWindowSize"
 export { default as useDocumentScroll } from "./hooks/useDocumentScroll"
 export { default as useRenderer } from "./hooks/useRenderer"
 export { default as useScene } from "./hooks/useScene"
-
-export { default as Reticle } from "@lincode/react-reticle"
-export { default as Joystick } from "@lincode/react-joystick"
+export { default as useChildren } from "./hooks/useChildren"

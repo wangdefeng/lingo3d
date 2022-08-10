@@ -1,24 +1,31 @@
 import StaticObjectManager from "../display/core/StaticObjectManager"
-import IPhysics, { physicsDefaults, physicsSchema } from "./IPhysics"
-import IPositioned, { positionedDefaults, positionedSchema } from "./IPositioned"
-import IStaticObjectManager, { staticObjectManagerDefaults, staticObjectManagerSchema } from "./IStaticObjectManaget"
+import IAnimatedObjectManager, {
+    animatedObjectManagerDefaults,
+    animatedObjectManagerSchema
+} from "./IAnimatedObjectManager"
+import IPositioned, {
+    positionedDefaults,
+    positionedSchema
+} from "./IPositioned"
 import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
+import fn from "./utils/fn"
 import { hideSchema } from "./utils/nonEditorSchemaSet"
 import Nullable from "./utils/Nullable"
 
 export type OnIntersectValue = (target: StaticObjectManager) => void
 
-export default interface ISimpleObjectManager extends IStaticObjectManager, IPositioned, IPhysics {
+export default interface ISimpleObjectManager
+    extends IAnimatedObjectManager,
+        IPositioned {
     onIntersect: Nullable<OnIntersectValue>
     onIntersectOut: Nullable<OnIntersectValue>
     onMoveToEnd: Nullable<() => void>
 
-    intersectIds: Nullable<Array<string>>
+    moveTo: Function | Array<any>
+    lerpTo: Function | Array<any>
 
-    width: number
-    height: number
-    depth: number
+    intersectIds: Nullable<Array<string>>
 
     scaleX: number
     scaleY: number
@@ -29,24 +36,22 @@ export default interface ISimpleObjectManager extends IStaticObjectManager, IPos
     rotationY: number
     rotationZ: number
     rotation: number
-
-    innerVisible: boolean
 }
 
-export const simpleObjectManagerSchema: Required<ExtractProps<ISimpleObjectManager>> = {
-    ...staticObjectManagerSchema,
+export const simpleObjectManagerSchema: Required<
+    ExtractProps<ISimpleObjectManager>
+> = {
+    ...animatedObjectManagerSchema,
     ...positionedSchema,
-    ...physicsSchema,
 
     onIntersect: Function,
     onIntersectOut: Function,
     onMoveToEnd: Function,
 
-    intersectIds: Array,
+    moveTo: [Function, Array],
+    lerpTo: [Function, Array],
 
-    width: Number,
-    height: Number,
-    depth: Number,
+    intersectIds: Array,
 
     scaleX: Number,
     scaleY: Number,
@@ -56,27 +61,23 @@ export const simpleObjectManagerSchema: Required<ExtractProps<ISimpleObjectManag
     rotationX: Number,
     rotationY: Number,
     rotationZ: Number,
-    rotation: Number,
-
-    innerVisible: Boolean
+    rotation: Number
 }
 
-hideSchema(["intersectIds"])
+hideSchema(["intersectIds", "moveTo", "lerpTo"])
 
 export const simpleObjectManagerDefaults: Defaults<ISimpleObjectManager> = {
-    ...staticObjectManagerDefaults,
+    ...animatedObjectManagerDefaults,
     ...positionedDefaults,
-    ...physicsDefaults,
 
     onIntersect: undefined,
     onIntersectOut: undefined,
     onMoveToEnd: undefined,
 
-    intersectIds: undefined,
+    moveTo: fn,
+    lerpTo: fn,
 
-    width: 100,
-    height: 100,
-    depth: 100,
+    intersectIds: undefined,
 
     scaleX: 1,
     scaleY: 1,
@@ -86,7 +87,5 @@ export const simpleObjectManagerDefaults: Defaults<ISimpleObjectManager> = {
     rotationX: 0,
     rotationY: 0,
     rotationZ: 0,
-    rotation: 0,
-
-    innerVisible: true
+    rotation: 0
 }

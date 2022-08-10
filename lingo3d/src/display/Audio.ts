@@ -1,36 +1,45 @@
-import { createEffect } from "@lincode/reactivity"
+import store, { createEffect, Reactive } from "@lincode/reactivity"
 import { AudioListener, PositionalAudio } from "three"
 import PositionedItem from "../api/core/PositionedItem"
 import mainCamera from "../engine/mainCamera"
 import scene from "../engine/scene"
-import { onSelectionTarget, emitSelectionTarget } from "../events/onSelectionTarget"
+import {
+    onSelectionTarget,
+    emitSelectionTarget
+} from "../events/onSelectionTarget"
 import IAudio, { audioDefaults, audioSchema } from "../interface/IAudio"
 import { getCameraRendered } from "../states/useCameraRendered"
 import makeAudioSprite from "./core/utils/makeAudioSprite"
 import loadAudio from "./utils/loaders/loadAudio"
 
-const audioListener = new AudioListener()
+const [setAudioListener, getAudioListener] = store<AudioListener | undefined>(
+    undefined
+)
 
 createEffect(() => {
+    const audioListener = getAudioListener()
+    if (!audioListener) return
+
     const cam = getCameraRendered()
     cam.add(audioListener)
 
     return () => {
         cam.remove(audioListener)
     }
-}, [getCameraRendered])
+}, [getCameraRendered, getAudioListener])
 
-export default class Audio extends PositionedItem implements IAudio {
+export default class Audio
+    extends PositionedItem<PositionalAudio>
+    implements IAudio
+{
     public static componentName = "audio"
     public static defaults = audioDefaults
     public static schema = audioSchema
 
-    private sound: PositionalAudio
-
     public constructor() {
-        const sound = new PositionalAudio(audioListener)
+        !getAudioListener() && setAudioListener(new AudioListener())
+        const sound = new PositionalAudio(getAudioListener()!)
         super(sound)
-        this.sound = sound
         scene.add(sound)
 
         this.createEffect(() => {
@@ -47,74 +56,146 @@ export default class Audio extends PositionedItem implements IAudio {
                 handle.cancel()
             }
         }, [getCameraRendered])
+
+        const [setReady, getReady] = store(false)
+
+        this.createEffect(() => {
+            const src = this.srcState.get()
+            if (!src) return
+
+            let proceed = true
+            loadAudio(src).then((buffer) => {
+                if (!proceed) return
+                sound.setBuffer(buffer)
+                setReady(true)
+            })
+            return () => {
+                proceed = false
+                setReady(false)
+            }
+        }, [this.srcState.get])
+
+        this.createEffect(() => {
+            if (
+                !getReady() ||
+                !this.autoplayState.get() ||
+                this.pausedState.get() ||
+                this.stoppedState.get()
+            )
+                return
+
+            sound.play()
+
+            return () => {
+                this.stoppedState.get() ? sound.stop() : sound.pause()
+            }
+        }, [
+            getReady,
+            this.autoplayState.get,
+            this.pausedState.get,
+            this.stoppedState.get
+        ])
     }
 
     public override dispose() {
         if (this.done) return this
         super.dispose()
-        this.sound.disconnect()
+        this.outerObject3d.buffer && this.outerObject3d.disconnect()
         return this
     }
 
-    private _src?: string
-    private srcCount = 0
+    public play() {
+        this.autoplay = true
+        this.paused = false
+        this.stopped = false
+    }
+
+    public pause() {
+        this.paused = true
+    }
+
+    public stop() {
+        this.stopped = true
+    }
+
+    private srcState = new Reactive<string | undefined>(undefined)
     public get src() {
-        return this._src
+        return this.srcState.get()
     }
     public set src(val) {
-        if (this._src === val) return
-        this._src = val
-        
-        const srcCount = ++this.srcCount
-        
-        if (!val) return
-
-        loadAudio(val).then(buffer => {
-            if (srcCount !== this.srcCount || this.done) return
-            this.sound.setBuffer(buffer)
-        })
+        this.srcState.set(val)
     }
 
+    private autoplayState = new Reactive(false)
     public get autoplay() {
-        return this.sound.autoplay
+        return this.autoplayState.get()
     }
     public set autoplay(val) {
-        this.sound.autoplay = val
-        val && this.sound.play()
+        this.autoplayState.set(val)
+    }
+
+    private pausedState = new Reactive(false)
+    public get paused() {
+        return this.pausedState.get()
+    }
+    public set paused(val) {
+        this.pausedState.set(val)
+    }
+
+    private stoppedState = new Reactive(false)
+    public get stopped() {
+        return this.stoppedState.get()
+    }
+    public set stopped(val) {
+        this.stoppedState.set(val)
     }
 
     public get loop() {
-        return this.sound.loop
+        return this.outerObject3d.loop
     }
     public set loop(val) {
-        this.sound.loop = val
+        this.outerObject3d.loop = val
+    }
+
+    public get volume() {
+        return this.outerObject3d.getVolume()
+    }
+    public set volume(val) {
+        this.outerObject3d.setVolume(val)
+    }
+
+    public get playbackRate() {
+        return this.outerObject3d.playbackRate
+    }
+    public set playbackRate(val) {
+        this.outerObject3d.playbackRate = val
     }
 
     public get distance() {
-        return this.sound.getRefDistance()
+        return this.outerObject3d.getRefDistance()
     }
     public set distance(val) {
-        this.sound.setRefDistance(val)
+        this.outerObject3d.setRefDistance(val)
     }
 
     public get distanceModel() {
-        return this.sound.getDistanceModel()
+        return this.outerObject3d.getDistanceModel()
     }
     public set distanceModel(val) {
-        this.sound.setDistanceModel(val)
+        this.outerObject3d.setDistanceModel(val)
     }
 
     public get maxDistance() {
-        return this.sound.getMaxDistance()
+        return this.outerObject3d.getMaxDistance()
     }
     public set maxDistance(val) {
-        this.sound.setMaxDistance(val)
+        this.outerObject3d.setMaxDistance(val)
     }
 
     public get rolloffFactor() {
-        return this.sound.getRolloffFactor()
+        return this.outerObject3d.getRolloffFactor()
     }
     public set rolloffFactor(val) {
-        this.sound.setRolloffFactor(val)
+        this.outerObject3d.setRolloffFactor(val)
     }
 }

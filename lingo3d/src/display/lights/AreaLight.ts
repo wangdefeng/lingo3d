@@ -1,19 +1,25 @@
 import { Color, RectAreaLight } from "three"
 import { RectAreaLightHelper } from "three/examples/jsm/helpers/RectAreaLightHelper"
-import IAreaLight, { areaLightDefaults, areaLightSchema } from "../../interface/IAreaLight"
+import IAreaLight, {
+    areaLightDefaults,
+    areaLightSchema
+} from "../../interface/IAreaLight"
 import { lazy } from "@lincode/utils"
 import ObjectManager from "../core/ObjectManager"
 import mainCamera from "../../engine/mainCamera"
 import scene from "../../engine/scene"
 import { scaleDown } from "../../engine/constants"
-import { getTransformControlsMode } from "../../states/useTransformControlsMode"
 import { onTransformControls } from "../../events/onTransformControls"
 import { Reactive } from "@lincode/reactivity"
 import { getSelectionTarget } from "../../states/useSelectionTarget"
 import { getCameraRendered } from "../../states/useCameraRendered"
+import { getEditorModeComputed } from "../../states/useEditorModeComputed"
+import Nullable from "../../interface/utils/Nullable"
 
 const lazyInit = lazy(async () => {
-    const { RectAreaLightUniformsLib } = await import("three/examples/jsm/lights/RectAreaLightUniformsLib.js")
+    const { RectAreaLightUniformsLib } = await import(
+        "three/examples/jsm/lights/RectAreaLightUniformsLib.js"
+    )
     RectAreaLightUniformsLib.init()
 })
 
@@ -27,23 +33,25 @@ export default class AreaLight extends ObjectManager implements IAreaLight {
     public constructor() {
         super()
 
-        ;(async () => {
-            await lazyInit()
-
+        lazyInit().then(() => {
             if (this.done) return
 
-            const light = this.light = new RectAreaLight(
+            const light = (this.light = new RectAreaLight(
                 this._color,
                 this._intensity,
                 this.width * this.scaleX * scaleDown,
                 this.height * this.scaleY * scaleDown
-            )
+            ))
             this.object3d.add(light)
 
             this.then(() => light.dispose())
 
             this.createEffect(() => {
-                if (getTransformControlsMode() !== "scale" || getSelectionTarget() !== this) return
+                if (
+                    getEditorModeComputed() !== "scale" ||
+                    getSelectionTarget() !== this
+                )
+                    return
 
                 const handle = onTransformControls(() => {
                     const { x, y } = this.outerObject3d.scale
@@ -53,21 +61,27 @@ export default class AreaLight extends ObjectManager implements IAreaLight {
                 return () => {
                     handle.cancel()
                 }
-            }, [getTransformControlsMode, getSelectionTarget])
-            
+            }, [getEditorModeComputed, getSelectionTarget])
+
             this.createEffect(() => {
-                if (getCameraRendered() !== mainCamera || !this.helperState.get()) return
-    
+                if (
+                    getCameraRendered() !== mainCamera ||
+                    !this.helperState.get()
+                )
+                    return
+
                 const helper = new RectAreaLightHelper(light)
                 scene.add(helper)
-    
+
                 return () => {
                     helper.dispose()
                     scene.remove(helper)
                 }
             }, [getCameraRendered, this.helperState.get])
-        })()
+        })
     }
+
+    public shadowResolution: Nullable<number>
 
     private helperState = new Reactive(true)
     public get helper() {
@@ -134,11 +148,9 @@ export default class AreaLight extends ObjectManager implements IAreaLight {
     public override get depth() {
         return 0
     }
-    public override set depth(_) {
-    }
+    public override set depth(_) {}
     public override get scaleZ() {
         return 0
     }
-    public override set scaleZ(_) {
-    }
+    public override set scaleZ(_) {}
 }

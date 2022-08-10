@@ -15,6 +15,7 @@ import Circle from "./display/primitives/Circle"
 import Model from "./display/Model"
 import Dummy from "./display/Dummy"
 import Building from "./display/Building"
+import Tree from "./display/Tree"
 import SvgMesh from "./display/SvgMesh"
 import Reflector from "./display/Reflector"
 import Line from "./display/Line"
@@ -24,6 +25,7 @@ import Audio from "./display/Audio"
 import Group from "./display/Group"
 import Skybox from "./display/Skybox"
 import Environment from "./display/Environment"
+import Setup from "./display/Setup"
 import Sky from "./display/Sky"
 import Camera from "./display/cameras/Camera"
 import ThirdPersonCamera from "./display/cameras/ThirdPersonCamera"
@@ -36,12 +38,12 @@ import SkyLight from "./display/lights/SkyLight"
 import PointLight from "./display/lights/PointLight"
 import SpotLight from "./display/lights/SpotLight"
 
-import circleShape from "./display/core/mixins/PhysicsMixin/cannon/shapes/circleShape"
-import cubeShape from "./display/core/mixins/PhysicsMixin/cannon/shapes/cubeShape"
-import cylinderShape from "./display/core/mixins/PhysicsMixin/cannon/shapes/cylinderShape"
-import sphereShape from "./display/core/mixins/PhysicsMixin/cannon/shapes/sphereShape"
-import torusShape from "./display/core/mixins/PhysicsMixin/cannon/shapes/torusShape"
-import pillShape from "./display/core/mixins/PhysicsMixin/cannon/shapes/pillShape"
+import circleShape from "./display/core/PhysicsObjectManager/cannon/shapes/circleShape"
+import cubeShape from "./display/core/PhysicsObjectManager/cannon/shapes/cubeShape"
+import cylinderShape from "./display/core/PhysicsObjectManager/cannon/shapes/cylinderShape"
+import sphereShape from "./display/core/PhysicsObjectManager/cannon/shapes/sphereShape"
+import torusShape from "./display/core/PhysicsObjectManager/cannon/shapes/torusShape"
+import pillShape from "./display/core/PhysicsObjectManager/cannon/shapes/pillShape"
 
 import keyboard, { Keyboard } from "./api/keyboard"
 import mouse, { Mouse } from "./api/mouse"
@@ -52,15 +54,22 @@ import preload from "./api/preload"
 import screenshot from "./api/screenshot"
 
 import Reticle from "./ui/Reticle"
+import Joystick from "./ui/Joystick"
 
-import applySetup from "./api/serializer/applySetup"
 import serialize from "./api/serializer/serialize"
 import deserialize from "./api/serializer/deserialize"
+
+import downloadBlob from "./api/files/downloadBlob"
+import downloadText from "./api/files/downloadText"
+import exportJSON from "./api/files/exportJSON"
+import exportReact from "./api/files/exportReact"
+import exportVue from "./api/files/exportVue"
+import openJSON from "./api/files/openJSON"
 
 import { loop, timer } from "./engine/eventLoop"
 import mainOrbitCamera from "./engine/mainOrbitCamera"
 
-import SimpleObjectManager from "./display/core/SimpleObjectManager"
+import ObjectManager from "./display/core/ObjectManager"
 import FoundManager from "./display/core/FoundManager"
 
 import { onAfterRender } from "./events/onAfterRender"
@@ -69,7 +78,12 @@ import { onBeforeRender } from "./events/onBeforeRender"
 import { Point3d, Point } from "@lincode/math"
 import { setWasmPath } from "./states/useWasmPath"
 
-export type { SimpleMouseEvent, LingoMouseEvent as MouseEvent } from "./interface/IMouse"
+import clientToWorld from "./display/utils/clientToWorld"
+
+export type {
+    SimpleMouseEvent,
+    LingoMouseEvent as MouseEvent
+} from "./interface/IMouse"
 
 export default {}
 
@@ -83,10 +97,10 @@ export {
     Torus,
     Plane,
     Circle,
-
     Model,
     Dummy,
     Building,
+    Tree,
     SvgMesh,
     Reflector,
     Line,
@@ -96,6 +110,7 @@ export {
     Group,
     Skybox,
     Environment,
+    Setup,
     Sky,
     Camera,
     ThirdPersonCamera,
@@ -107,14 +122,12 @@ export {
     SkyLight,
     PointLight,
     SpotLight,
-
     circleShape,
     cubeShape,
     cylinderShape,
     sphereShape,
     torusShape,
     pillShape,
-
     Keyboard,
     keyboard,
     Mouse,
@@ -124,24 +137,25 @@ export {
     settings,
     preload,
     screenshot,
-
+    Joystick,
     Reticle,
-
-    applySetup,
     serialize,
     deserialize,
-    
+    downloadBlob,
+    downloadText,
+    exportJSON,
+    exportReact,
+    exportVue,
+    openJSON,
     loop,
     timer,
     mainOrbitCamera,
-
-    SimpleObjectManager as Object,
-    FoundManager,
-
+    ObjectManager as Object,
+    FoundManager as Found,
     onAfterRender,
     onBeforeRender,
-
     Point3d,
     Point,
-    setWasmPath
+    setWasmPath,
+    clientToWorld
 }

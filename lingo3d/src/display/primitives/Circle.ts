@@ -1,7 +1,7 @@
 import { CircleBufferGeometry } from "three"
 import Primitive from "../core/Primitive"
 import { flatGeomScaleZ, radiusScaled } from "../../engine/constants"
-import circleShape from "../core/mixins/PhysicsMixin/cannon/shapes/circleShape"
+import circleShape from "../core/PhysicsObjectManager/cannon/shapes/circleShape"
 import ICircle, { circleDefaults, circleSchema } from "../../interface/ICircle"
 
 const circleGeometry = new CircleBufferGeometry(radiusScaled, 32)
@@ -21,11 +21,9 @@ export default class Circle extends Primitive implements ICircle {
     public override get depth() {
         return 0
     }
-    public override set depth(_) {
-    }
+    public override set depth(_) {}
     public override get scaleZ() {
         return 0
     }
-    public override set scaleZ(_) {
-    }
+    public override set scaleZ(_) {}
 }

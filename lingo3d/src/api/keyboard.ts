@@ -1,13 +1,18 @@
 import { event } from "@lincode/events"
-import IKeyboard, { keyboardDefaults, keyboardSchema } from "../interface/IKeyboard"
+import IKeyboard, {
+    keyboardDefaults,
+    keyboardSchema
+} from "../interface/IKeyboard"
 import EventLoopItem from "./core/EventLoopItem"
 import { createEffect } from "@lincode/reactivity"
-import { getSelectionBlockKeyboard } from "../states/useSelectionBlockKeyboard"
 import { appendableRoot } from "./core/Appendable"
-import { getEditorActive } from "../states/useEditorActive"
 import { onKeyClear } from "../events/onKeyClear"
 import Nullable from "../interface/utils/Nullable"
 import { onBeforeRender } from "../events/onBeforeRender"
+import { getEditing } from "../states/useEditing"
+import { getEditorMounted } from "../states/useEditorMounted"
+import { getCameraRendered } from "../states/useCameraRendered"
+import mainCamera from "../engine/mainCamera"
 
 const [emitDown, onDown] = event<string>()
 const [emitUp, onUp] = event<string>()
@@ -22,7 +27,11 @@ const processKey = (str: string) => {
 }
 
 createEffect(() => {
-    if (getEditorActive() && getSelectionBlockKeyboard()) return
+    if (
+        getEditing() ||
+        (getEditorMounted() && getCameraRendered() === mainCamera)
+    )
+        return
 
     const handle = onBeforeRender(() => isPressed.size > 0 && emitPress())
 
@@ -31,7 +40,7 @@ createEffect(() => {
         isPressed.add(key)
         emitDown(key)
     }
-    
+
     const handleKeyUp = (e: KeyboardEvent): void => {
         const key = processKey(e.key)
         isPressed.delete(key)
@@ -39,14 +48,15 @@ createEffect(() => {
         !isPressed.size && emitPress()
     }
 
-    handle.watch(onKeyClear(() => {
-        if (!isPressed.size) return
-        const pressed = [...isPressed]
-        isPressed.clear()
-        for (const key of pressed)
-            emitUp(key)
-    }))
-    
+    handle.watch(
+        onKeyClear(() => {
+            if (!isPressed.size) return
+            const pressed = [...isPressed]
+            isPressed.clear()
+            for (const key of pressed) emitUp(key)
+        })
+    )
+
     document.addEventListener("keydown", handleKeyDown)
     document.addEventListener("keyup", handleKeyUp)
 
@@ -55,7 +65,7 @@ createEffect(() => {
         document.removeEventListener("keydown", handleKeyDown)
         document.removeEventListener("keyup", handleKeyUp)
     }
-}, [getEditorActive, getSelectionBlockKeyboard])
+}, [getEditing, getEditorMounted, getCameraRendered])
 
 export class Keyboard extends EventLoopItem implements IKeyboard {
     public static componentName = "keyboard"
@@ -69,18 +79,19 @@ export class Keyboard extends EventLoopItem implements IKeyboard {
     public constructor() {
         super()
 
-        this.watch(onPress(() => {
-            if (!this.onKeyPress) return
+        this.watch(
+            onPress(() => {
+                if (!this.onKeyPress) return
 
-            if (!isPressed.size) {
-                this.onKeyPress("", isPressed)
-                return
-            }
-            for (const key of isPressed)
-                this.onKeyPress(key, isPressed)
-        }))
-        this.watch(onUp(key => this.onKeyUp?.(key, isPressed)))
-        this.watch(onDown(key => this.onKeyDown?.(key, isPressed)))
+                if (!isPressed.size) {
+                    this.onKeyPress("", isPressed)
+                    return
+                }
+                for (const key of isPressed) this.onKeyPress(key, isPressed)
+            })
+        )
+        this.watch(onUp((key) => this.onKeyUp?.(key, isPressed)))
+        this.watch(onDown((key) => this.onKeyDown?.(key, isPressed)))
     }
 }
 

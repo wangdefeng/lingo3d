@@ -1,21 +1,11 @@
 import { distance3d, Point3d } from "@lincode/math"
 import {
     Color,
-    Material,
     Matrix3,
-    MeshStandardMaterial,
     MeshToonMaterial,
     Object3D,
     PropertyBinding
 } from "three"
-import {
-    clickSet,
-    mouseDownSet,
-    mouseOutSet,
-    mouseMoveSet,
-    mouseOverSet,
-    mouseUpSet
-} from "./raycast"
 import {
     frustum,
     matrix4,
@@ -24,7 +14,7 @@ import {
     vector3_1,
     vector3_half
 } from "../../utils/reusables"
-import { applyMixins, forceGet, throttle } from "@lincode/utils"
+import { forceGet, throttle } from "@lincode/utils"
 import { OBB } from "three/examples/jsm/math/OBB"
 import { scaleDown, scaleUp } from "../../../engine/constants"
 import {
@@ -36,25 +26,28 @@ import { Cancellable } from "@lincode/promiselikes"
 import { point2Vec, vec2Point } from "../../utils/vec2Point"
 import { LingoMouseEvent } from "../../../interface/IMouse"
 import {
-    addSSR,
-    deleteSSR
-} from "../../../engine/renderLoop/effectComposer/ssrPass"
-import {
     addOutline,
     deleteOutline
 } from "../../../engine/renderLoop/effectComposer/outlinePass"
 import getCenter from "../../utils/getCenter"
 import EventLoopItem from "../../../api/core/EventLoopItem"
 import IStaticObjectManager from "../../../interface/IStaticObjectManaget"
-import AnimationMixin from "../mixins/AnimationMixin"
-import MeshItem, { getObject3d } from "../MeshItem"
-import { Reactive } from "@lincode/reactivity"
-import copyStandard from "./applyMaterialProperties/copyStandard"
+import MeshItem from "../MeshItem"
 import copyToon from "./applyMaterialProperties/copyToon"
 import { getCameraRendered } from "../../../states/useCameraRendered"
 import { onBeforeRender } from "../../../events/onBeforeRender"
 import diffQuaternions from "../../utils/diffQuaternions"
 import getWorldPosition from "../../utils/getWorldPosition"
+import getWorldDirection from "../../utils/getWorldDirection"
+import {
+    clickSet,
+    mouseDownSet,
+    mouseUpSet,
+    mouseOverSet,
+    mouseOutSet,
+    mouseMoveSet
+} from "./raycast/sets"
+import "./raycast"
 
 const thisOBB = new OBB()
 const targetOBB = new OBB()
@@ -73,8 +66,6 @@ const updateFrustum = throttle(
     "leading"
 )
 
-const forcePBRSet = new WeakSet<Material>()
-
 const setNumber = (
     child: any,
     property: string,
@@ -85,8 +76,7 @@ const setNumber = (
     child.material[property] =
         factor === undefined
             ? defaultValue
-            : (defaultValue || (forcePBRSet.has(child.material) ? 1 : 0)) *
-              factor
+            : Math.max(defaultValue || 0, 0.25) * factor
 }
 
 const setBoolean = (
@@ -108,14 +98,10 @@ const setColor = (child: any, property: string, value: Color | undefined) => {
 export const idMap = new Map<string, Set<StaticObjectManager>>()
 const makeSet = () => new Set()
 
-class StaticObjectManager<T extends Object3D = Object3D>
-    extends EventLoopItem
+export default class StaticObjectManager<T extends Object3D = Object3D>
+    extends EventLoopItem<T>
     implements IStaticObjectManager
 {
-    public constructor(public object3d: T) {
-        super(object3d)
-    }
-
     public override dispose() {
         if (this.done) return this
         super.dispose()
@@ -134,8 +120,8 @@ class StaticObjectManager<T extends Object3D = Object3D>
     }
 
     protected addToRaycastSet(set: Set<Object3D>) {
-        set.add(this.object3d)
-        return new Cancellable(() => set.delete(this.object3d))
+        set.add(this.nativeObject3d)
+        return new Cancellable(() => set.delete(this.nativeObject3d))
     }
 
     private _onClick?: (e: LingoMouseEvent) => void
@@ -219,8 +205,8 @@ class StaticObjectManager<T extends Object3D = Object3D>
 
     protected getRay() {
         return ray.set(
-            getWorldPosition(this.object3d),
-            this.object3d.getWorldDirection(vector3)
+            getWorldPosition(this.nativeObject3d),
+            getWorldDirection(this.nativeObject3d)
         )
     }
 
@@ -234,16 +220,16 @@ class StaticObjectManager<T extends Object3D = Object3D>
         if (this === target) return undefined
 
         targetOBB.set(
-            getWorldPosition(target.object3d),
+            getWorldPosition(target.nativeObject3d),
             vector3_half,
-            new Matrix3().setFromMatrix4(target.object3d.matrixWorld)
+            new Matrix3().setFromMatrix4(target.nativeObject3d.matrixWorld)
         )
 
         const vec = targetOBB.intersectRay(this.getRay(), vector3)
         if (!vec) return
 
         if (maxDistance) {
-            const { x, y, z } = getWorldPosition(this.object3d)
+            const { x, y, z } = getWorldPosition(this.nativeObject3d)
             if (
                 distance3d(vec.x, vec.y, vec.z, x, y, z) * scaleUp >
                 maxDistance
@@ -263,39 +249,28 @@ class StaticObjectManager<T extends Object3D = Object3D>
         if (this === target) return false
 
         thisOBB.set(
-            getWorldPosition(this.object3d),
+            getWorldPosition(this.nativeObject3d),
             vector3_1.clone(),
             new Matrix3()
         )
-        thisOBB.applyMatrix4(this.object3d.matrixWorld)
+        thisOBB.applyMatrix4(this.nativeObject3d.matrixWorld)
 
         targetOBB.set(
-            getWorldPosition(target.object3d),
+            getWorldPosition(target.nativeObject3d),
             vector3_1.clone(),
             new Matrix3()
         )
-        targetOBB.applyMatrix4(target.object3d.matrixWorld)
+        targetOBB.applyMatrix4(target.nativeObject3d.matrixWorld)
 
         return thisOBB.intersectsOBB(targetOBB, 0)
     }
 
     public get clientX() {
-        return worldToClient(this.object3d).x
+        return worldToClient(this.nativeObject3d).x
     }
 
     public get clientY() {
-        return worldToClient(this.object3d).y
-    }
-
-    public get reflection() {
-        return !!this.object3d.userData.ssr
-    }
-    public set reflection(val) {
-        val && addSSR(this.object3d)
-        this.cancelHandle(
-            "reflection",
-            val && (() => new Cancellable(() => deleteSSR(this.object3d)))
-        )
+        return worldToClient(this.nativeObject3d).y
     }
 
     public get bloom() {
@@ -311,13 +286,15 @@ class StaticObjectManager<T extends Object3D = Object3D>
     }
 
     public get outline() {
-        return !!this.object3d.userData.outline
+        return !!this.nativeObject3d.userData.outline
     }
     public set outline(val) {
-        val && addOutline(this.object3d)
+        val && addOutline(this.nativeObject3d)
         this.cancelHandle(
             "outline",
-            val && (() => new Cancellable(() => deleteOutline(this.object3d)))
+            val &&
+                (() =>
+                    new Cancellable(() => deleteOutline(this.nativeObject3d)))
         )
     }
 
@@ -337,103 +314,76 @@ class StaticObjectManager<T extends Object3D = Object3D>
         this.outerObject3d.traverse((child) => (child.frustumCulled = val))
     }
 
-    private _refreshFactors?: Reactive<{}>
     protected refreshFactors() {
-        if (this._refreshFactors) {
-            this._refreshFactors.set({})
-            return
-        }
-        this._refreshFactors = new Reactive({})
-
-        this.createEffect(() => {
+        this.cancelHandle("refreshFactors", () => {
             const handle = new Cancellable()
 
-            const {
-                _toon,
-                _pbr,
-                _metalnessFactor,
-                _roughnessFactor,
-                _opacityFactor,
-                _emissiveIntensityFactor,
-                _emissiveColorFactor,
-                _colorFactor
-            } = this
+            queueMicrotask(() => {
+                if (handle.done) return
 
-            this.outerObject3d.traverse((child: any) => {
-                let { material } = child
-                if (!material) return
+                const {
+                    _toon,
+                    _metalnessFactor,
+                    _roughnessFactor,
+                    _opacityFactor,
+                    _adjustColor
+                } = this
 
-                Array.isArray(material) && (material = material[0])
+                this.outerObject3d.traverse((child: any) => {
+                    let { material } = child
+                    if (!material) return
 
-                if (_toon) {
-                    child.material = new MeshToonMaterial()
-                    copyToon(material, child.material)
-                } else if (_pbr) {
-                    forcePBRSet.add(
-                        (child.material = new MeshStandardMaterial())
-                    )
-                    copyStandard(material, child.material)
-                }
+                    Array.isArray(material) && (material = material[0])
 
-                if (_metalnessFactor !== undefined)
-                    setNumber(
-                        child,
-                        "metalness",
-                        _metalnessFactor !== 0 ? _metalnessFactor : undefined
-                    )
+                    if (_toon) {
+                        child.material = new MeshToonMaterial()
+                        copyToon(material, child.material)
+                    }
 
-                if (_roughnessFactor !== undefined)
-                    setNumber(
-                        child,
-                        "roughness",
-                        _roughnessFactor !== 1 ? _roughnessFactor : undefined
-                    )
+                    if (_metalnessFactor !== undefined)
+                        setNumber(
+                            child,
+                            "metalness",
+                            _metalnessFactor !== 0
+                                ? _metalnessFactor
+                                : undefined
+                        )
 
-                if (_opacityFactor !== undefined) {
-                    setNumber(child, "opacity", _opacityFactor)
-                    setBoolean(
-                        child,
-                        "transparent",
-                        _opacityFactor !== 1 ? true : undefined
-                    )
-                }
+                    if (_roughnessFactor !== undefined)
+                        setNumber(
+                            child,
+                            "roughness",
+                            _roughnessFactor !== 1
+                                ? _roughnessFactor
+                                : undefined
+                        )
 
-                if (_emissiveIntensityFactor !== undefined)
-                    setNumber(
-                        child,
-                        "emissiveIntensity",
-                        _emissiveIntensityFactor !== 1
-                            ? _emissiveIntensityFactor
-                            : undefined
-                    )
+                    if (_opacityFactor !== undefined) {
+                        setNumber(child, "opacity", _opacityFactor)
+                        setBoolean(
+                            child,
+                            "transparent",
+                            _opacityFactor !== 1 ? true : undefined
+                        )
+                    }
 
-                if (_emissiveColorFactor !== undefined)
-                    setColor(
-                        child,
-                        "emissive",
-                        _emissiveColorFactor !== "#000000"
-                            ? new Color(_emissiveColorFactor)
-                            : undefined
-                    )
+                    if (_adjustColor !== undefined)
+                        setColor(
+                            child,
+                            "color",
+                            _adjustColor !== "#ffffff"
+                                ? new Color(_adjustColor)
+                                : undefined
+                        )
 
-                if (_colorFactor !== undefined)
-                    setColor(
-                        child,
-                        "color",
-                        _colorFactor !== "#ffffff"
-                            ? new Color(_colorFactor)
-                            : undefined
-                    )
-
-                handle.then(() => {
-                    child.material.dispose()
-                    child.material = material
+                    handle.then(() => {
+                        child.material.dispose()
+                        child.material = material
+                    })
                 })
             })
-            return () => {
-                handle.cancel()
-            }
-        }, [this._refreshFactors.get])
+            return handle
+        })
     }
 
     private _metalnessFactor?: number
@@ -463,30 +413,12 @@ class StaticObjectManager<T extends Object3D = Object3D>
         this.refreshFactors()
     }
 
-    private _emissiveIntensityFactor?: number
-    public get emissiveIntensityFactor() {
-        return this._emissiveIntensityFactor
+    private _adjustColor?: string
+    public get adjustColor() {
+        return this._adjustColor
     }
-    public set emissiveIntensityFactor(val) {
-        this._emissiveIntensityFactor = val
-        this.refreshFactors()
-    }
-
-    private _emissiveColorFactor?: string
-    public get emissiveColorFactor() {
-        return this._emissiveColorFactor
-    }
-    public set emissiveColorFactor(val) {
-        this._emissiveColorFactor = val
-        this.refreshFactors()
-    }
-
-    private _colorFactor?: string
-    public get colorFactor() {
-        return this._colorFactor
-    }
-    public set colorFactor(val) {
-        this._colorFactor = val
+    public set adjustColor(val) {
+        this._adjustColor = val
         this.refreshFactors()
     }
 
@@ -499,18 +431,9 @@ class StaticObjectManager<T extends Object3D = Object3D>
         this.refreshFactors()
     }
 
-    private _pbr?: boolean
-    public get pbr() {
-        return this._pbr ?? false
-    }
-    public set pbr(val) {
-        this._pbr = val
-        this.refreshFactors()
-    }
-
     public get frustumVisible() {
         updateFrustum()
-        return frustum.containsPoint(getCenter(this.object3d))
+        return frustum.containsPoint(getCenter(this.nativeObject3d))
     }
 
     public lookAt(target: MeshItem | Point3d): void
@@ -529,7 +452,7 @@ class StaticObjectManager<T extends Object3D = Object3D>
             return
         }
         if ("outerObject3d" in a0)
-            this.outerObject3d.lookAt(getWorldPosition(getObject3d(a0)))
+            this.outerObject3d.lookAt(getWorldPosition(a0.nativeObject3d))
         else this.outerObject3d.lookAt(point2Vec(a0))
     }
 
@@ -582,9 +505,8 @@ class StaticObjectManager<T extends Object3D = Object3D>
             })
         )
     }
+
+    public getWorldPosition(): Point3d {
+        return vec2Point(getWorldPosition(this.nativeObject3d))
+    }
 }
-interface StaticObjectManager<T extends Object3D = Object3D>
-    extends EventLoopItem,
-        AnimationMixin {}
-applyMixins(StaticObjectManager, [AnimationMixin])
-export default StaticObjectManager

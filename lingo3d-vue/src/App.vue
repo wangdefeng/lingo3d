@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import { World, Cube, HTML, Stats, LingoEditor, Dummy, Find, OrbitCamera, UI } from "."
-
-
+import {
+  World,
+  Model,
+  LingoEditor,
+  Setup,
+  DirectionalLight,
+  UI,
+  Frame,
+  Cube
+} from "./index"
 </script>
 
 <template>
-  <World>
-    <Cube />
-    <UI>
-      <button>click me!</button>
-    </UI>
+  <World default-light="studio">
+    <Cube :metalness-factor="1" :roughness-factor="0" />
     <LingoEditor />
   </World>
-  
 </template>

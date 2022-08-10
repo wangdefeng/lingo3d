@@ -1,20 +1,21 @@
-import settings from "../api/settings"
+import setupStruct from "../engine/setupStruct"
 import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 
-export default interface ISetup extends Partial<typeof settings> {}
+type Type = typeof setupStruct
+
+export default interface ISetup extends Type {}
 
 export const setupSchema: Required<ExtractProps<ISetup>> = {
     skybox: [String, Array],
     defaultLight: [String, Boolean],
-    defaultLightScale: Number,
-    defaultOrbitControls: Boolean,
-    defaultFog: String,
+    shadowDistance: Number,
+    shadowResolution: Number,
     gridHelper: Boolean,
     gridHelperSize: Number,
     gravity: Number,
     repulsion: Number,
-    autoMount: [Boolean, String],
+    centripetal: Boolean,
     antiAlias: [Boolean, String],
     logarithmicDepth: Boolean,
     pixelRatio: Number,
@@ -31,6 +32,10 @@ export const setupSchema: Required<ExtractProps<ISetup>> = {
     outlinePulse: Number,
     outlineStrength: Number,
     outlineThickness: Number,
+    bokeh: Boolean,
+    bokehAperture: Number,
+    bokehFocus: Number,
+    bokehMaxBlur: Number,
     lensDistortion: Boolean,
     lensIor: Number,
     lensBand: Number,
@@ -41,5 +46,7 @@ export const setupSchema: Required<ExtractProps<ISetup>> = {
 }
 
 export const setupDefaults: Defaults<ISetup> = {
-    ...settings
+    ...setupStruct,
+    shadowDistance: 2000,
+    shadowResolution: 1024
 }

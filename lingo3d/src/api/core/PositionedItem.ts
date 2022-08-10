@@ -1,11 +1,15 @@
-import { getObject3d } from "../../display/core/MeshItem"
+import { Point3d } from "@lincode/math"
+import { Object3D } from "three"
 import getWorldPosition from "../../display/utils/getWorldPosition"
 import { vec2Point } from "../../display/utils/vec2Point"
 import { scaleUp, scaleDown } from "../../engine/constants"
 import IPositioned from "../../interface/IPositioned"
 import EventLoopItem from "./EventLoopItem"
 
-export default abstract class PositionedItem extends EventLoopItem implements IPositioned {
+export default abstract class PositionedItem<T extends Object3D = Object3D>
+    extends EventLoopItem<T>
+    implements IPositioned
+{
     public get x() {
         return this.outerObject3d.position.x * scaleUp
     }
@@ -27,9 +31,10 @@ export default abstract class PositionedItem extends EventLoopItem implements IP
         this.outerObject3d.position.z = val * scaleDown
     }
 
-    public getWorldPosition() {
-        return vec2Point(getWorldPosition(getObject3d(this)))
+    public getWorldPosition(): Point3d {
+        return vec2Point(getWorldPosition(this.nativeObject3d))
     }
 }
 
-export const isPositionedItem = (item: any): item is PositionedItem => item instanceof EventLoopItem && "getWorldPosition" in item
+export const isPositionedItem = (item: any): item is PositionedItem =>
+    item instanceof EventLoopItem && "x" in item

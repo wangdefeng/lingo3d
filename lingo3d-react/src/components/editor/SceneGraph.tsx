@@ -1,11 +1,11 @@
 import React from "react"
-import "lingo3d/lib/editor"
+import LingoSceneGraph from "lingo3d/lib/editor/SceneGraph"
+import useEditor from "../../hooks/useEditor"
 
 const SceneGraph: React.FC = () => {
-    return (
-        //@ts-ignore
-        <lingo3d-scenegraph />
-    )
+  const divRef = useEditor(LingoSceneGraph)
+
+  return <div ref={divRef} className="lingo3d-ui" style={{ height: "100%" }} />
 }
 
 export default SceneGraph

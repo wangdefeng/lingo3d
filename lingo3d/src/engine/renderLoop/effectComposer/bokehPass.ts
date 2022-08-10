@@ -8,10 +8,14 @@ import { getCameraRendered } from "../../../states/useCameraRendered"
 const bokehPass = new BokehPass(scene, getCameraRendered(), {})
 export default bokehPass
 
-getCameraRendered(camera => bokehPass.camera = camera)
-
 const uniforms = bokehPass.uniforms as any
 
-getBokehFocus(val => uniforms["focus"].value = val)
-getBokehAperture(val => uniforms["aperture"].value = val)
-getBokehMaxBlur(val => uniforms["maxblur"].value = val)
+getCameraRendered((camera) => {
+    bokehPass.camera = camera
+    uniforms["aspect"].value = camera.aspect
+    uniforms["nearClip"].value = camera.near
+    uniforms["farClip"].value = camera.far
+})
+getBokehFocus((val) => (uniforms["focus"].value = val))
+getBokehAperture((val) => (uniforms["aperture"].value = val))
+getBokehMaxBlur((val) => (uniforms["maxblur"].value = val))

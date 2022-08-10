@@ -1,14 +1,13 @@
 import { applyMixins } from "@lincode/utils"
 import { MeshStandardMaterial, Object3D } from "three"
-import StaticObjectManager from "./StaticObjectManager"
 import IFound, { foundDefaults, foundSchema } from "../../interface/IFound"
 import TexturedBasicMixin from "./mixins/TexturedBasicMixin"
 import TexturedStandardMixin from "./mixins/TexturedStandardMixin"
-import { Cancellable } from "@lincode/promiselikes"
 import { appendableRoot } from "../../api/core/Appendable"
 import Model from "../Model"
+import AnimatedObjectManager from "./AnimatedObjectManager"
 
-class FoundManager extends StaticObjectManager implements IFound {
+class FoundManager extends AnimatedObjectManager implements IFound {
     public static componentName = "find"
     public static defaults = foundDefaults
     public static schema = foundSchema
@@ -16,8 +15,6 @@ class FoundManager extends StaticObjectManager implements IFound {
     protected material: MeshStandardMaterial
 
     public constructor(mesh: Object3D) {
-        // mesh.castShadow = true
-        // mesh.receiveShadow = true
         super(mesh)
         //@ts-ignore
         this.material = mesh.material ??= new MeshStandardMaterial()
@@ -27,9 +24,12 @@ class FoundManager extends StaticObjectManager implements IFound {
     public model?: Model
     private retargetAnimations() {
         if (!this.model?.animationManagers) return
-        for (const animationManager of Object.values(this.model.animationManagers))
-            this.animations[animationManager.name] = this.watch(animationManager.retarget(this.object3d))
-
+        for (const animationManager of Object.values(
+            this.model.animationManagers
+        ))
+            this.animations[animationManager.name] = this.watch(
+                animationManager.retarget(this.nativeObject3d)
+            )
         this.model = undefined
     }
 
@@ -52,12 +52,16 @@ class FoundManager extends StaticObjectManager implements IFound {
     protected override addToRaycastSet(set: Set<Object3D>) {
         if (!this.managerSet) {
             this.managerSet = true
-            this.object3d.traverse(child => child.userData.manager = this)
+            this.nativeObject3d.traverse(
+                (child) => (child.userData.manager = this)
+            )
         }
-        set.add(this.object3d)
-        return new Cancellable(() => set.delete(this.object3d))
+        return super.addToRaycastSet(set)
     }
 }
-interface FoundManager extends StaticObjectManager, TexturedBasicMixin, TexturedStandardMixin {}
+interface FoundManager
+    extends AnimatedObjectManager,
+        TexturedBasicMixin,
+        TexturedStandardMixin {}
 applyMixins(FoundManager, [TexturedStandardMixin, TexturedBasicMixin])
 export default FoundManager
