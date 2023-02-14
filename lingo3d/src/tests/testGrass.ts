@@ -1,19 +1,18 @@
 import {
+    Clock,
     DoubleSide,
     InstancedMesh,
     Mesh,
     Object3D,
     PlaneGeometry,
-    ShaderMaterial,
+    ShaderMaterial
 } from "three"
 import { MeshSurfaceSampler } from "three/examples/jsm/math/MeshSurfaceSampler"
 import Cube from "../display/primitives/Cube"
 import { vector3, vector3_ } from "../display/utils/reusables"
-import { clock } from "../engine/eventLoop"
 import scene from "../engine/scene"
 import { onBeforeRender } from "../events/onBeforeRender"
-
-export default {}
+import { PI } from "../globals"
 
 const leavesMaterial = new ShaderMaterial({
     vertexShader: `
@@ -92,7 +91,7 @@ cube.width = 1000
 cube.depth = 1000
 cube.height = 10
 
-const sampler = new MeshSurfaceSampler(cube.nativeObject3d as Mesh).build()
+const sampler = new MeshSurfaceSampler(cube.object3d as Mesh).build()
 
 const instanceNumber = 100
 const dummy = new Object3D()
@@ -111,10 +110,12 @@ for (let i = 0; i < instanceNumber; i++) {
     _normal.add(_position)
     dummy.position.set(_position.x, 0, _position.z)
     dummy.scale.setScalar(0.5 + Math.random() * 0.5)
-    dummy.rotation.y = Math.random() * Math.PI
+    dummy.rotation.y = Math.random() * PI
     dummy.updateMatrix()
     instancedMesh.setMatrixAt(i, dummy.matrix)
 }
+
+export const clock = new Clock()
 
 onBeforeRender(() => {
     leavesMaterial.uniforms.time.value = clock.getElapsedTime()

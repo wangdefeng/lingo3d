@@ -1,16 +1,15 @@
-import { camNear, camFar } from "../engine/constants"
-import { MIN_POLAR_ANGLE, MAX_POLAR_ANGLE } from "../globals"
-import { bokehDefault } from "../states/useBokeh"
-import { bokehApertureDefault } from "../states/useBokehAperture"
-import { bokehFocusDefault } from "../states/useBokehFocus"
-import { bokehMaxBlurDefault } from "../states/useBokehMaxBlur"
+import { MIN_POLAR_ANGLE, MAX_POLAR_ANGLE, NEAR, FAR } from "../globals"
 import IObjectManager, {
     objectManagerDefaults,
     objectManagerSchema
 } from "./IObjectManager"
-import Defaults from "./utils/Defaults"
+import Choices from "./utils/Choices"
+import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
+import { hideSchema } from "./utils/nonEditorSchemaSet"
 import Nullable from "./utils/Nullable"
+import { nullableDefault } from "./utils/NullableDefault"
+import Range from "./utils/Range"
 
 export type MouseControl = boolean | "drag"
 
@@ -23,11 +22,6 @@ export default interface ICameraBase extends IObjectManager {
     far: number
     active: boolean
     transition: Nullable<boolean | number>
-
-    bokeh: boolean
-    bokehFocus: number
-    bokehMaxBlur: number
-    bokehAperture: number
 
     minPolarAngle: number
     maxPolarAngle: number
@@ -53,11 +47,6 @@ export const cameraBaseSchema: Required<ExtractProps<ICameraBase>> = {
     active: Boolean,
     transition: [Boolean, Number],
 
-    bokeh: Boolean,
-    bokehFocus: Number,
-    bokehMaxBlur: Number,
-    bokehAperture: Number,
-
     minPolarAngle: Number,
     maxPolarAngle: Number,
 
@@ -69,32 +58,40 @@ export const cameraBaseSchema: Required<ExtractProps<ICameraBase>> = {
 
     enableDamping: Boolean
 }
+hideSchema(["minAzimuthAngle", "maxAzimuthAngle", "near", "far"])
 
-export const cameraBaseDefaults: Defaults<ICameraBase> = {
-    ...objectManagerDefaults,
+export const cameraBaseDefaults = extendDefaults<ICameraBase>(
+    [objectManagerDefaults],
+    {
+        mouseControl: false,
 
-    mouseControl: false,
+        fov: 75,
+        zoom: 1,
+        near: NEAR,
+        far: FAR,
+        active: false,
+        transition: nullableDefault(false),
 
-    fov: 75,
-    zoom: 1,
-    near: camNear,
-    far: camFar,
-    active: false,
-    transition: [undefined, false],
+        minPolarAngle: MIN_POLAR_ANGLE,
+        maxPolarAngle: MAX_POLAR_ANGLE,
 
-    bokeh: bokehDefault,
-    bokehFocus: bokehFocusDefault,
-    bokehMaxBlur: bokehMaxBlurDefault,
-    bokehAperture: bokehApertureDefault,
+        minAzimuthAngle: -Infinity,
+        maxAzimuthAngle: Infinity,
 
-    minPolarAngle: MIN_POLAR_ANGLE,
-    maxPolarAngle: MAX_POLAR_ANGLE,
+        polarAngle: nullableDefault(0),
+        azimuthAngle: nullableDefault(0),
 
-    minAzimuthAngle: [-Infinity, -999999999],
-    maxAzimuthAngle: [Infinity, 999999999],
-
-    polarAngle: [undefined, 0],
-    azimuthAngle: [undefined, 0],
-
-    enableDamping: false
-}
+        enableDamping: false
+    },
+    {
+        mouseControl: new Choices({ true: true, false: false, drag: "drag" }),
+        fov: new Range(30, 120, 5),
+        zoom: new Range(0.1, 10),
+        near: new Range(0.1, 10000),
+        far: new Range(0.1, 10000),
+        minPolarAngle: new Range(0, 180, 1),
+        maxPolarAngle: new Range(0, 180, 1),
+        polarAngle: new Range(0, 180),
+        azimuthAngle: new Range(0, 360)
+    }
+)

@@ -1,135 +1,157 @@
-import { debounce } from "@lincode/utils"
 import { Object3D } from "three"
-import { AnimationData } from "../../../api/serializer/types"
 import IAnimatedObjectManager, {
     Animation,
     AnimationValue
 } from "../../../interface/IAnimatedObjectManager"
-import Nullable from "../../../interface/utils/Nullable"
-import AnimationManager, { PlayOptions } from "./AnimationManager"
-import StaticObjectManager from "../StaticObjectManager"
+import AnimationManager from "./AnimationManager"
+import { Reactive } from "@lincode/reactivity"
+import { Cancellable } from "@lincode/promiselikes"
+import { event, EventFunctions } from "@lincode/events"
+import { SEC2FRAME } from "../../../globals"
+import { AnimationData } from "../../../interface/IAnimationManager"
+import MeshAppendable from "../../../api/core/MeshAppendable"
 
-const buildAnimationTracks = debounce(
-    (val: AnimationValue) => {
-        const entries = Object.entries(val)
-        let maxLength = 0
-        for (const [, { length }] of entries)
-            length > maxLength && (maxLength = length)
+const animationValueToData = (val: AnimationValue) => {
+    const entries = Object.entries(val)
+    let maxLength = 0
+    for (const [, { length }] of entries)
+        length > maxLength && (maxLength = length)
 
-        const duration = 1000
-        const timeStep = (duration * 0.001) / maxLength
+    const duration = 1000
+    const timeStep = (duration * 0.001) / maxLength
 
-        const result: AnimationData = {}
-        for (const [name, values] of entries)
-            result[name] = Object.fromEntries(
-                values.map((v, i) => [(i * timeStep).toFixed(2), v])
-            )
+    const data: AnimationData = {}
+    const result = (data[""] ??= {})
+    for (const [name, values] of entries)
+        result[name] = Object.fromEntries(
+            values.map((v, i) => [Math.ceil(i * timeStep * SEC2FRAME), v])
+        )
+    return data
+}
 
-        return result
-    },
-    0,
-    "trailingPromise"
-)
+type States = {
+    managerRecordState: Reactive<Record<string, AnimationManager>>
+    managerState: Reactive<AnimationManager | undefined>
+    pausedState: Reactive<boolean>
+    repeatState: Reactive<number>
+    onFinishState: Reactive<(() => void) | undefined>
+    finishEventState: Reactive<EventFunctions | undefined>
+}
 
 export default class AnimatedObjectManager<T extends Object3D = Object3D>
-    extends StaticObjectManager<T>
+    extends MeshAppendable<T>
     implements IAnimatedObjectManager
 {
-    public animationManagers?: Record<string, AnimationManager>
+    private states?: States
+    public lazyStates() {
+        if (this.states) return this.states
+
+        const { managerState, pausedState } = (this.states = {
+            managerRecordState: new Reactive<Record<string, AnimationManager>>(
+                {}
+            ),
+            managerState: new Reactive<AnimationManager | undefined>(undefined),
+            pausedState: new Reactive(false),
+            repeatState: new Reactive(Infinity),
+            onFinishState: new Reactive<(() => void) | undefined>(undefined),
+            finishEventState: new Reactive<EventFunctions | undefined>(
+                undefined
+            )
+        })
+        this.createEffect(() => {
+            const manager = managerState.get()
+            if (manager) manager.paused = pausedState.get()
+        }, [managerState.get, pausedState.get])
+
+        return this.states
+    }
 
     public get animations() {
-        return (this.animationManagers ??= {})
+        return this.lazyStates().managerRecordState.get()
     }
     public set animations(val) {
-        this.animationManagers = val
+        this.lazyStates().managerRecordState.set(val)
     }
 
-    private createAnimation(name: string): AnimationManager {
-        if (name in this.animations) {
-            const animation = this.animations[name]
-            if (typeof animation !== "string") return animation
-        }
-        const animation = this.watch(new AnimationManager(name, this))
-        this.animations[name] = animation
-
-        return animation
-    }
-
-    private buildAnimation(val: AnimationValue) {
-        buildAnimationTracks(val).then((tracks) => {
-            const name = "lingo3d-animation"
-            this.createAnimation(name).setTracks(tracks)
-            this.playAnimation(name)
-        })
-    }
-
-    private makeAnimationProxy(source: AnimationValue) {
-        return new Proxy(source, {
-            get: (anim, prop: string) => {
-                return anim[prop]
-            },
-            set: (anim, prop: string, value) => {
-                anim[prop] = value
-                this.buildAnimation(anim)
-                return true
-            }
-        })
-    }
-
-    private animationManager?: AnimationManager
-
-    private _animationPaused?: boolean
     public get animationPaused() {
-        return this._animationPaused
+        return this.lazyStates().pausedState.get()
     }
     public set animationPaused(value) {
-        this._animationPaused = value
-        this.animationManager?.setPaused(!!value)
+        this.lazyStates().pausedState.set(value)
     }
 
-    public animationRepeat: Nullable<boolean>
+    public get animationRepeat() {
+        return this.lazyStates().repeatState.get()
+    }
+    public set animationRepeat(value) {
+        this.lazyStates().repeatState.set(value)
+    }
 
-    public onAnimationFinish: Nullable<() => void>
+    public get onAnimationFinish() {
+        return this.lazyStates().onFinishState.get()
+    }
+    public set onAnimationFinish(value) {
+        this.lazyStates().onFinishState.set(value)
+    }
 
-    public playAnimation(name?: string | number, o?: PlayOptions) {
-        const manager = (this.animationManager =
+    protected playAnimation(name?: string | number) {
+        const { managerState, pausedState } = this.lazyStates()
+        pausedState.set(false)
+        managerState.set(
             typeof name === "string"
                 ? this.animations[name]
-                : Object.values(this.animations)[name ?? 0])
-
-        if (!manager) return
-
-        manager.play(o)
-        this._animationPaused && manager.setPaused(true)
+                : Object.values(this.animations)[name ?? 0]
+        )
     }
 
     public stopAnimation() {
-        this.animationManager?.stop()
+        this.lazyStates().pausedState.set(true)
     }
 
-    protected serializeAnimation?: string | number
-    private setAnimation(
-        val?: string | number | boolean | AnimationValue,
-        o?: PlayOptions
-    ) {
+    private createAnimation(name: string): AnimationManager {
+        let animation = this.animations[name]
+        if (animation && typeof animation !== "string") return animation
+
+        const { onFinishState, repeatState, finishEventState } =
+            this.lazyStates()
+        animation = this.watch(
+            new AnimationManager(
+                name,
+                undefined,
+                this,
+                repeatState,
+                onFinishState,
+                finishEventState
+            )
+        )
+        this.append(animation)
+        this.animations[name] = animation
+        return animation
+    }
+
+    protected get serializeAnimation() {
+        return typeof this._animation !== "object" ? this._animation : undefined
+    }
+
+    private setAnimation(val?: string | number | boolean | AnimationValue) {
         this._animation = val
 
         if (typeof val === "string" || typeof val === "number") {
-            this.serializeAnimation = val
-            this.playAnimation(val, o)
+            this.playAnimation(val)
             return
         }
         if (typeof val === "boolean") {
-            val ? this.playAnimation(undefined, o) : this.stopAnimation()
+            val ? this.playAnimation(undefined) : this.stopAnimation()
             return
         }
-
         if (!val) {
             this.stopAnimation()
             return
         }
-        this._animation = this.makeAnimationProxy(val)
-        this.buildAnimation(val)
+        const name = "animation"
+        const anim = this.createAnimation(name)
+        anim.data = animationValueToData(val)
+        this.playAnimation(name)
     }
 
     private _animation?: Animation
@@ -137,29 +159,35 @@ export default class AnimatedObjectManager<T extends Object3D = Object3D>
         return this._animation
     }
     public set animation(val) {
-        if (Array.isArray(val)) {
-            let currentIndex = 0
-            const o = {
-                onFinish: () => {
-                    if (++currentIndex >= val.length) {
-                        if (this.animationRepeat === false) {
-                            this.onAnimationFinish?.()
-                            return
-                        }
-                        currentIndex = 0
-                    }
-                    this.setAnimation(val[currentIndex], o)
-                },
-                repeat: false
-            }
-            this.setAnimation(val[0], o)
-            return
-        }
-        this.queueMicrotask(() =>
-            this.setAnimation(val, {
-                repeat: this.animationRepeat,
-                onFinish: this.onAnimationFinish
-            })
+        this.cancelHandle(
+            "playAnimation",
+            Array.isArray(val)
+                ? () => {
+                      const { finishEventState } = this.lazyStates()
+                      const finishEvent = event()
+                      finishEventState.set(finishEvent)
+
+                      let currentIndex = 0
+                      const next = () => {
+                          if (currentIndex === val.length) {
+                              if (this.animationRepeat < 2) {
+                                  this.onAnimationFinish?.()
+                                  return
+                              }
+                              currentIndex = 0
+                          }
+                          this.setAnimation(val[currentIndex++])
+                      }
+                      next()
+                      const [, onFinish] = finishEvent
+                      const handle = onFinish(next)
+
+                      return new Cancellable(() => {
+                          finishEventState.set(undefined)
+                          handle.cancel()
+                      })
+                  }
+                : void this.setAnimation(val)
         )
     }
 }

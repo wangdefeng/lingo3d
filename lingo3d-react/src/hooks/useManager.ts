@@ -39,7 +39,7 @@ export const applyChanges = (
     if (defaultValue === fn) {
       if (!value) continue
       if (Array.isArray(value)) manager[key](...value)
-      else manager[key]()
+      else manager[key](value)
       continue
     }
     manager[key] = value
@@ -54,7 +54,7 @@ export const applyChanges = (
 const appendedSet = new WeakSet<any>()
 
 export default (
-  p: React.PropsWithChildren<any>,
+  p: { children?: React.ReactNode },
   ref: React.ForwardedRef<any>,
   ManagerClass: any
 ) => {

@@ -1,21 +1,51 @@
-import { CircleBufferGeometry } from "three"
-import Primitive from "../core/Primitive"
-import { flatGeomScaleZ, radiusScaled } from "../../engine/constants"
-import circleShape from "../core/PhysicsObjectManager/cannon/shapes/circleShape"
+import { CircleGeometry } from "three"
 import ICircle, { circleDefaults, circleSchema } from "../../interface/ICircle"
+import { deg2Rad } from "@lincode/math"
+import ConfigurablePrimitive, {
+    allocateDefaultInstance,
+    refreshParamsSystem
+} from "../core/ConfigurablePrimitive"
+import { PI2 } from "../../globals"
 
-const circleGeometry = new CircleBufferGeometry(radiusScaled, 32)
+const defaultParams = <const>[0.5, 32, 0, PI2]
+const geometry = allocateDefaultInstance(
+    CircleGeometry,
+    defaultParams
+) as CircleGeometry
 
-export default class Circle extends Primitive implements ICircle {
+export default class Circle
+    extends ConfigurablePrimitive<typeof CircleGeometry>
+    implements ICircle
+{
     public static componentName = "circle"
     public static override defaults = circleDefaults
     public static override schema = circleSchema
 
-    protected override _physicsShape = circleShape
-
     public constructor() {
-        super(circleGeometry, true)
-        this.object3d.scale.z = flatGeomScaleZ
+        super(CircleGeometry, defaultParams, geometry)
+        this.object3d.scale.z = Number.EPSILON
+    }
+
+    public override getParams() {
+        return <const>[0.5, this.segments, 0, this.theta * deg2Rad]
+    }
+
+    private _theta?: number
+    public get theta() {
+        return this._theta ?? 360
+    }
+    public set theta(val) {
+        this._theta = val
+        refreshParamsSystem(this)
+    }
+
+    private _segments?: number
+    public get segments() {
+        return this._segments ?? 32
+    }
+    public set segments(val) {
+        this._segments = val
+        refreshParamsSystem(this)
     }
 
     public override get depth() {

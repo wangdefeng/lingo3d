@@ -1,242 +1,422 @@
-import { debounce } from "@lincode/utils"
+import { Point } from "@lincode/math"
+import { filter } from "@lincode/utils"
 import {
-    Color,
+    BufferGeometry,
+    DoubleSide,
+    Mesh,
     MeshStandardMaterial,
-    ObjectSpaceNormalMap,
-    TangentSpaceNormalMap,
     Vector2
 } from "three"
 import ITexturedStandard, {
-    NormalMapType
+    texturedStandardDefaults,
+    texturedStandardSchema
 } from "../../../interface/ITexturedStandard"
-import loadTexture from "../../utils/loaders/loadTexture"
+import getDefaultValue from "../../../interface/utils/getDefaultValue"
+import throttleSystem from "../../../utils/throttleSystem"
+import { color, standardMaterial } from "../../utils/reusables"
+import createInstancePool from "../utils/createInstancePool"
+import filterNotDefault from "./utils/filterNotDefault"
+import createMap from "./utils/createMap"
+import MeshAppendable from "../../../api/core/MeshAppendable"
 
-const mapNames = <const>[
-    "map",
-    "alphaMap",
-    "envMap",
-    "aoMap",
-    "bumpMap",
-    "displacementMap",
-    "emissiveMap",
-    "lightMap",
-    "metalnessMap",
-    "roughnessMap",
-    "normalMap"
+export type StandardParams = [
+    color: string,
+    opacity: number,
+    texture: string,
+    alphaMap: string,
+    textureRepeat: number | Point,
+    textureFlipY: boolean,
+    textureRotation: number,
+    wireframe: boolean,
+    envMap: string,
+    envMapIntensity: number,
+    aoMap: string,
+    aoMapIntensity: number,
+    bumpMap: string,
+    bumpScale: number,
+    displacementMap: string,
+    displacementScale: number,
+    displacementBias: number,
+    emissive: boolean,
+    emissiveIntensity: number,
+    lightMap: string,
+    lightMapIntensity: number,
+    metalnessMap: string,
+    metalness: number,
+    roughnessMap: string,
+    roughness: number,
+    normalMap: string,
+    normalScale: number,
+    depthTest: boolean
 ]
 
-const textureRepeatMap = new Map<TexturedStandardMixin, Vector2>()
-const applyTextureRepeat = debounce(
-    function (this: TexturedStandardMixin) {
-        for (const [item, repeat] of textureRepeatMap) {
-            for (const name of mapNames) {
-                const map = item.material[name]
-                map && (map.repeat = repeat)
-            }
-        }
-        textureRepeatMap.clear()
-    },
-    0,
-    "trailing"
+const [increaseCount, decreaseCount, allocateDefaultInstance] =
+    createInstancePool<MeshStandardMaterial, StandardParams>(
+        (_, params) =>
+            new MeshStandardMaterial(
+                filter(
+                    {
+                        side: DoubleSide,
+                        color: params[0],
+                        opacity: params[1],
+                        transparent: params[1] !== undefined && params[1] < 1,
+                        map: createMap(
+                            params[2],
+                            params[4],
+                            params[5],
+                            params[6]
+                        ),
+                        alphaMap: createMap(
+                            params[3],
+                            params[4],
+                            params[5],
+                            params[6]
+                        ),
+                        wireframe: params[7],
+                        envMap: createMap(
+                            params[8],
+                            params[4],
+                            params[5],
+                            params[6]
+                        ),
+                        envMapIntensity: params[9],
+                        aoMap: createMap(
+                            params[10],
+                            params[4],
+                            params[5],
+                            params[6]
+                        ),
+                        aoMapIntensity: params[11],
+                        bumpMap: createMap(
+                            params[12],
+                            params[4],
+                            params[5],
+                            params[6]
+                        ),
+                        bumpScale: params[13],
+                        displacementMap: createMap(
+                            params[14],
+                            params[4],
+                            params[5],
+                            params[6]
+                        ),
+                        displacementScale: params[15],
+                        displacementBias: params[16],
+                        emissive: params[17] ? params[0] : undefined,
+                        emissiveIntensity: params[18],
+                        lightMap: createMap(
+                            params[19],
+                            params[4],
+                            params[5],
+                            params[6]
+                        ),
+                        lightMapIntensity: params[20],
+                        metalnessMap: createMap(
+                            params[21],
+                            params[4],
+                            params[5],
+                            params[6]
+                        ),
+                        metalness: params[22],
+                        roughnessMap: createMap(
+                            params[23],
+                            params[4],
+                            params[5],
+                            params[6]
+                        ),
+                        roughness: params[24],
+                        normalMap: createMap(
+                            params[25],
+                            params[4],
+                            params[5],
+                            params[6]
+                        ),
+                        normalScale: new Vector2(params[26], params[26]),
+                        depthTest: params[27]
+                    },
+                    filterNotDefault
+                )
+            ),
+        (material) => material.dispose()
+    )
+
+const refreshParamsSystem = throttleSystem((target: TexturedStandardMixin) => {
+    if (target.materialParamString)
+        decreaseCount(MeshStandardMaterial, target.materialParamString)
+    else
+        target.then(() =>
+            decreaseCount(MeshStandardMaterial, target.materialParamString!)
+        )
+    const paramString = JSON.stringify(target.materialParams)
+    target.material = increaseCount(
+        MeshStandardMaterial,
+        target.materialParams,
+        paramString
+    )
+    target.materialParamString = paramString
+})
+
+export const standardDefaults = Object.fromEntries(
+    Object.entries(texturedStandardSchema).map(([key]) => [
+        key,
+        structuredClone(getDefaultValue(texturedStandardDefaults, key, true))
+    ])
+)
+export const standardDefaultParams = Object.values(
+    standardDefaults
+) as StandardParams
+
+allocateDefaultInstance(
+    MeshStandardMaterial,
+    standardDefaultParams,
+    standardMaterial
 )
 
+export type StandardMesh = Mesh<BufferGeometry, MeshStandardMaterial>
+
 export default abstract class TexturedStandardMixin
+    extends MeshAppendable<StandardMesh>
     implements ITexturedStandard
 {
-    protected abstract material: MeshStandardMaterial
+    public get material() {
+        return this.object3d.material
+    }
+    public set material(val: MeshStandardMaterial) {
+        this.object3d.material = val
+    }
+
+    private _materialParams?: StandardParams
+    public get materialParams() {
+        return (this._materialParams ??= Object.values(
+            standardDefaultParams
+        ) as StandardParams)
+    }
+
+    public materialParamString?: string
 
     public get color() {
-        return "#" + this.material.color.getHexString()
+        return this.materialParams[0]
     }
-    public set color(val) {
-        this.material.color = new Color(val)
+    public set color(val: string | undefined) {
+        this.materialParams[0] = val
+            ? "#" + color.set(val).getHexString()
+            : standardDefaults.color
+        refreshParamsSystem(this)
+    }
+
+    public get opacity() {
+        return this.materialParams[1]
+    }
+    public set opacity(val: number | undefined) {
+        this.materialParams[1] = val ?? standardDefaults.opacity
+        refreshParamsSystem(this)
+    }
+
+    public get texture() {
+        return this.materialParams[2]
+    }
+    public set texture(val: string | undefined) {
+        this.materialParams[2] = val ?? standardDefaults.texture
+        refreshParamsSystem(this)
+    }
+
+    public get alphaMap() {
+        return this.materialParams[3]
+    }
+    public set alphaMap(val: string | undefined) {
+        this.materialParams[3] = val ?? standardDefaults.alphaMap
+        refreshParamsSystem(this)
+    }
+
+    public get textureRepeat() {
+        return this.materialParams[4]
+    }
+    public set textureRepeat(val: number | Point | undefined) {
+        this.materialParams[4] = val ?? standardDefaults.textureRepeat
+        refreshParamsSystem(this)
+    }
+
+    public get textureFlipY() {
+        return this.materialParams[5]
+    }
+    public set textureFlipY(val: boolean | undefined) {
+        this.materialParams[5] = val ?? standardDefaults.textureFlipY
+        refreshParamsSystem(this)
+    }
+
+    public get textureRotation() {
+        return this.materialParams[6]
+    }
+    public set textureRotation(val: number | undefined) {
+        this.materialParams[6] = val ?? standardDefaults.textureRotation
+        refreshParamsSystem(this)
     }
 
     public get wireframe() {
-        return this.material.wireframe
+        return this.materialParams[7]
     }
-    public set wireframe(val) {
-        this.material.wireframe = val
-    }
-
-    private standardTextureRepeat() {
-        this.material.needsUpdate = true
-        //@ts-ignore
-        if (!this._textureRepeat) return
-        //@ts-ignore
-        textureRepeatMap.set(this, this._textureRepeat)
-        applyTextureRepeat()
+    public set wireframe(val: boolean | undefined) {
+        this.materialParams[7] = val ?? standardDefaults.wireframe
+        refreshParamsSystem(this)
     }
 
-    private _envMap?: string
     public get envMap() {
-        return this._envMap
+        return this.materialParams[8]
     }
-    public set envMap(val) {
-        this._envMap = val
-        this.material.envMap = val ? loadTexture(val) : null
-        this.standardTextureRepeat()
+    public set envMap(val: string | undefined) {
+        this.materialParams[8] = val ?? standardDefaults.envMap
+        refreshParamsSystem(this)
     }
 
-    private _aoMap?: string
-    public get aoMap() {
-        return this._aoMap
+    public get envMapIntensity() {
+        return this.materialParams[9]
     }
-    public set aoMap(val) {
-        this._aoMap = val
-        this.material.aoMap = val ? loadTexture(val) : null
-        this.standardTextureRepeat()
+    public set envMapIntensity(val: number | undefined) {
+        this.materialParams[9] = val ?? standardDefaults.envMapIntensity
+        refreshParamsSystem(this)
+    }
+
+    public get aoMap() {
+        return this.materialParams[10]
+    }
+    public set aoMap(val: string | undefined) {
+        this.materialParams[10] = val ?? standardDefaults.aoMap
+        refreshParamsSystem(this)
     }
 
     public get aoMapIntensity() {
-        return this.material.aoMapIntensity
+        return this.materialParams[11]
     }
-    public set aoMapIntensity(val) {
-        this.material.aoMapIntensity = val
+    public set aoMapIntensity(val: number | undefined) {
+        this.materialParams[11] = val ?? standardDefaults.aoMapIntensity
+        refreshParamsSystem(this)
     }
 
-    private _bumpMap?: string
     public get bumpMap() {
-        return this._bumpMap
+        return this.materialParams[12]
     }
-    public set bumpMap(val) {
-        this._bumpMap = val
-        this.material.bumpMap = val ? loadTexture(val) : null
-        this.standardTextureRepeat()
+    public set bumpMap(val: string | undefined) {
+        this.materialParams[12] = val ?? standardDefaults.bumpMap
+        refreshParamsSystem(this)
     }
 
     public get bumpScale() {
-        return this.material.bumpScale
+        return this.materialParams[13]
     }
-    public set bumpScale(val) {
-        this.material.bumpScale = val
+    public set bumpScale(val: number | undefined) {
+        this.materialParams[13] = val ?? standardDefaults.bumpScale
+        refreshParamsSystem(this)
     }
 
-    private _displacementMap?: string
     public get displacementMap() {
-        return this._displacementMap
+        return this.materialParams[14]
     }
-    public set displacementMap(val) {
-        this._displacementMap = val
-        this.material.displacementMap = val ? loadTexture(val) : null
-        this.standardTextureRepeat()
+    public set displacementMap(val: string | undefined) {
+        this.materialParams[14] = val ?? standardDefaults.displacementMap
+        refreshParamsSystem(this)
     }
 
     public get displacementScale() {
-        return this.material.displacementScale
+        return this.materialParams[15]
     }
-    public set displacementScale(val) {
-        this.material.displacementScale = val
+    public set displacementScale(val: number | undefined) {
+        this.materialParams[15] = val ?? standardDefaults.displacementScale
+        refreshParamsSystem(this)
     }
 
     public get displacementBias() {
-        return this.material.displacementBias
+        return this.materialParams[16]
     }
-    public set displacementBias(val) {
-        this.material.displacementBias = val
-    }
-
-    public get emissiveColor() {
-        return "#" + this.material.emissive.getHexString()
-    }
-    public set emissiveColor(val) {
-        this.material.emissive = new Color(val)
+    public set displacementBias(val: number | undefined) {
+        this.materialParams[16] = val ?? standardDefaults.displacementBias
+        refreshParamsSystem(this)
     }
 
-    private _emissiveMap?: string
-    public get emissiveMap() {
-        return this._emissiveMap
+    public get emissive() {
+        return this.materialParams[17]
     }
-    public set emissiveMap(val) {
-        this._emissiveMap = val
-        this.material.emissiveMap = val ? loadTexture(val) : null
-        this.standardTextureRepeat()
+    public set emissive(val: boolean | undefined) {
+        this.materialParams[17] = val ?? standardDefaults.emissive
+        refreshParamsSystem(this)
     }
 
     public get emissiveIntensity() {
-        return this.material.emissiveIntensity
+        return this.materialParams[18]
     }
-    public set emissiveIntensity(val) {
-        this.material.emissiveIntensity = val
+    public set emissiveIntensity(val: number | undefined) {
+        this.materialParams[18] = val ?? standardDefaults.emissiveIntensity
+        refreshParamsSystem(this)
     }
 
-    private _lightMap?: string
     public get lightMap() {
-        return this._lightMap
+        return this.materialParams[19]
     }
-    public set lightMap(val) {
-        this._lightMap = val
-        this.material.lightMap = val ? loadTexture(val) : null
-        this.standardTextureRepeat()
+    public set lightMap(val: string | undefined) {
+        this.materialParams[19] = val ?? standardDefaults.lightMap
+        refreshParamsSystem(this)
     }
 
     public get lightMapIntensity() {
-        return this.material.lightMapIntensity
+        return this.materialParams[20]
     }
-    public set lightMapIntensity(val) {
-        this.material.lightMapIntensity = val
+    public set lightMapIntensity(val: number | undefined) {
+        this.materialParams[20] = val ?? standardDefaults.lightMapIntensity
+        refreshParamsSystem(this)
     }
 
-    private _metalnessMap?: string
     public get metalnessMap() {
-        return this._metalnessMap
+        return this.materialParams[21]
     }
-    public set metalnessMap(val) {
-        this._metalnessMap = val
-        this.material.metalnessMap = val ? loadTexture(val) : null
-        this.standardTextureRepeat()
+    public set metalnessMap(val: string | undefined) {
+        this.materialParams[21] = val ?? standardDefaults.metalnessMap
+        refreshParamsSystem(this)
     }
 
     public get metalness() {
-        return this.material.metalness
+        return this.materialParams[22]
     }
-    public set metalness(val) {
-        this.material.metalness = val
+    public set metalness(val: number | undefined) {
+        this.materialParams[22] = val ?? standardDefaults.metalness
+        refreshParamsSystem(this)
     }
 
-    private _roughnessMap?: string
     public get roughnessMap() {
-        return this._roughnessMap
+        return this.materialParams[23]
     }
-    public set roughnessMap(val) {
-        this._roughnessMap = val
-        this.material.roughnessMap = val ? loadTexture(val) : null
-        this.standardTextureRepeat()
+    public set roughnessMap(val: string | undefined) {
+        this.materialParams[23] = val ?? standardDefaults.roughnessMap
+        refreshParamsSystem(this)
     }
 
     public get roughness() {
-        return this.material.roughness
+        return this.materialParams[24]
     }
-    public set roughness(val) {
-        this.material.roughness = val
+    public set roughness(val: number | undefined) {
+        this.materialParams[24] = val ?? standardDefaults.roughness
+        refreshParamsSystem(this)
     }
 
-    private _normalMap?: string
     public get normalMap() {
-        return this._normalMap
+        return this.materialParams[25]
     }
-    public set normalMap(val) {
-        this._normalMap = val
-        this.material.normalMap = val ? loadTexture(val) : null
-        this.standardTextureRepeat()
+    public set normalMap(val: string | undefined) {
+        this.materialParams[25] = val ?? standardDefaults.normalMap
+        refreshParamsSystem(this)
     }
 
     public get normalScale() {
-        return this.material.normalScale
+        return this.materialParams[26]
     }
-    public set normalScale(val: Vector2 | number) {
-        if (typeof val === "number")
-            this.material.normalScale = new Vector2(val, val)
-        else this.material.normalScale = val
+    public set normalScale(val: number | undefined) {
+        this.materialParams[26] = val ?? standardDefaults.normalScale
+        refreshParamsSystem(this)
     }
 
-    private _normalMapType?: NormalMapType
-    public get normalMapType() {
-        return this._normalMapType
+    public get depthTest() {
+        return this.materialParams[27]
     }
-    public set normalMapType(val) {
-        this._normalMapType = val
-        this.material.normalMapType =
-            val === "objectSpace" ? ObjectSpaceNormalMap : TangentSpaceNormalMap
+    public set depthTest(val: boolean | undefined) {
+        this.materialParams[27] = val ?? standardDefaults.depthTest
+        refreshParamsSystem(this)
     }
 }

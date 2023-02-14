@@ -1,16 +1,12 @@
-import { SphereBufferGeometry } from "three"
+import { SphereGeometry } from "three"
 import Primitive from "../core/Primitive"
-import { radiusScaled } from "../../engine/constants"
-import sphereShape from "../core/PhysicsObjectManager/cannon/shapes/sphereShape"
 
-const geometry = new SphereBufferGeometry(radiusScaled, 16, 16)
+export const sphereGeometry = new SphereGeometry(0.5)
 
 export default class Sphere extends Primitive {
     public static componentName = "sphere"
 
-    protected override _physicsShape = sphereShape
-
     public constructor() {
-        super(geometry)
+        super(sphereGeometry)
     }
 }

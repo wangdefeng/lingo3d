@@ -1,70 +1,76 @@
 import { createEffect } from "@lincode/reactivity"
-import { Pass } from "three/examples/jsm/postprocessing/EffectComposer"
-import { getBloom } from "../../../states/useBloom"
-import { getSelectiveBloom } from "../../../states/useSelectiveBloom"
-import bloomPass from "./bloomPass"
-import renderPass from "./renderPass"
-import selectiveBloomPass from "./selectiveBloomPass"
-import lensDistortionPass from "./lensDistortionPass"
-import { getLensDistortion } from "../../../states/useLensDistortion"
-import { getEffectComposer } from "../../../states/useEffectComposer"
-import motionBlurPass from "./motionBlurPass"
-import { getMotionBlur } from "../../../states/useMotionBlur"
-import { getAmbientOcclusion } from "../../../states/useAmbientOcclusion"
-import saoPass from "./saoPass"
-import { getBokeh } from "../../../states/useBokeh"
-import bokehPass from "./bokehPass"
-import { getOutline } from "../../../states/useOutline"
-import outlinePass from "./outlinePass"
-import { getPixelRatioComputed } from "../../../states/usePixelRatioComputed"
-import { getAntiAlias } from "../../../states/useAntiAlias"
+import { filterBoolean } from "@lincode/utils"
+import { EffectComposer, EffectPass, RenderPass } from "postprocessing"
+import { getCameraRendered } from "../../../states/useCameraRendered"
 import { getRenderer } from "../../../states/useRenderer"
-import smaaPass from "./smaaPass"
+import { getResolution } from "../../../states/useResolution"
+import scene from "../../scene"
+import { getBloomEffect } from "./bloomEffect"
+import { getBokehEffect } from "./bokehEffect"
+import { getNormalPass } from "./normalPass"
+import { getOutlineEffect } from "./outlineEffect"
+import { getSelectiveBloomEffect } from "./selectiveBloomEffect"
+import { getSSAOEffect } from "./ssaoEffect"
+import { getSSREffect } from "./ssrEffect"
+import { getVignetteEffect } from "./vignetteEffect"
 
-export default {}
+const effectComposer = new EffectComposer(undefined)
+export default effectComposer
+
+effectComposer.multisampling = 4
+
+getRenderer((renderer) => renderer && effectComposer.setRenderer(renderer))
 
 createEffect(() => {
-    const effectComposer = getEffectComposer()
-    if (!effectComposer) return
+    const renderPass = new RenderPass(scene, getCameraRendered())
+    effectComposer.addPass(renderPass, 0)
+    return () => {
+        effectComposer.removePass(renderPass)
+        renderPass.dispose()
+    }
+}, [getCameraRendered])
 
-    const passes: Array<Pass> = [renderPass]
+createEffect(() => {
+    if (!getRenderer()) return
 
-    if (getAmbientOcclusion()) passes.push(saoPass)
+    const [w, h] = getResolution()
+    effectComposer.setSize(w, h)
+}, [getRenderer, getResolution])
 
-    if (getBloom()) passes.push(bloomPass)
+createEffect(() => {
+    if (!getRenderer()) return
 
-    if (getSelectiveBloom()) passes.push(selectiveBloomPass)
+    const normalPass = getNormalPass()
+    normalPass && effectComposer.addPass(normalPass)
 
-    if (getBokeh()) passes.push(bokehPass)
-
-    if (getOutline()) passes.push(outlinePass)
-
-    if (getLensDistortion()) passes.push(lensDistortionPass)
-
-    if (getMotionBlur()) for (const pass of motionBlurPass) passes.push(pass)
-
-    const antiAlias = getAntiAlias()
-    if (
-        (antiAlias === "MSAA" && !getRenderer()?.capabilities.isWebGL2) ||
-        antiAlias === "SSAA"
+    const effectPass = new EffectPass(
+        getCameraRendered(),
+        ...[
+            getBloomEffect(),
+            getSelectiveBloomEffect(),
+            getSSREffect(),
+            getSSAOEffect(),
+            getOutlineEffect(),
+            getBokehEffect(),
+            getVignetteEffect()
+        ].filter(filterBoolean)
     )
-        passes.push(smaaPass)
-
-    for (const pass of passes) effectComposer.addPass(pass)
+    effectComposer.addPass(effectPass)
 
     return () => {
-        for (const pass of passes) effectComposer.removePass(pass)
+        effectComposer.removePass(effectPass)
+        normalPass && effectComposer.removePass(normalPass)
+        effectPass.dispose()
     }
 }, [
-    getEffectComposer,
-    getAmbientOcclusion,
-    getBloom,
-    getSelectiveBloom,
-    getBokeh,
-    getOutline,
-    getLensDistortion,
-    getPixelRatioComputed,
-    getMotionBlur,
-    getAntiAlias,
-    getRenderer
+    getCameraRendered,
+    getRenderer,
+    getBloomEffect,
+    getSelectiveBloomEffect,
+    getSSREffect,
+    getSSAOEffect,
+    getOutlineEffect,
+    getBokehEffect,
+    getVignetteEffect,
+    getNormalPass
 ])

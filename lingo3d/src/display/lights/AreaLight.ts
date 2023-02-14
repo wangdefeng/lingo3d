@@ -1,4 +1,4 @@
-import { Color, RectAreaLight } from "three"
+import { RectAreaLight } from "three"
 import { RectAreaLightHelper } from "three/examples/jsm/helpers/RectAreaLightHelper"
 import IAreaLight, {
     areaLightDefaults,
@@ -6,19 +6,21 @@ import IAreaLight, {
 } from "../../interface/IAreaLight"
 import { lazy } from "@lincode/utils"
 import ObjectManager from "../core/ObjectManager"
-import mainCamera from "../../engine/mainCamera"
 import scene from "../../engine/scene"
-import { scaleDown } from "../../engine/constants"
-import { onTransformControls } from "../../events/onTransformControls"
 import { Reactive } from "@lincode/reactivity"
-import { getSelectionTarget } from "../../states/useSelectionTarget"
-import { getCameraRendered } from "../../states/useCameraRendered"
-import { getEditorModeComputed } from "../../states/useEditorModeComputed"
+import { ShadowResolution } from "../../states/useShadowResolution"
 import Nullable from "../../interface/utils/Nullable"
+import { ssrExcludeSet } from "../../engine/renderLoop/effectComposer/ssrEffect/renderSetup"
+import selectionCandidates, {
+    additionalSelectionCandidates
+} from "../core/utils/raycast/selectionCandidates"
+import { setManager } from "../../api/utils/getManager"
+import { CM2M } from "../../globals"
+import { getEditorHelper } from "../../states/useEditorHelper"
 
 const lazyInit = lazy(async () => {
     const { RectAreaLightUniformsLib } = await import(
-        "three/examples/jsm/lights/RectAreaLightUniformsLib.js"
+        "three/examples/jsm/lights/RectAreaLightUniformsLib"
     )
     RectAreaLightUniformsLib.init()
 })
@@ -39,49 +41,44 @@ export default class AreaLight extends ObjectManager implements IAreaLight {
             const light = (this.light = new RectAreaLight(
                 this._color,
                 this._intensity,
-                this.width * this.scaleX * scaleDown,
-                this.height * this.scaleY * scaleDown
+                this.width * this.scaleX * CM2M,
+                this.height * this.scaleY * CM2M
             ))
             this.object3d.add(light)
 
             this.then(() => light.dispose())
 
-            this.createEffect(() => {
-                if (
-                    getEditorModeComputed() !== "scale" ||
-                    getSelectionTarget() !== this
-                )
-                    return
-
-                const handle = onTransformControls(() => {
-                    const { x, y } = this.outerObject3d.scale
-                    this.scaleX = x
-                    this.scaleY = y
-                })
-                return () => {
-                    handle.cancel()
-                }
-            }, [getEditorModeComputed, getSelectionTarget])
+            this.onTransformControls = (_, mode) => {
+                if (mode !== "scale") return
+                const { x, y } = this.outerObject3d.scale
+                this.scaleX = x
+                this.scaleY = y
+            }
 
             this.createEffect(() => {
-                if (
-                    getCameraRendered() !== mainCamera ||
-                    !this.helperState.get()
-                )
-                    return
+                if (!getEditorHelper() || !this.helperState.get()) return
 
                 const helper = new RectAreaLightHelper(light)
                 scene.add(helper)
+                ssrExcludeSet.add(helper)
+                setManager(helper, this)
+
+                selectionCandidates.add(helper)
+                additionalSelectionCandidates.add(helper)
 
                 return () => {
                     helper.dispose()
                     scene.remove(helper)
+                    ssrExcludeSet.delete(helper)
+
+                    selectionCandidates.delete(helper)
+                    additionalSelectionCandidates.delete(helper)
                 }
-            }, [getCameraRendered, this.helperState.get])
+            }, [this.helperState.get, getEditorHelper])
         })
     }
 
-    public shadowResolution: Nullable<number>
+    public shadowResolution: Nullable<ShadowResolution>
 
     private helperState = new Reactive(true)
     public get helper() {
@@ -97,7 +94,7 @@ export default class AreaLight extends ObjectManager implements IAreaLight {
     }
     public set color(val) {
         this._color = val
-        this.light && (this.light.color = new Color(val))
+        this.light?.color.set(val)
     }
 
     private _intensity?: number
@@ -115,7 +112,7 @@ export default class AreaLight extends ObjectManager implements IAreaLight {
     }
     public override set width(val) {
         this._width = val
-        this.light && (this.light.width = val * this.scaleX * scaleDown)
+        this.light && (this.light.width = val * this.scaleX * CM2M)
     }
 
     private _height?: number
@@ -124,7 +121,7 @@ export default class AreaLight extends ObjectManager implements IAreaLight {
     }
     public override set height(val) {
         this._height = val
-        this.light && (this.light.height = val * this.scaleY * scaleDown)
+        this.light && (this.light.height = val * this.scaleY * CM2M)
     }
 
     private _scaleX?: number
@@ -133,7 +130,7 @@ export default class AreaLight extends ObjectManager implements IAreaLight {
     }
     public override set scaleX(val) {
         this._scaleX = val
-        this.light && (this.light.width = val * this.width * scaleDown)
+        this.light && (this.light.width = val * this.width * CM2M)
     }
 
     private _scaleY?: number
@@ -142,7 +139,7 @@ export default class AreaLight extends ObjectManager implements IAreaLight {
     }
     public override set scaleY(val) {
         this._scaleY = val
-        this.light && (this.light.height = val * this.height * scaleDown)
+        this.light && (this.light.height = val * this.height * CM2M)
     }
 
     public override get depth() {
@@ -153,4 +150,12 @@ export default class AreaLight extends ObjectManager implements IAreaLight {
         return 0
     }
     public override set scaleZ(_) {}
+
+    private _castShadow?: boolean
+    public get castShadow() {
+        return !!this._castShadow
+    }
+    public set castShadow(val) {
+        this._castShadow = val
+    }
 }

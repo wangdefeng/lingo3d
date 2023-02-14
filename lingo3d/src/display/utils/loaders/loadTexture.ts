@@ -1,12 +1,12 @@
-import { TextureLoader, Texture, RepeatWrapping } from "three"
+import { TextureLoader, Texture, RepeatWrapping, DataTexture } from "three"
 import { forceGet } from "@lincode/utils"
-import {
-    increaseLoadingCount,
-    decreaseLoadingCount
-} from "../../../states/useLoadingCount"
-import { handleProgress } from "./bytesLoaded"
+import { handleProgress } from "./utils/bytesLoaded"
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js"
 import Events from "@lincode/events"
+import {
+    decreaseLoadingUnpkgCount,
+    increaseLoadingUnpkgCount
+} from "../../../states/useLoadingUnpkgCount"
 
 const cache = new Map<string, Texture>()
 const textureLoader = new TextureLoader()
@@ -16,24 +16,25 @@ const loaded = new Events()
 export default (url: string, onLoad?: () => void) => {
     onLoad && loaded.once(url, () => queueMicrotask(onLoad))
 
-    return forceGet(cache, url, () => {
-        increaseLoadingCount()
+    const texture = forceGet(cache, url, () => {
+        const unpkg = url.startsWith("https://unpkg.com/")
+        unpkg && increaseLoadingUnpkgCount()
 
-        const hdr = url.toLowerCase().toLowerCase().endsWith(".hdr")
+        const hdr = url.toLowerCase().endsWith(".hdr")
         const loader = hdr ? rgbeLoader : textureLoader
 
         return loader.load(
             url,
             (texture) => {
                 texture.wrapS = texture.wrapT = RepeatWrapping
+                texture.flipY = texture.userData.flipY ? false : true
+                texture.userData.flipped = true
                 loaded.setState(url)
-                decreaseLoadingCount()
+
+                unpkg && decreaseLoadingUnpkgCount()
             },
-            handleProgress(url),
-            () => {
-                loaded.setState(url)
-                decreaseLoadingCount()
-            }
+            handleProgress(url)
         )
     })
+    return texture.constructor === DataTexture ? texture : texture.clone()
 }

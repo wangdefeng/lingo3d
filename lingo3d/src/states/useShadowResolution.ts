@@ -1,5 +1,6 @@
 import store from "@lincode/reactivity"
 
-export const [setShadowResolution, getShadowResolution] = store<
-    number | undefined
->(undefined)
+export type ShadowResolution = "low" | "medium" | "high"
+
+export const [setShadowResolution, getShadowResolution] =
+    store<ShadowResolution>("medium")

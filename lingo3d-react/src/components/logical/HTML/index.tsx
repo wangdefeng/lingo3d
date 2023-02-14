@@ -6,7 +6,7 @@ import htmlContainer from "./htmlContainer"
 
 interface HTMLProps {
   parent?: any
-  children: React.ReactNode
+  children?: React.ReactNode
 }
 
 const HTML: React.FC<HTMLProps> = ({ children }) => {
@@ -38,7 +38,16 @@ const HTML: React.FC<HTMLProps> = ({ children }) => {
 
   return ReactDOM.createPortal(
     <div ref={divRef} style={{ display: "none" }}>
-      {children}
+      <div
+        style={{
+          position: "absolute",
+          transform: "translateX(-50%) translateY(-50%)",
+          left: 0,
+          top: 0
+        }}
+      >
+        {children}
+      </div>
     </div>,
     htmlContainer
   )

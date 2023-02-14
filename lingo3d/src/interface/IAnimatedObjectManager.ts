@@ -1,11 +1,13 @@
 import AnimationManager from "../display/core/AnimatedObjectManager/AnimationManager"
 import { ExtractProps } from "./utils/extractProps"
 import Nullable from "./utils/Nullable"
-import Defaults from "./utils/Defaults"
-import IStaticObjectManager, {
-    staticObjectManagerDefaults,
-    staticObjectManagerSchema
-} from "./IStaticObjectManaget"
+import { extendDefaults } from "./utils/Defaults"
+import { nullableDefault } from "./utils/NullableDefault"
+import { hideSchema } from "./utils/nonEditorSchemaSet"
+import IMeshAppendable, {
+    meshAppendableDefaults,
+    meshAppendableSchema
+} from "./IMeshAppendable"
 
 export type AnimationValue = Record<string, Array<number>>
 export type Animation =
@@ -15,32 +17,32 @@ export type Animation =
     | boolean
     | AnimationValue
 
-export default interface IAnimatedObjectManager extends IStaticObjectManager {
+export default interface IAnimatedObjectManager extends IMeshAppendable {
     animations: Record<string, string | AnimationManager>
     animation: Nullable<Animation>
     animationPaused: Nullable<boolean>
-    animationRepeat: Nullable<boolean>
+    animationRepeat: Nullable<number>
     onAnimationFinish: Nullable<() => void>
 }
 
 export const animatedObjectManagerSchema: Required<
     ExtractProps<IAnimatedObjectManager>
 > = {
-    ...staticObjectManagerSchema,
+    ...meshAppendableSchema,
 
     animations: Object,
     animation: [String, Number, Array, Boolean, Object],
     animationPaused: Boolean,
-    animationRepeat: Boolean,
+    animationRepeat: Number,
     onAnimationFinish: Function
 }
+hideSchema(["animationRepeat"])
 
-export const animatedObjectManagerDefaults: Defaults<IAnimatedObjectManager> = {
-    ...staticObjectManagerDefaults,
-
-    animations: {},
-    animation: undefined,
-    animationPaused: [undefined, false],
-    animationRepeat: [undefined, true],
-    onAnimationFinish: undefined
-}
+export const animatedObjectManagerDefaults =
+    extendDefaults<IAnimatedObjectManager>([meshAppendableDefaults], {
+        animations: {},
+        animation: undefined,
+        animationPaused: nullableDefault(false),
+        animationRepeat: nullableDefault(Infinity),
+        onAnimationFinish: undefined
+    })

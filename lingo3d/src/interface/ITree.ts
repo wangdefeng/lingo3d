@@ -1,5 +1,5 @@
 import IModel, { modelDefaults, modelSchema } from "./IModel"
-import Defaults from "./utils/Defaults"
+import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 
 export default interface ITree extends IModel {
@@ -11,8 +11,7 @@ export const treeSchema: Required<ExtractProps<ITree>> = {
     preset: String
 }
 
-export const treeDefaults: Defaults<ITree> = {
-    ...modelDefaults,
+export const treeDefaults = extendDefaults<ITree>([modelDefaults], {
     preset: "tree1",
     scale: 4
-}
+})

@@ -6,21 +6,19 @@ import loadTexture from "../display/utils/loaders/loadTexture"
 import { getBackgroundColor } from "../states/useBackgroundColor"
 import { getBackgroundImage } from "../states/useBackgroundImage"
 import { getSkyboxStack } from "../states/useSkyboxStack"
-import { last } from "@lincode/utils"
-
-export default {}
+import { environmentToUrl } from "./defaultLight"
 
 createEffect(() => {
     const image = getBackgroundImage()
     const color = getBackgroundColor()
-    const skybox = last(getSkyboxStack())?.texture
+    const skybox = getSkyboxStack().at(-1)?.texture
 
     if (skybox) {
         if (Array.isArray(skybox)) scene.background = loadCubeTexture(skybox)
         else {
             let proceed = true
             const texture = loadTexture(
-                skybox,
+                environmentToUrl(skybox),
                 () => proceed && (scene.background = texture)
             )
             texture.mapping = EquirectangularReflectionMapping
@@ -32,5 +30,5 @@ createEffect(() => {
     else if (color) {
         if (color === "transparent") scene.background = null
         else scene.background = new Color(color)
-    } else scene.background = new Color("black")
+    } else scene.background = new Color(0)
 }, [getBackgroundColor, getBackgroundImage, getSkyboxStack])

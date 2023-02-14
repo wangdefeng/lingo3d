@@ -1,13 +1,13 @@
-import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader"
-import { Bone, Group, LinearEncoding, MeshStandardMaterial } from "three"
+import { FBXLoader } from "./loaders/FBXLoader"
+import { Group } from "three"
 import { forceGet } from "@lincode/utils"
 import cloneSkinnedMesh from "../cloneSkinnedMesh"
+import { handleProgress } from "./utils/bytesLoaded"
 import {
-    decreaseLoadingCount,
-    increaseLoadingCount
-} from "../../../states/useLoadingCount"
-import { handleProgress } from "./bytesLoaded"
-import copyStandard from "../../core/StaticObjectManager/applyMaterialProperties/copyStandard"
+    decreaseLoadingUnpkgCount,
+    increaseLoadingUnpkgCount
+} from "../../../states/useLoadingUnpkgCount"
+import processChildren from "./utils/processChildren"
 
 const cache = new Map<string, Promise<[Group, boolean]>>()
 const loader = new FBXLoader()
@@ -18,37 +18,19 @@ export default async (url: string, clone: boolean) => {
         url,
         () =>
             new Promise<[Group, boolean]>((resolve, reject) => {
-                increaseLoadingCount()
+                const unpkg = url.startsWith("https://unpkg.com/")
+                unpkg && increaseLoadingUnpkgCount()
                 loader.load(
                     url,
-                    (group) => {
-                        decreaseLoadingCount()
+                    (group: Group) => {
+                        const noBonePtr: [boolean] = [true]
+                        processChildren(group, noBonePtr)
 
-                        let noBone = true
-                        group.traverse((child: any) => {
-                            noBone && child instanceof Bone && (noBone = false)
-
-                            child.castShadow = true
-                            child.receiveShadow = true
-
-                            const { material } = child
-                            if (!material) return
-
-                            material.map &&
-                                (material.map.encoding = LinearEncoding)
-                            copyStandard(
-                                material,
-                                (child.material = new MeshStandardMaterial())
-                            )
-                            material.dispose()
-                        })
-                        resolve([group, noBone])
+                        unpkg && decreaseLoadingUnpkgCount()
+                        resolve([group, noBonePtr[0]])
                     },
                     handleProgress(url),
-                    () => {
-                        decreaseLoadingCount()
-                        reject()
-                    }
+                    reject
                 )
             })
     )

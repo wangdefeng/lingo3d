@@ -1,102 +1,76 @@
 import { CameraHelper, PerspectiveCamera, Quaternion } from "three"
 import ObjectManager from "../ObjectManager"
-import { debounce, last } from "@lincode/utils"
-import { scaleDown } from "../../../engine/constants"
-import {
-    ray,
-    euler,
-    quaternion,
-    quaternion_,
-    halfPi
-} from "../../utils/reusables"
-import pillShape from "../PhysicsObjectManager/cannon/shapes/pillShape"
+import { ray, euler, quaternion, quaternion_ } from "../../utils/reusables"
 import ICameraBase, { MouseControl } from "../../../interface/ICameraBase"
 import { deg2Rad, Point3d } from "@lincode/math"
-import { MIN_POLAR_ANGLE, MAX_POLAR_ANGLE } from "../../../globals"
+import { MIN_POLAR_ANGLE, MAX_POLAR_ANGLE, PI, PI_HALF } from "../../../globals"
 import { Reactive } from "@lincode/reactivity"
-import MeshItem from "../MeshItem"
 import { Cancellable } from "@lincode/promiselikes"
-import mainCamera from "../../../engine/mainCamera"
 import scene from "../../../engine/scene"
-import {
-    onSelectionTarget,
-    emitSelectionTarget
-} from "../../../events/onSelectionTarget"
-import { bokehDefault } from "../../../states/useBokeh"
-import { bokehApertureDefault } from "../../../states/useBokehAperture"
-import { bokehFocusDefault } from "../../../states/useBokehFocus"
-import { bokehMaxBlurDefault } from "../../../states/useBokehMaxBlur"
-import { setBokehRefresh } from "../../../states/useBokehRefresh"
-import { setCameraFrom } from "../../../states/useCameraFrom"
 import { pushCameraList, pullCameraList } from "../../../states/useCameraList"
-import { getCameraRendered } from "../../../states/useCameraRendered"
 import {
     pullCameraStack,
-    getCameraStack,
     pushCameraStack
 } from "../../../states/useCameraStack"
-import makeCameraSprite from "../utils/makeCameraSprite"
 import getWorldPosition from "../../utils/getWorldPosition"
 import getWorldQuaternion from "../../utils/getWorldQuaternion"
 import getWorldDirection from "../../utils/getWorldDirection"
+import { addSelectionHelper } from "../utils/raycast/selectionCandidates"
+import HelperSprite from "../utils/HelperSprite"
+import { setManager } from "../../../api/utils/getManager"
+import throttleSystem from "../../../utils/throttleSystem"
+import MeshAppendable from "../../../api/core/MeshAppendable"
+import { getEditorHelper } from "../../../states/useEditorHelper"
+import { getCameraRendered } from "../../../states/useCameraRendered"
 
-export default abstract class CameraBase<T extends PerspectiveCamera>
+export const updateAngleSystem = throttleSystem((target: CameraBase) =>
+    target.gyrate(0, 0)
+)
+
+export default abstract class CameraBase<
+        T extends PerspectiveCamera = PerspectiveCamera
+    >
     extends ObjectManager
     implements ICameraBase
 {
-    protected override _physicsShape = pillShape
+    public midObject3d = this.outerObject3d
 
-    protected midObject3d = this.outerObject3d
-
-    public constructor(protected camera: T) {
+    public constructor(public camera: T) {
         super()
         this.object3d.add(camera)
-        this.camera.userData.manager = this
-        pushCameraList(this.camera)
+        setManager(camera, this)
+
+        pushCameraList(camera)
+        this.then(() => {
+            pullCameraStack(camera)
+            pullCameraList(camera)
+        })
 
         this.createEffect(() => {
-            if (
-                getCameraRendered() !== mainCamera ||
-                getCameraRendered() === this.camera
-            )
-                return
+            if (!getEditorHelper() || getCameraRendered() === camera) return
 
-            const helper = new CameraHelper(this.camera)
+            const helper = new CameraHelper(camera)
             scene.add(helper)
 
-            const sprite = makeCameraSprite()
+            const sprite = new HelperSprite("camera")
+            const handle = addSelectionHelper(sprite, this)
             helper.add(sprite.outerObject3d)
-
-            const handle = onSelectionTarget(({ target }) => {
-                target === sprite && emitSelectionTarget(this as any)
-            })
             return () => {
                 helper.dispose()
                 scene.remove(helper)
-
-                sprite.dispose()
                 handle.cancel()
             }
-        }, [getCameraRendered])
+        }, [getEditorHelper, getCameraRendered])
     }
 
-    public override dispose() {
-        if (this.done) return this
-        super.dispose()
-
-        pullCameraStack(this.camera)
-        pullCameraList(this.camera)
-
-        return this
-    }
-
-    public override lookAt(target: MeshItem | Point3d): void
+    //@ts-ignore
+    public override lookAt(target: MeshAppendable | Point3d): void
     public override lookAt(x: number, y: number | undefined, z: number): void
     public override lookAt(a0: any, a1?: any, a2?: any) {
         super.lookAt(a0, a1, a2)
-        const angle = euler.setFromQuaternion(this.outerObject3d.quaternion)
-        angle.x += Math.PI
-        angle.z += Math.PI
+        const angle = euler.setFromQuaternion(this.quaternion)
+        angle.x += PI
+        angle.z += PI
         this.outerObject3d.setRotationFromEuler(angle)
     }
 
@@ -132,20 +106,14 @@ export default abstract class CameraBase<T extends PerspectiveCamera>
         this.camera.updateProjectionMatrix?.()
     }
 
-    public activate() {
-        const cameraFrom = last(getCameraStack())
-        if (cameraFrom === this.camera) return
-
-        pullCameraStack(this.camera)
-        pushCameraStack(this.camera)
-        setCameraFrom(cameraFrom)
-    }
-
+    private _active?: boolean
     public get active() {
-        return last(getCameraStack()) === this.camera
+        return !!this._active
     }
     public set active(val) {
-        val && this.activate()
+        this._active = val
+        pullCameraStack(this.camera)
+        val && pushCameraStack(this.camera)
     }
 
     public get transition() {
@@ -155,38 +123,6 @@ export default abstract class CameraBase<T extends PerspectiveCamera>
         this.camera.userData.transition = val
     }
 
-    public get bokeh() {
-        return this.camera.userData.bokeh ?? bokehDefault
-    }
-    public set bokeh(val) {
-        this.camera.userData.bokeh = val
-        setBokehRefresh({})
-    }
-
-    public get bokehFocus() {
-        return this.camera.userData.bokehFocus ?? bokehFocusDefault
-    }
-    public set bokehFocus(val) {
-        this.camera.userData.bokehFocus = val
-        setBokehRefresh({})
-    }
-
-    public get bokehMaxBlur() {
-        return this.camera.userData.bokehMaxBlur ?? bokehMaxBlurDefault
-    }
-    public set bokehMaxBlur(val) {
-        this.camera.userData.bokehMaxBlur = val
-        setBokehRefresh({})
-    }
-
-    public get bokehAperture() {
-        return this.camera.userData.bokehAperture ?? bokehApertureDefault
-    }
-    public set bokehAperture(val) {
-        this.camera.userData.bokehAperture = val
-        setBokehRefresh({})
-    }
-
     protected override getRay() {
         return ray.set(
             getWorldPosition(this.camera),
@@ -194,41 +130,14 @@ export default abstract class CameraBase<T extends PerspectiveCamera>
         )
     }
 
-    public override append(object: MeshItem) {
-        this._append(object)
+    public override append(object: MeshAppendable) {
+        this.appendNode(object)
         this.camera.add(object.outerObject3d)
     }
 
-    public override attach(object: MeshItem) {
-        this._append(object)
+    public override attach(object: MeshAppendable) {
+        this.appendNode(object)
         this.camera.attach(object.outerObject3d)
-    }
-
-    public override get width() {
-        return super.width
-    }
-    public override set width(val) {
-        const num = val * scaleDown
-        this.object3d.scale.x = num
-        this.camera.scale.x = 1 / num
-    }
-
-    public override get height() {
-        return super.height
-    }
-    public override set height(val) {
-        const num = val * scaleDown
-        this.object3d.scale.y = num
-        this.camera.scale.y = 1 / num
-    }
-
-    public override get depth() {
-        return super.depth
-    }
-    public override set depth(val) {
-        const num = val * scaleDown
-        this.object3d.scale.z = num
-        this.camera.scale.z = 1 / num
     }
 
     protected orbitMode?: boolean
@@ -239,18 +148,15 @@ export default abstract class CameraBase<T extends PerspectiveCamera>
 
         euler.y -= movementX * 0.002
         euler.y = Math.max(
-            halfPi - this._maxAzimuthAngle * deg2Rad,
-            Math.min(halfPi - this._minAzimuthAngle * deg2Rad, euler.y)
+            PI_HALF - this._maxAzimuthAngle * deg2Rad,
+            Math.min(PI_HALF - this._minAzimuthAngle * deg2Rad, euler.y)
         )
-
         euler.x -= movementY * 0.002
         euler.x = Math.max(
-            halfPi - this._maxPolarAngle * deg2Rad,
-            Math.min(halfPi - this._minPolarAngle * deg2Rad, euler.x)
+            PI_HALF - this._maxPolarAngle * deg2Rad,
+            Math.min(PI_HALF - this._minPolarAngle * deg2Rad, euler.x)
         )
-
         manager.setRotationFromEuler(euler)
-        !inner && this.physicsRotate()
     }
 
     private gyrateHandle?: Cancellable
@@ -270,14 +176,12 @@ export default abstract class CameraBase<T extends PerspectiveCamera>
         this.gyrateHandle?.cancel()
 
         let factor = 1
-        const handle = (this.gyrateHandle = this.beforeRender(() => {
+        const handle = (this.gyrateHandle = this.registerOnLoop(() => {
             factor *= 0.95
             this._gyrate(movementX * factor, movementY * factor)
             factor <= 0.001 && handle.cancel()
         }))
     }
-
-    protected updateAngle = debounce(() => this.gyrate(0, 0), 0, "trailing")
 
     private _minPolarAngle = MIN_POLAR_ANGLE
     public get minPolarAngle() {
@@ -285,7 +189,7 @@ export default abstract class CameraBase<T extends PerspectiveCamera>
     }
     public set minPolarAngle(val) {
         this._minPolarAngle = val
-        this.updateAngle()
+        updateAngleSystem(this)
     }
 
     private _maxPolarAngle = MAX_POLAR_ANGLE
@@ -294,7 +198,7 @@ export default abstract class CameraBase<T extends PerspectiveCamera>
     }
     public set maxPolarAngle(val) {
         this._maxPolarAngle = val
-        this.updateAngle()
+        updateAngleSystem(this)
     }
 
     private _minAzimuthAngle = -Infinity
@@ -303,7 +207,7 @@ export default abstract class CameraBase<T extends PerspectiveCamera>
     }
     public set minAzimuthAngle(val) {
         this._minAzimuthAngle = val
-        this.updateAngle()
+        updateAngleSystem(this)
     }
 
     private _maxAzimuthAngle = Infinity
@@ -312,7 +216,7 @@ export default abstract class CameraBase<T extends PerspectiveCamera>
     }
     public set maxAzimuthAngle(val) {
         this._maxAzimuthAngle = val
-        this.updateAngle()
+        updateAngleSystem(this)
     }
 
     public setPolarAngle(angle: number) {
@@ -374,7 +278,6 @@ export default abstract class CameraBase<T extends PerspectiveCamera>
         return !!this._gyroControl
     }
     public set gyroControl(val) {
-        if (this._gyroControl === val) return
         this._gyroControl = val
 
         const deviceEuler = euler

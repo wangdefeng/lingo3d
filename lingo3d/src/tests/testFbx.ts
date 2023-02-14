@@ -1,9 +1,5 @@
-import { settings, Model } from ".."
-
-export default {}
-
-settings.defaultLight = "studio"
+import Model from "../display/Model"
 
 const model = new Model()
-model.src = "map.glb"
-model.scale = 150
+model.src = "rig2.fbx"
+model.resize = false

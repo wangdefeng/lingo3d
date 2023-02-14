@@ -8,8 +8,8 @@ export default <T extends Object3D>(
     noBone: boolean,
     animations = target.animations
 ) => {
-    const result = noBone ? target.clone() : clone(target as any)
-    !noBone && skinnedMeshSet.add(result as Object3D)
+    const result = noBone ? target.clone() : clone(target)
+    !noBone && skinnedMeshSet.add(result)
     result.animations = animations
     return result as T
 }

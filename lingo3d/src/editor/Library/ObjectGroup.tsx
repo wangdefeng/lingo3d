@@ -1,9 +1,5 @@
-import { preventTreeShake } from "@lincode/utils"
-import { h, Fragment } from "preact"
 import { GameObjectType } from "../../api/serializer/types"
 import ObjectIcon from "./ObjectIcon"
-
-preventTreeShake(h)
 
 interface ObjectGroupProps {
     names: Array<GameObjectType | Partial<Record<GameObjectType, string>>>
@@ -40,7 +36,7 @@ const ObjectGroup = ({ names }: ObjectGroupProps) => {
     }
 
     return (
-        <Fragment>
+        <>
             {groups.map(([name0, name1], i) => (
                 <div key={i} style={{ display: "flex" }}>
                     <ObjectIcon
@@ -55,7 +51,7 @@ const ObjectGroup = ({ names }: ObjectGroupProps) => {
                     )}
                 </div>
             ))}
-        </Fragment>
+        </>
     )
 }
 

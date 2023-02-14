@@ -1,284 +1,333 @@
-import cubeShape from "./cannon/shapes/cubeShape"
-import { Object3D, Vector3 } from "three"
-import type { Body } from "cannon-es"
-import { Cancellable } from "@lincode/promiselikes"
-import { assertExhaustive } from "@lincode/utils"
-import { Point3d } from "@lincode/math"
-import SimpleObjectManager from "../SimpleObjectManager"
+import { Object3D } from "three"
+import { deg2Rad, Point3d } from "@lincode/math"
 import IPhysicsObjectManager, {
-    PhysicsGroupIndex,
-    PhysicsOptions,
-    PhysicsShape
+    PhysicsOptions
 } from "../../../interface/IPhysicsObjectManager"
-import StaticObjectManager from "../StaticObjectManager"
-import bvhContactMap from "./bvh/bvhContactMap"
-import { cannonContactBodies, cannonContactMap } from "./cannon/cannonLoop"
-import MeshItem from "../MeshItem"
+import getActualScale from "../../utils/getActualScale"
+import { Reactive, store } from "@lincode/reactivity"
+import {
+    actorPtrManagerMap,
+    managerActorMap,
+    managerActorPtrMap,
+    managerContactMap,
+    managerControllerMap
+} from "./physx/pxMaps"
+import scene from "../../../engine/scene"
+import destroy from "./physx/destroy"
+import { assignPxTransform, setPxVec, setPxVec_ } from "./physx/pxMath"
+import SpawnPoint from "../../SpawnPoint"
+import {
+    pxUpdateSet,
+    pxVXUpdateMap,
+    pxVYUpdateMap,
+    pxVZUpdateMap
+} from "./physx/physxLoop"
+import Nullable from "../../../interface/utils/Nullable"
+import MeshAppendable from "../../../api/core/MeshAppendable"
+import cookConvexGeometry, {
+    decreaseConvexGeometryCount
+} from "./physx/cookConvexGeometry"
+import { physxPtr } from "./physx/physxPtr"
+import { getPhysXLoaded } from "../../../states/usePhysXLoaded"
+import { lazy } from "@lincode/utils"
+import {
+    decreaseLoadingUnpkgCount,
+    increaseLoadingUnpkgCount
+} from "../../../states/useLoadingUnpkgCount"
+import VisibleObjectManager from "../VisibleObjectManager"
+
+const importPhysX = lazy(async () => {
+    increaseLoadingUnpkgCount()
+    await import("./physx")
+    decreaseLoadingUnpkgCount()
+})
 
 export default class PhysicsObjectManager<T extends Object3D = Object3D>
-    extends SimpleObjectManager<T>
+    extends VisibleObjectManager<T>
     implements IPhysicsObjectManager
 {
-    protected _mAV?: Point3d
-    private getMAV() {
-        return (this._mAV ??= new Point3d(Infinity, Infinity, Infinity))
-    }
-    public get maxAngularVelocityX() {
-        return this._mAV?.x ?? Infinity
-    }
-    public set maxAngularVelocityX(val) {
-        this.getMAV().x = val
-    }
-    public get maxAngularVelocityY() {
-        return this._mAV?.y ?? Infinity
-    }
-    public set maxAngularVelocityY(val) {
-        this.getMAV().y = val
-    }
-    public get maxAngularVelocityZ() {
-        return this._mAV?.z ?? Infinity
-    }
-    public set maxAngularVelocityZ(val) {
-        this.getMAV().z = val
-    }
+    public actor?: any
+    public capsuleHeight?: number
 
-    protected _mV?: Point3d
-    private getMV() {
-        return (this._mV ??= new Point3d(Infinity, Infinity, Infinity))
-    }
-    public get maxVelocityX() {
-        return this._mV?.x ?? Infinity
-    }
-    public set maxVelocityX(val) {
-        this.getMV().x = val
-    }
-    public get maxVelocityY() {
-        return this._mV?.y ?? Infinity
-    }
-    public set maxVelocityY(val) {
-        this.getMV().y = val
-    }
-    public get maxVelocityZ() {
-        return this._mV?.z ?? Infinity
-    }
-    public set maxVelocityZ(val) {
-        this.getMV().z = val
-    }
-
-    protected physicsUpdate?: {
-        position?: { x?: boolean; y?: boolean; z?: boolean }
-        rotation?: { x?: boolean; y?: boolean; z?: boolean }
-    }
-    protected physicsRotate() {
-        if (!this.physicsUpdate) return
-        const rotation = (this.physicsUpdate.rotation ??= {})
-        rotation.x = true
-        rotation.y = true
-        rotation.z = true
-    }
-    protected physicsMove() {
-        if (!this.physicsUpdate) return
-        const position = (this.physicsUpdate.position ??= {})
-        position.x = true
-        position.y = true
-        position.z = true
-    }
-    protected physicsMoveXZ() {
-        if (!this.physicsUpdate) return
-        const position = (this.physicsUpdate.position ??= {})
-        position.x = true
-        position.z = true
-    }
-
-    protected cannonBody?: Body
-
-    public applyForce(x: number, y: number, z: number) {
-        setTimeout(() => this.cannonBody?.applyForce({ x, y, z } as any))
-    }
-
-    public applyImpulse(x: number, y: number, z: number) {
-        setTimeout(() => this.cannonBody?.applyImpulse({ x, y, z } as any))
-    }
-
-    public applyLocalForce(x: number, y: number, z: number) {
-        setTimeout(() => this.cannonBody?.applyLocalForce({ x, y, z } as any))
-    }
-
-    public applyLocalImpulse(x: number, y: number, z: number) {
-        setTimeout(() => this.cannonBody?.applyLocalImpulse({ x, y, z } as any))
-    }
-
-    public applyTorque(x: number, y: number, z: number) {
-        setTimeout(() => this.cannonBody?.applyTorque({ x, y, z } as any))
-    }
-
-    public get velocity(): Point3d {
-        if (this.bvhVelocity) return this.bvhVelocity
-
-        if (this.cannonBody) return this.cannonBody.velocity
-
-        return new Point3d(0, 0, 0)
-    }
-    public set velocity(val) {
-        if (this.bvhVelocity) Object.assign(this.bvhVelocity, val)
-        else if (this.cannonBody) Object.assign(this.cannonBody.velocity, val)
-    }
-
-    private refreshCannon() {
-        this.physicsUpdate && (this.physics = this._physics ?? false)
-    }
-
-    protected _noTumble?: boolean
-    public get noTumble() {
-        return this._noTumble
-    }
-    public set noTumble(val) {
-        this._noTumble = val
-        this.refreshCannon()
-    }
-
-    protected _slippery?: boolean
-    public get slippery() {
-        return this._slippery
-    }
-    public set slippery(val) {
-        this._slippery = val
-        this.refreshCannon()
-    }
-
-    protected _mass?: number
-    public get mass() {
-        return this._mass
+    private _mass?: number
+    public get mass(): number {
+        if (this.actor && !this.actor.getMass) return 0
+        return this.actor?.getMass() ?? this._mass ?? 1
     }
     public set mass(val) {
         this._mass = val
-        this.refreshCannon()
+        this.actor?.setMass?.(val)
     }
 
-    protected _physicsGroup?: PhysicsGroupIndex
-    public get physicsGroup() {
-        return this._physicsGroup
+    public gravity: Nullable<boolean>
+
+    public get velocityX(): number {
+        return this.actor?.getLinearVelocity().get_x() ?? 0
     }
-    public set physicsGroup(val) {
-        this._physicsGroup = val
-        this.refreshCannon()
-    }
+    public set velocityX(val) {
+        const { actor } = this
+        if (!actor) return
 
-    protected _ignorePhysicsGroups?: Array<PhysicsGroupIndex>
-    public get ignorePhysicsGroups() {
-        return this._ignorePhysicsGroups
-    }
-    public set ignorePhysicsGroups(val) {
-        this._ignorePhysicsGroups = val
-        this.refreshCannon()
-    }
-
-    protected _physicsShape?: PhysicsShape
-    public get physicsShape() {
-        return (this._physicsShape ??= cubeShape)
-    }
-    public set physicsShape(val) {
-        this._physicsShape = val
-        this.refreshCannon()
-    }
-
-    protected bvhVelocity?: Vector3
-    protected bvhOnGround?: boolean
-    protected bvhRadius?: number
-    protected bvhHalfHeight?: number
-    protected bvhMap?: boolean
-    protected bvhCharacter?: boolean
-    protected bvhDir?: Vector3
-
-    protected initPhysics(val: PhysicsOptions, handle: Cancellable) {
-        if (!val || handle.done) return
-
-        switch (val) {
-            case true:
-            case "2d":
-                import("./enableCannon").then((module) =>
-                    module.default.call(this, handle)
-                )
-                break
-
-            case "map":
-                this.bvhMap = true
-                import("./enableBVHMap").then((module) =>
-                    module.default.call(this, handle, false)
-                )
-                break
-
-            case "map-debug":
-                this.bvhMap = true
-                import("./enableBVHMap").then((module) =>
-                    module.default.call(this, handle, true)
-                )
-                break
-
-            case "character":
-                this.bvhCharacter = true
-                import("./enableBVHCharacter").then((module) =>
-                    module.default.call(this, handle)
-                )
-                break
-
-            default:
-                assertExhaustive(val)
+        if (this._physics === "character") {
+            pxVXUpdateMap.set(this, val)
+            return
         }
+        const velocity = actor.getLinearVelocity()
+        velocity.set_x(val)
+        actor.setLinearVelocity(velocity)
     }
-    protected _physics?: PhysicsOptions
-    public get physics() {
-        return this._physics ?? false
-    }
-    public set physics(val) {
-        if (this._physics === val) return
-        this._physics = val
 
-        this.initPhysics(
-            val,
-            this.cancelHandle("physics", () => new Cancellable())!
+    public get velocityY(): number {
+        return this.actor?.getLinearVelocity().get_y() ?? 0
+    }
+    public set velocityY(val) {
+        const { actor } = this
+        if (!actor) return
+
+        if (this._physics === "character") {
+            pxVYUpdateMap.set(this, val)
+            return
+        }
+        const velocity = actor.getLinearVelocity()
+        velocity.set_y(val)
+        actor.setLinearVelocity(velocity)
+    }
+
+    public get velocityZ(): number {
+        return this.actor?.getLinearVelocity().get_z() ?? 0
+    }
+    public set velocityZ(val) {
+        const { actor } = this
+        if (!actor) return
+
+        if (this._physics === "character") {
+            pxVZUpdateMap.set(this, val)
+            return
+        }
+        const velocity = actor.getLinearVelocity()
+        velocity.set_z(val)
+        actor.setLinearVelocity(velocity)
+    }
+
+    public addForce(x: number, y: number, z: number) {
+        this.actor?.addForce(setPxVec(x, y, z))
+    }
+
+    public addLocalForceAtPos(
+        x: number,
+        y: number,
+        z: number,
+        posX = 0,
+        posY = 0,
+        posZ = 0
+    ) {
+        const { PxRigidBodyExt } = physxPtr[0]
+        if (!PxRigidBodyExt || !this.actor) return
+
+        PxRigidBodyExt.prototype.addLocalForceAtPos(
+            this.actor,
+            setPxVec(x, y, z),
+            setPxVec_(posX, posY, posZ)
         )
     }
 
-    protected _gravity?: boolean
-    public get gravity() {
-        return this._gravity ?? true
+    public addLocalForceAtLocalPos(
+        x: number,
+        y: number,
+        z: number,
+        posX = 0,
+        posY = 0,
+        posZ = 0
+    ) {
+        const { PxRigidBodyExt } = physxPtr[0]
+        if (!PxRigidBodyExt || !this.actor) return
+
+        PxRigidBodyExt.prototype.addLocalForceAtLocalPos(
+            this.actor,
+            setPxVec(x, y, z),
+            setPxVec_(posX, posY, posZ)
+        )
     }
-    public set gravity(val) {
-        this._gravity = val
+
+    public addTorque(x: number, y: number, z: number) {
+        this.actor?.addTorque(setPxVec(x, y, z))
     }
 
-    public override intersects(target: StaticObjectManager): boolean {
-        if (this.done) return false
-        if (target.done) return false
-        if (this === target) return false
+    private initActor(actor: any) {
+        this.actor = actor
+        const { _mass } = this
+        if (_mass !== undefined) actor.mass = _mass
+        actorPtrManagerMap.set(actor.ptr, this)
+        managerActorPtrMap.set(this, actor.ptr)
+        return actor
+    }
 
-        if (target instanceof PhysicsObjectManager) {
-            if (
-                (this.bvhMap && target.bvhCharacter) ||
-                (this.bvhCharacter && target.bvhMap)
-            )
-                return (
-                    bvhContactMap.get(this)?.has(target) ||
-                    bvhContactMap.get(target)?.has(this) ||
-                    false
-                )
+    public convexParamString?: string
+    protected override _dispose() {
+        super._dispose()
+        decreaseConvexGeometryCount(this)
+    }
+    protected getPxShape(_: PhysicsOptions, actor: any) {
+        const { material, shapeFlags, PxRigidActorExt, pxFilterData } =
+            physxPtr[0]
 
-            if (this.cannonBody && target.cannonBody) {
-                cannonContactBodies.add(this.cannonBody)
-                cannonContactBodies.add(target.cannonBody)
-                return (
-                    cannonContactMap
-                        .get(this.cannonBody)
-                        ?.has(target.cannonBody) ||
-                    cannonContactMap
-                        .get(target.cannonBody)
-                        ?.has(this.cannonBody) ||
-                    false
-                )
-            }
+        const shape: any = PxRigidActorExt.prototype.createExclusiveShape(
+            actor,
+            cookConvexGeometry(this.componentName, this),
+            material,
+            shapeFlags
+        )
+        shape.setSimulationFilterData(pxFilterData)
+        return shape
+    }
+
+    public refreshPhysicsState?: Reactive<{}>
+    private refreshShapeState?: Reactive<{}>
+    public refreshPhysics() {
+        if (this.refreshPhysicsState) {
+            this.refreshPhysicsState.set({})
+            return
         }
-        return super.intersects(target)
+        this.refreshPhysicsState = new Reactive({})
+        this.refreshShapeState = new Reactive({})
+
+        importPhysX()
+
+        const [setMode, getMode] = store<PhysicsOptions>(false)
+        this.createEffect(() => {
+            setMode(this._physics || !!this._jointCount)
+        }, [this.refreshPhysicsState.get])
+
+        this.createEffect(() => {
+            const mode = getMode()
+            const {
+                physics,
+                pxScene,
+                PxCapsuleControllerDesc,
+                PxCapsuleClimbingModeEnum,
+                PxControllerNonWalkableModeEnum,
+                material,
+                getPxControllerManager
+            } = physxPtr[0]
+            if (!physics || !mode) return
+
+            const ogParent = this.outerObject3d.parent
+            ogParent !== scene && scene.attach(this.outerObject3d)
+
+            if (mode === "character") {
+                const desc = new PxCapsuleControllerDesc()
+                const { x, y } = getActualScale(this).multiplyScalar(0.5)
+                this.capsuleHeight = y * 2
+                desc.height = y * 1.2
+                desc.radius = x
+                Object.assign(desc.position, this.position)
+                desc.climbingMode = PxCapsuleClimbingModeEnum.eEASY()
+                desc.nonWalkableMode =
+                    PxControllerNonWalkableModeEnum.ePREVENT_CLIMBING()
+                desc.slopeLimit = Math.cos(45 * deg2Rad)
+                desc.material = material
+                desc.contactOffset = 0.1
+                // desc.stepOffset = y * 0.4
+                // desc.maxJumpHeight = 0.1
+
+                // desc.reportCallback = hitCallback.callback
+                // desc.behaviorCallback = behaviorCallback.callback
+                const controller =
+                    getPxControllerManager().createController(desc)
+                destroy(desc)
+
+                const actor = this.initActor(controller.getActor())
+                managerControllerMap.set(this, controller)
+
+                return () => {
+                    actorPtrManagerMap.delete(actor.ptr)
+                    destroy(controller)
+                    managerControllerMap.delete(this)
+                    this.actor = undefined
+                }
+            }
+
+            const pxTransform = assignPxTransform(this)
+            const isStatic = mode === "map" || mode === "static"
+            const actor = this.initActor(
+                isStatic
+                    ? physics.createRigidStatic(pxTransform)
+                    : physics.createRigidDynamic(pxTransform)
+            )
+
+            this.getPxShape(mode, actor)
+            pxScene.addActor(actor)
+            managerActorMap.set(this, actor)
+
+            return () => {
+                pxScene.removeActor(actor)
+                destroy(actor)
+
+                actorPtrManagerMap.delete(actor.ptr)
+                managerActorMap.delete(this)
+                this.actor = undefined
+            }
+        }, [getMode, getPhysXLoaded, this.refreshShapeState.get])
+    }
+
+    private _physics?: PhysicsOptions
+    public get physics() {
+        return this._physics
+    }
+    public set physics(val) {
+        this._physics = val
+        this.refreshPhysics()
+    }
+
+    private _jointCount?: number
+    public get jointCount() {
+        return this._jointCount ?? 0
+    }
+    public set jointCount(val) {
+        this._jointCount = val
+        this.refreshPhysics()
+    }
+
+    public updatePhysics() {
+        this.actor && pxUpdateSet.add(this)
+    }
+    public updatePhysicsShape() {
+        this.refreshShapeState?.set({})
+    }
+
+    //@ts-ignore
+    public override moveForward(distance: number) {
+        super.moveForward(distance)
+        this.updatePhysics()
+    }
+
+    //@ts-ignore
+    public override moveRight(distance: number) {
+        super.moveRight(distance)
+        this.updatePhysics()
+    }
+
+    //@ts-ignore
+    public override placeAt(
+        target: string | Point3d | MeshAppendable | SpawnPoint
+    ) {
+        super.placeAt(target)
+        this.updatePhysics()
+    }
+
+    //@ts-ignore
+    public override lerpTo(x: number, y: number, z: number, alpha?: number) {
+        super.lerpTo(x, y, z, alpha, () => this.updatePhysics())
+    }
+
+    //@ts-ignore
+    public override moveTo(
+        x: number,
+        y: number | undefined,
+        z: number,
+        speed?: number
+    ) {
+        super.moveTo(x, y, z, speed, () => this.updatePhysics())
     }
 
     public override get x() {
@@ -286,7 +335,7 @@ export default class PhysicsObjectManager<T extends Object3D = Object3D>
     }
     public override set x(val) {
         super.x = val
-        this.physicsUpdate && ((this.physicsUpdate.position ??= {}).x = true)
+        this.updatePhysics()
     }
 
     public override get y() {
@@ -294,7 +343,7 @@ export default class PhysicsObjectManager<T extends Object3D = Object3D>
     }
     public override set y(val) {
         super.y = val
-        this.physicsUpdate && ((this.physicsUpdate.position ??= {}).y = true)
+        this.updatePhysics()
     }
 
     public override get z() {
@@ -302,7 +351,7 @@ export default class PhysicsObjectManager<T extends Object3D = Object3D>
     }
     public override set z(val) {
         super.z = val
-        this.physicsUpdate && ((this.physicsUpdate.position ??= {}).z = true)
+        this.updatePhysics()
     }
 
     public override get rotationX() {
@@ -310,7 +359,7 @@ export default class PhysicsObjectManager<T extends Object3D = Object3D>
     }
     public override set rotationX(val) {
         super.rotationX = val
-        this.physicsUpdate && ((this.physicsUpdate.rotation ??= {}).x = true)
+        this.updatePhysics()
     }
 
     public override get rotationY() {
@@ -318,7 +367,7 @@ export default class PhysicsObjectManager<T extends Object3D = Object3D>
     }
     public override set rotationY(val) {
         super.rotationY = val
-        this.physicsUpdate && ((this.physicsUpdate.rotation ??= {}).y = true)
+        this.updatePhysics()
     }
 
     public override get rotationZ() {
@@ -326,34 +375,38 @@ export default class PhysicsObjectManager<T extends Object3D = Object3D>
     }
     public override set rotationZ(val) {
         super.rotationZ = val
-        this.physicsUpdate && ((this.physicsUpdate.rotation ??= {}).z = true)
+        this.updatePhysics()
     }
 
-    public override lookAt(target: MeshItem | Point3d): void
-    public override lookAt(x: number, y: number | undefined, z: number): void
-    public override lookAt(a0: any, a1?: any, a2?: any) {
-        super.lookAt(a0, a1, a2)
-        this.physicsRotate()
+    public override get scaleX() {
+        return super.scaleX
+    }
+    public override set scaleX(val) {
+        super.scaleX = val
+        this.updatePhysicsShape()
     }
 
-    public override placeAt(object: MeshItem | Point3d) {
-        super.placeAt(object)
-        this.physicsMove()
-        this.physicsRotate()
+    public override get scaleY() {
+        return super.scaleY
+    }
+    public override set scaleY(val) {
+        super.scaleY = val
+        this.updatePhysicsShape()
     }
 
-    public override lerpTo(x: number, y: number, z: number, alpha: number) {
-        super.lerpTo(x, y, z, alpha, () => this.physicsMove())
+    public override get scaleZ() {
+        return super.scaleZ
+    }
+    public override set scaleZ(val) {
+        super.scaleZ = val
+        this.updatePhysicsShape()
     }
 
-    public override moveTo(
-        x: number,
-        y: number | undefined,
-        z: number,
-        speed: number
-    ) {
-        super.moveTo(x, y, z, speed, (y) =>
-            y === undefined ? this.physicsMoveXZ() : this.physicsMove()
-        )
+    //@ts-ignore
+    public override hitTest(target: MeshAppendable | PhysicsObjectManager) {
+        if (this._physics && "_physics" in target && target._physics)
+            return !!managerContactMap.get(this)?.has(target)
+
+        return super.hitTest(target)
     }
 }

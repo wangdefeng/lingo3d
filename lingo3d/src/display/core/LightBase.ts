@@ -1,19 +1,38 @@
-import { Cancellable } from "@lincode/promiselikes"
 import { Reactive } from "@lincode/reactivity"
-import { Class } from "@lincode/utils"
-import { Color, Group, Light, Object3D } from "three"
-import mainCamera from "../../engine/mainCamera"
-import scene from "../../engine/scene"
-import { onBeforeRender } from "../../events/onBeforeRender"
+import { assertExhaustive } from "@lincode/utils"
 import {
-    emitSelectionTarget,
-    onSelectionTarget
-} from "../../events/onSelectionTarget"
+    DirectionalLightHelper,
+    Group,
+    Light,
+    PointLightHelper,
+    SpotLightHelper
+} from "three"
+import { RectAreaLightHelper } from "three/examples/jsm/helpers/RectAreaLightHelper"
+import scene from "../../engine/scene"
+import { SHADOW_BIAS } from "../../globals"
 import ILightBase from "../../interface/ILightBase"
-import { getCameraRendered } from "../../states/useCameraRendered"
-import { getShadowResolution } from "../../states/useShadowResolution"
+import { getEditorHelper } from "../../states/useEditorHelper"
+import {
+    getShadowResolution,
+    ShadowResolution
+} from "../../states/useShadowResolution"
 import ObjectManager from "./ObjectManager"
-import makeLightSprite from "./utils/makeLightSprite"
+import { addSelectionHelper } from "./utils/raycast/selectionCandidates"
+import HelperSprite from "./utils/HelperSprite"
+import { addUpdateSystem, deleteUpdateSystem } from "./utils/updateSystem"
+
+export const mapShadowResolution = (val: ShadowResolution) => {
+    switch (val) {
+        case "low":
+            return 512
+        case "medium":
+            return 1024
+        case "high":
+            return 2048
+        default:
+            assertExhaustive(val)
+    }
+}
 
 export default abstract class LightBase<T extends typeof Light>
     extends ObjectManager<Group>
@@ -21,84 +40,68 @@ export default abstract class LightBase<T extends typeof Light>
 {
     protected lightState = new Reactive<InstanceType<T> | undefined>(undefined)
 
-    protected defaultShadowResolution = 512
-
     public constructor(
         Light: T,
-        Helper?: Class<Object3D & { dispose: () => void }>
+        Helper?:
+            | typeof DirectionalLightHelper
+            | typeof SpotLightHelper
+            | typeof PointLightHelper
+            | typeof RectAreaLightHelper
     ) {
-        const group = new Group()
-        super(group)
+        super()
 
         this.createEffect(() => {
             const light = new Light()
             this.lightState.set(light as InstanceType<T>)
-            group.add(light)
+            this.object3d.add(light)
 
-            if (light.shadow) {
-                const shadowResolution =
-                    this.shadowResolutionState.get() ??
-                    getShadowResolution() ??
-                    this.defaultShadowResolution
-
+            if (light.shadow && this.castShadowState.get()) {
                 light.castShadow = true
-                light.shadow.bias = -0.0005
-                // light.shadow.bias = -0.00009
-                light.shadow.mapSize.width = shadowResolution
-                light.shadow.mapSize.height = shadowResolution
-                light.shadow.radius = 2
+                light.shadow.bias = SHADOW_BIAS
+
+                light.shadow.mapSize.setScalar(
+                    mapShadowResolution(
+                        this.shadowResolutionState.get() ??
+                            getShadowResolution()
+                    )
+                )
             }
             return () => {
-                group.remove(light)
+                this.object3d.remove(light)
                 light.dispose()
             }
-        }, [this.shadowResolutionState.get, getShadowResolution])
+        }, [
+            this.castShadowState.get,
+            this.shadowResolutionState.get,
+            getShadowResolution
+        ])
 
         this.createEffect(() => {
             const light = this.lightState.get()
-            if (
-                getCameraRendered() !== mainCamera ||
-                !this.helperState.get() ||
-                !light
-            )
-                return
+            if (!getEditorHelper() || !this.helperState.get() || !light) return
 
-            const handle = new Cancellable()
-
-            const sprite = makeLightSprite()
-            handle.watch(
-                onSelectionTarget(({ target }) => {
-                    target === sprite && emitSelectionTarget(this)
-                })
-            )
-
+            const sprite = new HelperSprite("light")
+            const handle = addSelectionHelper(sprite, this)
             if (Helper) {
-                const helper = new Helper(light)
+                const helper = new Helper(light as any)
                 scene.add(helper)
                 helper.add(sprite.outerObject3d)
 
-                if ("update" in helper)
-                    handle.watch(
-                        onBeforeRender(() => {
-                            //@ts-ignore
-                            helper.update()
-                        })
-                    )
+                "update" in helper && addUpdateSystem(helper)
 
                 handle.then(() => {
                     helper.dispose()
                     scene.remove(helper)
+                    "update" in helper && deleteUpdateSystem(helper)
                 })
-            } else this.outerObject3d.add(sprite.outerObject3d)
-
+            }
             return () => {
-                sprite.dispose()
                 handle.cancel()
             }
-        }, [getCameraRendered, this.helperState.get, this.lightState.get])
+        }, [getEditorHelper, this.helperState.get, this.lightState.get])
     }
 
-    private helperState = new Reactive(true)
+    protected helperState = new Reactive(true)
     public get helper() {
         return this.helperState.get()
     }
@@ -106,7 +109,17 @@ export default abstract class LightBase<T extends typeof Light>
         this.helperState.set(val)
     }
 
-    private shadowResolutionState = new Reactive<number | undefined>(undefined)
+    protected castShadowState = new Reactive(false)
+    public get castShadow() {
+        return this.castShadowState.get()
+    }
+    public set castShadow(val) {
+        this.castShadowState.set(val)
+    }
+
+    protected shadowResolutionState = new Reactive<
+        ShadowResolution | undefined
+    >(undefined)
     public get shadowResolution() {
         return this.shadowResolutionState.get()
     }
@@ -122,9 +135,7 @@ export default abstract class LightBase<T extends typeof Light>
     }
     public set color(val) {
         this.cancelHandle("color", () =>
-            this.lightState.get(
-                (light) => light && (light.color = new Color(val))
-            )
+            this.lightState.get((light) => light?.color.set(val))
         )
     }
 

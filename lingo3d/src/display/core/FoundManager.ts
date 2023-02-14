@@ -1,34 +1,59 @@
 import { applyMixins } from "@lincode/utils"
-import { MeshStandardMaterial, Object3D } from "three"
-import IFound, { foundDefaults, foundSchema } from "../../interface/IFound"
-import TexturedBasicMixin from "./mixins/TexturedBasicMixin"
-import TexturedStandardMixin from "./mixins/TexturedStandardMixin"
-import { appendableRoot } from "../../api/core/Appendable"
+import { Object3D } from "three"
+import IFoundManager, {
+    foundManagerDefaults,
+    foundManagerSchema
+} from "../../interface/IFoundManager"
 import Model from "../Model"
-import AnimatedObjectManager from "./AnimatedObjectManager"
+import VisibleMixin from "./mixins/VisibleMixin"
+import SimpleObjectManager from "./SimpleObjectManager"
+import { setManager } from "../../api/utils/getManager"
+import TextureManager from "./TextureManager"
+import MeshAppendable from "../../api/core/MeshAppendable"
+import { appendableRoot } from "../../api/core/collections"
+import { StandardMesh } from "./mixins/TexturedStandardMixin"
+import MixinType from "./mixins/utils/MixinType"
+import { Cancellable } from "@lincode/promiselikes"
 
-class FoundManager extends AnimatedObjectManager implements IFound {
+class FoundManager extends SimpleObjectManager implements IFoundManager {
     public static componentName = "find"
-    public static defaults = foundDefaults
-    public static schema = foundSchema
+    public static defaults = foundManagerDefaults
+    public static schema = foundManagerSchema
 
-    protected material: MeshStandardMaterial
-
-    public constructor(mesh: Object3D) {
+    public constructor(
+        mesh: Object3D | StandardMesh,
+        public owner: MeshAppendable
+    ) {
         super(mesh)
-        //@ts-ignore
-        this.material = mesh.material ??= new MeshStandardMaterial()
         appendableRoot.delete(this)
+
+        if (!("material" in mesh)) return
+        const { defaults, defaultParams, refreshParamSystem } =
+            mesh.material.userData.TextureManager
+        this.defaults = defaults
+        this.defaultParams = defaultParams
+        this.refreshParamsSystem = refreshParamSystem
     }
 
     public model?: Model
     private retargetAnimations() {
-        if (!this.model?.animationManagers) return
-        for (const animationManager of Object.values(
-            this.model.animationManagers
-        ))
+        const state = this.model?.lazyStates()
+        if (!state) return
+
+        const {
+            onFinishState,
+            repeatState,
+            managerRecordState,
+            finishEventState
+        } = state
+        for (const animationManager of Object.values(managerRecordState.get()))
             this.animations[animationManager.name] = this.watch(
-                animationManager.retarget(this.nativeObject3d)
+                animationManager.retarget(
+                    this,
+                    repeatState,
+                    onFinishState,
+                    finishEventState
+                )
             )
         this.model = undefined
     }
@@ -41,27 +66,19 @@ class FoundManager extends AnimatedObjectManager implements IFound {
         super.animation = val
     }
 
-    public override dispose() {
-        if (this.done) return this
-        super.dispose()
-        this.material.dispose()
-        return this
-    }
-
     private managerSet?: boolean
-    protected override addToRaycastSet(set: Set<Object3D>) {
+    public addToRaycastSet(set: Set<Object3D>) {
         if (!this.managerSet) {
             this.managerSet = true
-            this.nativeObject3d.traverse(
-                (child) => (child.userData.manager = this)
-            )
+            this.object3d.traverse((child) => setManager(child, this))
         }
-        return super.addToRaycastSet(set)
+        set.add(this.object3d)
+        return new Cancellable(() => set.delete(this.object3d))
     }
 }
 interface FoundManager
-    extends AnimatedObjectManager,
-        TexturedBasicMixin,
-        TexturedStandardMixin {}
-applyMixins(FoundManager, [TexturedStandardMixin, TexturedBasicMixin])
+    extends SimpleObjectManager,
+        TextureManager,
+        MixinType<VisibleMixin> {}
+applyMixins(FoundManager, [VisibleMixin, TextureManager])
 export default FoundManager

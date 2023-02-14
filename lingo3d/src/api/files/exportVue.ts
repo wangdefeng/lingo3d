@@ -10,7 +10,7 @@ const serializeVue = (nodes: Array<SceneGraphNode>) => {
 
         let props = ""
         for (let [key, value] of Object.entries(node)) {
-            if (key === "children" || key === "type" || !value) continue
+            if (key === "children" || key === "type") continue
 
             key = kebabCase(key)
 
@@ -36,13 +36,11 @@ export default async () => {
     const parser = (await import("prettier/parser-html")).default
 
     const code = prettier.format(
-        `
-        <template>
+        `<template>
             <World>
-                ${serializeVue(serialize())}
+                ${serializeVue(await serialize())}
             </World>
-        </template>
-    `,
+        </template>`,
         { parser: "vue", plugins: [parser] }
     )
 

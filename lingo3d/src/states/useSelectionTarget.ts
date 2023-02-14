@@ -1,12 +1,7 @@
 import store from "@lincode/reactivity"
 import Appendable from "../api/core/Appendable"
-import { getSelectionLocked } from "./useSelectionLocked"
+import MeshAppendable from "../api/core/MeshAppendable"
 
-const [_setSelectionTarget, getSelectionTarget] = store<Appendable | undefined>(
-    undefined
-)
-export { getSelectionTarget }
-
-export const setSelectionTarget = (target: Appendable | undefined) => {
-    !getSelectionLocked() && _setSelectionTarget(target)
-}
+export const [setSelectionTarget, getSelectionTarget] = store<
+    Appendable | MeshAppendable | undefined
+>(undefined)

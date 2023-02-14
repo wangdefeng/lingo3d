@@ -3,16 +3,13 @@ import IKeyboard, {
     keyboardDefaults,
     keyboardSchema
 } from "../interface/IKeyboard"
-import EventLoopItem from "./core/EventLoopItem"
 import { createEffect } from "@lincode/reactivity"
-import { appendableRoot } from "./core/Appendable"
 import { onKeyClear } from "../events/onKeyClear"
 import Nullable from "../interface/utils/Nullable"
 import { onBeforeRender } from "../events/onBeforeRender"
-import { getEditing } from "../states/useEditing"
-import { getEditorMounted } from "../states/useEditorMounted"
-import { getCameraRendered } from "../states/useCameraRendered"
-import mainCamera from "../engine/mainCamera"
+import { appendableRoot } from "./core/collections"
+import { getWorldPlayComputed } from "../states/useWorldPlayComputed"
+import Appendable from "./core/Appendable"
 
 const [emitDown, onDown] = event<string>()
 const [emitUp, onUp] = event<string>()
@@ -21,17 +18,13 @@ const [emitPress, onPress] = event()
 export const isPressed = new Set<string>()
 
 const processKey = (str: string) => {
-    str = str.length === 1 ? str.toLowerCase() : str
+    str = str.length === 1 ? str.toLocaleLowerCase() : str
     if (str === " ") str = "Space"
     return str
 }
 
 createEffect(() => {
-    if (
-        getEditing() ||
-        (getEditorMounted() && getCameraRendered() === mainCamera)
-    )
-        return
+    if (!getWorldPlayComputed()) return
 
     const handle = onBeforeRender(() => isPressed.size > 0 && emitPress())
 
@@ -65,9 +58,9 @@ createEffect(() => {
         document.removeEventListener("keydown", handleKeyDown)
         document.removeEventListener("keyup", handleKeyUp)
     }
-}, [getEditing, getEditorMounted, getCameraRendered])
+}, [getWorldPlayComputed])
 
-export class Keyboard extends EventLoopItem implements IKeyboard {
+export class Keyboard extends Appendable implements IKeyboard {
     public static componentName = "keyboard"
     public static defaults = keyboardDefaults
     public static schema = keyboardSchema

@@ -2,34 +2,56 @@ import { LinearToneMapping, NoToneMapping } from "three"
 import { getExposure } from "../../states/useExposure"
 import { getResolution, setResolution } from "../../states/useResolution"
 import { createEffect, createNestedEffect } from "@lincode/reactivity"
-import { getVR } from "../../states/useVR"
+import { getWebXR } from "../../states/useWebXR"
 import { getRenderer } from "../../states/useRenderer"
 import { getPBR } from "../../states/usePBR"
-import { getSecondaryCamera } from "../../states/useSecondaryCamera"
 import { VRButton } from "./VRButton"
 import { getAutoMount } from "../../states/useAutoMount"
-import { debounce } from "@lincode/utils"
-import { getPixelRatioComputed } from "../../states/usePixelRatioComputed"
-import { getEditorMounted } from "../../states/useEditorMounted"
+import { throttleTrailing } from "@lincode/utils"
+import { getPixelRatio } from "../../states/usePixelRatio"
+import createElement from "../../utils/createElement"
+import { getUILayer } from "../../states/useUILayer"
+import { getSplitView } from "../../states/useSplitView"
+import { getTimelinePaused } from "../../states/useTimelinePaused"
 
-const rootContainer = document.createElement("div")
-Object.assign(rootContainer.style, {
-    position: "absolute",
-    left: "0px",
-    top: "0px",
-    width: "100%",
-    height: "100%"
-})
+const style = createElement(`
+    <style>
+        .lingo3d-container {
+            position: absolute !important;
+            top: 0px;
+            left: 0px;
+            width: 100%;
+            height: 100%;
+        }
+        .lingo3d-uicontainer {
+            pointer-events: none;
+        }
+        .lingo3d-uicontainer > * {
+            pointer-events: auto;
+        }
+    </style>
+`)
+document.head.appendChild(style)
 
-export const container = document.createElement("div")
-Object.assign(container.style, {
-    position: "absolute",
-    left: "0px",
-    top: "0px",
-    width: "100%"
+export const container = createElement<HTMLDivElement>(
+    `<div class="lingo3d-container"></div>`
+)
+export const uiContainer = createElement<HTMLDivElement>(
+    `<div class="lingo3d-container lingo3d-uicontainer"></div>`
+)
+export const overlayContainer = createElement<HTMLDivElement>(
+    `<div class="lingo3d-container lingo3d-uicontainer"></div>`
+)
+container.appendChild(uiContainer)
+container.appendChild(overlayContainer)
+getSplitView((val) => {
+    container.style.height = val ? "50%" : "100%"
+    uiContainer.style.top = val ? "100%" : "0px"
 })
-rootContainer.appendChild(container)
-getSecondaryCamera((cam) => (container.style.height = cam ? "50%" : "100%"))
+createEffect(() => {
+    uiContainer.style.display =
+        getUILayer() || !getTimelinePaused() ? "block" : "none"
+}, [getUILayer, getTimelinePaused])
 
 export const containerBounds = [container.getBoundingClientRect()]
 
@@ -45,13 +67,13 @@ const useResize = (el: Element) => {
         }
         handleResize()
 
-        const handleResizeDebounced = debounce(handleResize, 100, "both")
-        window.addEventListener("resize", handleResizeDebounced)
-        const handle = getEditorMounted(handleResizeDebounced)
+        const resizeObserver = new ResizeObserver(
+            throttleTrailing(handleResize, 100)
+        )
+        resizeObserver.observe(container)
 
         return () => {
-            window.removeEventListener("resize", handleResize)
-            handle.cancel()
+            resizeObserver.disconnect()
         }
     }, [el])
 }
@@ -64,28 +86,28 @@ createEffect(() => {
         const el = document.querySelector(autoMount)
         if (!el) return
 
-        el.prepend(rootContainer)
+        el.prepend(container)
         useResize(el)
 
         return () => {
-            el.removeChild(rootContainer)
+            container.remove()
         }
     }
 
     if (autoMount === true) {
-        document.body.prepend(rootContainer)
+        document.body.prepend(container)
         useResize(document.body)
 
         return () => {
-            document.body.removeChild(rootContainer)
+            container.remove()
         }
     }
 
-    autoMount.prepend(rootContainer)
+    autoMount.prepend(container)
     useResize(autoMount)
 
     return () => {
-        autoMount.removeChild(rootContainer)
+        container.remove()
     }
 }, [getAutoMount])
 
@@ -94,14 +116,10 @@ createEffect(() => {
     if (!renderer) return
 
     const canvas = renderer.domElement
-    rootContainer.prepend(canvas)
-    Object.assign(canvas.style, {
-        position: "absolute",
-        left: "0px",
-        top: "0px"
-    })
+    container.prepend(canvas)
+    canvas.classList.add("lingo3d-container")
     return () => {
-        rootContainer.removeChild(canvas)
+        canvas.remove()
     }
 }, [getRenderer])
 
@@ -111,8 +129,8 @@ createEffect(() => {
 
     const [w, h] = getResolution()
     renderer.setSize(w, h)
-    renderer.setPixelRatio(getPixelRatioComputed())
-}, [getRenderer, getResolution, getPixelRatioComputed])
+    renderer.setPixelRatio(Math.min(getPixelRatio(), devicePixelRatio))
+}, [getRenderer, getResolution, getPixelRatio])
 
 createEffect(() => {
     const renderer = getRenderer()
@@ -131,7 +149,7 @@ createEffect(() => {
 }, [getExposure, getRenderer])
 
 createEffect(() => {
-    if (getVR() !== "webxr") return
+    if (!getWebXR()) return
 
     const renderer = getRenderer()
     if (!renderer) return
@@ -139,12 +157,12 @@ createEffect(() => {
     renderer.xr.enabled = true
 
     const button = VRButton.createButton(renderer)
-    container.appendChild(button)
+    uiContainer.appendChild(button)
 
     button.ontouchstart = () => button.onclick?.(new MouseEvent("click"))
 
     return () => {
         renderer.xr.enabled = false
-        container.removeChild(button)
+        button.remove()
     }
-}, [getVR, getRenderer])
+}, [getWebXR, getRenderer])

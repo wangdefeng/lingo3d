@@ -6,17 +6,14 @@ import IMouse, {
     mouseSchema,
     SimpleMouseEvent
 } from "../interface/IMouse"
-import EventLoopItem from "./core/EventLoopItem"
 import { throttle } from "@lincode/utils"
-import { appendableRoot } from "./core/Appendable"
 import pointerToWorld from "../display/utils/pointerToWorld"
 import store from "@lincode/reactivity"
 import Nullable from "../interface/utils/Nullable"
 import { onBeforeRender } from "../events/onBeforeRender"
-import { getEditing } from "../states/useEditing"
-import { getEditorMounted } from "../states/useEditorMounted"
-import { getCameraRendered } from "../states/useCameraRendered"
-import mainCamera from "../engine/mainCamera"
+import { appendableRoot } from "./core/collections"
+import { getWorldPlayComputed } from "../states/useWorldPlayComputed"
+import Appendable from "./core/Appendable"
 
 export type MouseEventName = "click" | "rightClick" | "move" | "down" | "up"
 export const mouseEvents = new Events<LingoMouseEvent, MouseEventName>()
@@ -36,19 +33,19 @@ container.addEventListener("touchstart", (e) => {
 
 mouseEvents.on("down", (e) => {
     downTime = Date.now()
-    downX = e.clientX
-    downY = e.clientY
+    downX = e.canvasX
+    downY = e.canvasY
 })
 mouseEvents.on("up", (e) => {
     const upTime = Date.now()
 
     const deltaTime = upTime - downTime
-    const deltaX = Math.abs(e.clientX - downX)
-    const deltaY = Math.abs(e.clientY - downY)
+    const deltaX = Math.abs(e.canvasX - downX)
+    const deltaY = Math.abs(e.canvasY - downY)
 
     downTime = upTime
-    downX = e.clientX
-    downY = e.clientY
+    downX = e.canvasX
+    downY = e.canvasY
 
     if (deltaTime < 300 && deltaX < 5 && deltaY < 5)
         mouseEvents.emit(rightClick ? "rightClick" : "click", e)
@@ -76,7 +73,7 @@ container.addEventListener("pointerup", handleUp)
 container.addEventListener("pointercancel", handleUp)
 container.addEventListener("pointerleave", handleUp)
 
-export class Mouse extends EventLoopItem implements IMouse {
+export class Mouse extends Appendable implements IMouse {
     public static componentName = "mouse"
     public static defaults = mouseDefaults
     public static schema = mouseSchema
@@ -91,14 +88,14 @@ export class Mouse extends EventLoopItem implements IMouse {
     public constructor() {
         super()
 
-        let currentPayload = { clientX: 0, clientY: 0 }
+        let currentPayload = { canvasX: 0, canvasY: 0, clientX: 0, clientY: 0 }
         const [setDown, getDown] = store(false)
 
         this.createEffect(() => {
-            const cb = this.onMousePress
-            if (!getDown() || !cb) return
+            const { onMousePress } = this
+            if (!getDown() || !onMousePress) return
 
-            const handle = onBeforeRender(() => cb(currentPayload))
+            const handle = onBeforeRender(() => onMousePress(currentPayload))
 
             return () => {
                 handle.cancel()
@@ -106,11 +103,7 @@ export class Mouse extends EventLoopItem implements IMouse {
         }, [getDown])
 
         this.createEffect(() => {
-            if (
-                getEditing() ||
-                (getEditorMounted() && getCameraRendered() === mainCamera)
-            )
-                return
+            if (!getWorldPlayComputed()) return
 
             const handle0 = mouseEvents.on("move", (e) => {
                 this.onMouseMove?.(e)
@@ -142,7 +135,7 @@ export class Mouse extends EventLoopItem implements IMouse {
                 handle3.cancel()
                 handle4.cancel()
             }
-        }, [getEditing, getEditorMounted, getCameraRendered])
+        }, [getWorldPlayComputed])
     }
 }
 
@@ -150,3 +143,10 @@ const mouse = new Mouse()
 appendableRoot.delete(mouse)
 
 export default mouse
+
+export const rightClickPtr = [false]
+export const toggleRightClickPtr = () => {
+    rightClickPtr[0] = true
+    setTimeout(() => (rightClickPtr[0] = false), 100)
+}
+mouseEvents.on("rightClick", toggleRightClickPtr)

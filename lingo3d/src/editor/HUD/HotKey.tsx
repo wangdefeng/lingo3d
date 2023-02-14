@@ -1,14 +1,9 @@
-import { h } from "preact"
-import { preventTreeShake } from "@lincode/utils"
-
-preventTreeShake(h)
-
 interface HotKeysProps {
     hotkey?: string
-    hotkeyFunction?: string
+    description?: string
 }
 
-export default ({ hotkey, hotkeyFunction }: HotKeysProps) => {
+export default ({ hotkey, description }: HotKeysProps) => {
     return (
         <div
             style={{
@@ -25,19 +20,14 @@ export default ({ hotkey, hotkeyFunction }: HotKeysProps) => {
                     padding: "2px 4px 2px 4px"
                 }}
             >
-                <div
-                    style={{
-                        minWidth: 10,
-                        display: "flex",
-                        justifyContent: "center",
-                        alignItems: "center"
-                    }}
-                >
+                <div className="lingo3d-flexcenter" style={{ minWidth: 10 }}>
                     {hotkey}
                 </div>
             </div>
-            <div style={{ padding: "0 1px 0 1px" }}>&nbsp;-&nbsp;</div>
-            <div style={{ padding: "2px 0px 2px 0px" }}>{hotkeyFunction}</div>
+            {hotkey && description && (
+                <div style={{ padding: "0 1px 0 1px" }}>&nbsp;-&nbsp;</div>
+            )}
+            <div style={{ padding: "2px 0px 2px 0px" }}>{description}</div>
         </div>
     )
 }

@@ -1,20 +1,28 @@
-import ILight, { lightDefaults, lightSchema } from "./ILight"
-import Defaults from "./utils/Defaults"
+import { ShadowDistance } from "../states/useShadowDistance"
+import ILightBase, { lightBaseDefaults, lightBaseSchema } from "./ILightBase"
+import Choices from "./utils/Choices"
+import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 import Nullable from "./utils/Nullable"
+import { nullableDefault } from "./utils/NullableDefault"
 
-export default interface IDirectionalLight extends ILight {
-    shadowDistance: Nullable<number>
+export default interface IDirectionalLight extends ILightBase {
+    shadowDistance: Nullable<ShadowDistance>
 }
 
 export const directionalLightSchema: Required<ExtractProps<IDirectionalLight>> =
     {
-        ...lightSchema,
-        shadowDistance: Number
+        ...lightBaseSchema,
+        shadowDistance: String
     }
 
-export const directionalLightDefaults: Defaults<IDirectionalLight> = {
-    ...lightDefaults,
-    shadowDistance: [undefined, 2000],
-    shadowResolution: [undefined, 1024]
-}
+export const shadowDistanceChoices = new Choices({
+    near: "near",
+    medium: "medium",
+    far: "far"
+})
+export const directionalLightDefaults = extendDefaults<IDirectionalLight>(
+    [lightBaseDefaults],
+    { shadowDistance: nullableDefault("medium") },
+    { shadowDistance: shadowDistanceChoices }
+)

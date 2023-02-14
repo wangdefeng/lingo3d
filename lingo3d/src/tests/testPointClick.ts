@@ -1,16 +1,11 @@
 
 import { ThirdPersonCamera, Dummy, Reflector, settings, Cube } from ".."
 
-export default {}
-
 settings.gridHelper = true
 
 const reflector = new Reflector()
 reflector.scale = 100
 reflector.physics = "map"
-reflector.roughnessMap = "roughness.png"
-reflector.normalMap = "normal.jpg"
-reflector.roughness = 5
 reflector.onClick = e => {
     console.log(e)
 }
@@ -30,6 +25,6 @@ dummy.physics = "character"
 
 const cam = new ThirdPersonCamera()
 cam.append(dummy)
-cam.activate()
+cam.active = true
 cam.mouseControl = "drag"
 cam.lockTargetRotation = false

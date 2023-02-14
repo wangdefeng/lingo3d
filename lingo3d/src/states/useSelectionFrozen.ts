@@ -1,21 +1,29 @@
-import store from "@lincode/reactivity"
-import MeshItem from "../display/core/MeshItem"
-import { emitSelectionRecompute } from "../events/onSelectionRecompute"
+import store, { add, remove, createEffect, clear } from "@lincode/reactivity"
+import Appendable from "../api/core/Appendable"
+import { onDispose } from "../events/onDispose"
 
-export const [setSelectionFrozen, getSelectionFrozen] = store([
-    new Set<MeshItem>()
-])
+const [setSelectionFrozen, getSelectionFrozen] = store([new Set<Appendable>()])
+export { getSelectionFrozen }
+export const addSelectionFrozen = add(setSelectionFrozen, getSelectionFrozen)
+export const removeSelectionFrozen = remove(
+    setSelectionFrozen,
+    getSelectionFrozen
+)
+export const clearSelectionFrozen = clear(
+    setSelectionFrozen,
+    getSelectionFrozen
+)
 
-export const addSelectionFrozen = (item: MeshItem) => {
+createEffect(() => {
     const [frozenSet] = getSelectionFrozen()
-    frozenSet.add(item)
-    setSelectionFrozen([frozenSet])
-    emitSelectionRecompute()
-}
+    if (!frozenSet.size) return
 
-export const clearSelectionFrozen = () => {
-    const [frozenSet] = getSelectionFrozen()
-    frozenSet.clear()
-    setSelectionFrozen([frozenSet])
-    emitSelectionRecompute()
-}
+    const handle = onDispose((item) => {
+        if (!frozenSet.has(item)) return
+        frozenSet.delete(item)
+        setSelectionFrozen([frozenSet])
+    })
+    return () => {
+        handle.cancel()
+    }
+}, [getSelectionFrozen])

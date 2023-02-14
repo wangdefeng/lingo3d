@@ -1,8 +1,12 @@
-import IPlane, { planeDefaults, planeSchema } from "./IPlane"
-import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
+import { extendDefaults } from "./utils/Defaults"
+import Range from "./utils/Range"
+import IPhysicsObjectManager, {
+    physicsObjectManagerDefaults,
+    physicsObjectManagerSchema
+} from "./IPhysicsObjectManager"
 
-export default interface IReflector extends IPlane {
+export default interface IReflector extends IPhysicsObjectManager {
     resolution: number
     blur: number
     contrast: number
@@ -10,20 +14,26 @@ export default interface IReflector extends IPlane {
 }
 
 export const reflectorSchema: Required<ExtractProps<IReflector>> = {
-    ...planeSchema,
+    ...physicsObjectManagerSchema,
     resolution: Number,
     blur: Number,
     contrast: Number,
     mirror: Number
 }
 
-export const reflectorDefaults: Defaults<IReflector> = {
-    ...planeDefaults,
-
-    resolution: 256,
-    blur: 512,
-    contrast: 1.5,
-    mirror: 1,
-
-    rotationX: -90
-}
+export const reflectorDefaults = extendDefaults<IReflector>(
+    [physicsObjectManagerDefaults],
+    {
+        resolution: 256,
+        blur: 512,
+        contrast: 1.5,
+        mirror: 1,
+        rotationX: 270,
+        scaleZ: 0,
+        depth: 0
+    },
+    {
+        resolution: new Range(256, 2048, 256),
+        blur: new Range(256, 2048, 128)
+    }
+)

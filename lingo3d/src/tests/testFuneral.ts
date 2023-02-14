@@ -1,8 +1,5 @@
-
 import { Model, Cube, OrbitCamera, Sky } from ".."
 import { random } from "@lincode/utils"
-
-export default {}
 
 const sky = new Sky()
 
@@ -49,11 +46,10 @@ monolith.bloom = true
 monolith.texture = "wave1.mp4"
 
 const camera = new OrbitCamera()
-camera.activate()
+camera.active = true
 // camera.targetY = 50
 // camera.azimuthAngle = 235
 // camera.polarAngle = 70
 // camera.distance = 100
 camera.enableDamping = true
-camera.bokeh = true
 camera.enableZoom = true

@@ -1,17 +1,22 @@
-import IEventLoop, { eventLoopDefaults, eventLoopSchema } from "./IEventLoop"
-import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
+import { extendDefaults } from "./utils/Defaults"
+import IAppendable, {
+    appendableDefaults,
+    appendableSchema
+} from "./IAppendable"
+import Choices from "./utils/Choices"
 
-export default interface IReticle extends IEventLoop {
+export default interface IReticle extends IAppendable {
     variant: 1 | 2 | 3 | 4
 }
 
 export const reticleSchema: Required<ExtractProps<IReticle>> = {
-    ...eventLoopSchema,
+    ...appendableSchema,
     variant: Number
 }
 
-export const reticleDefaults: Defaults<IReticle> = {
-    ...eventLoopDefaults,
-    variant: 1
-}
+export const reticleDefaults = extendDefaults<IReticle>(
+    [appendableDefaults],
+    { variant: 1 },
+    { variant: new Choices({ 1: 1, 2: 2, 3: 3, 4: 4 }) }
+)

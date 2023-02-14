@@ -3,11 +3,9 @@ import Model from "../display/Model"
 import Sky from "../display/Sky"
 import Cube from "../display/primitives/Cube"
 import FirstPersonCamera from "../display/cameras/FirstPersonCamera"
-import { setVR } from "../states/useVR"
+import { setWebXR } from "../states/useWebXR"
 
-setVR("webxr")
-
-export default {}
+setWebXR(true)
 
 const player = new Cube()
 player.width = 50
@@ -21,7 +19,7 @@ keyboard.onKeyPress = (k) => {
     if (k === "s") player.moveForward(10)
     if (k === "a") player.moveRight(10)
     if (k === "d") player.moveRight(-10)
-    if (k === " ") player.velocity.y = 10
+    if (k === "Space") player.velocityY = 10
 }
 
 const cam = new FirstPersonCamera()

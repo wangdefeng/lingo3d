@@ -1,13 +1,13 @@
 import { SVGLoader, SVGResult } from "three/examples/jsm/loaders/SVGLoader"
 import { forceGet } from "@lincode/utils"
+import { handleProgress } from "./utils/bytesLoaded"
 import {
-    increaseLoadingCount,
-    decreaseLoadingCount
-} from "../../../states/useLoadingCount"
-import { handleProgress } from "./bytesLoaded"
+    decreaseLoadingUnpkgCount,
+    increaseLoadingUnpkgCount
+} from "../../../states/useLoadingUnpkgCount"
 
 const cache = new Map<string, Promise<SVGResult>>()
-const loader = new SVGLoader()
+export const loader = new SVGLoader()
 
 export default (url: string) =>
     forceGet(
@@ -15,19 +15,16 @@ export default (url: string) =>
         url,
         () =>
             new Promise<SVGResult>((resolve, reject) => {
-                increaseLoadingCount()
-
+                const unpkg = url.startsWith("https://unpkg.com/")
+                unpkg && increaseLoadingUnpkgCount()
                 loader.load(
                     url,
                     (svg) => {
-                        decreaseLoadingCount()
-                        resolve(Object.freeze(svg))
+                        unpkg && decreaseLoadingUnpkgCount()
+                        resolve(svg)
                     },
                     handleProgress(url),
-                    () => {
-                        decreaseLoadingCount()
-                        reject()
-                    }
+                    reject
                 )
             })
     )

@@ -1,25 +1,29 @@
-import { debounce } from "@lincode/utils"
-import { Pane } from "tweakpane"
+import { debounce, throttleTrailing } from "@lincode/utils"
+import { downPtr, Pane } from "./tweakpane"
 import resetIcon from "./resetIcon"
-import Defaults from "../../interface/utils/Defaults"
+import Defaults, { defaultsOptionsMap } from "../../interface/utils/Defaults"
 import getDefaultValue from "../../interface/utils/getDefaultValue"
+import { Cancellable } from "@lincode/promiselikes"
+import { isPoint } from "../../api/serializer/isPoint"
+import { MONITOR_INTERVAL } from "../../globals"
+import { emitEditorEdit } from "../../events/onEditorEdit"
+import toFixed, { toFixedPoint } from "../../api/serializer/toFixed"
+import { timer } from "../../engine/eventLoop"
+import {
+    assignEditorPresets,
+    getEditorPresets
+} from "../../states/useEditorPresets"
 
-let programmatic = false
-
+let skipApply = false
 let leading = true
-export const setProgrammatic = debounce(
+const skipApplyValue = debounce(
     () => {
-        programmatic = leading
+        skipApply = leading
         leading = !leading
     },
-    100,
+    0,
     "both"
 )
-
-const toFixed = (v: any) => (typeof v === "number" ? Number(v.toFixed(2)) : v)
-
-const isPoint = (v: any): v is { x: number; y: number; z?: number } =>
-    v && typeof v === "object" && "x" in v && "y" in v
 
 const isTrue = (v: any) => v === true || v === "true"
 const isFalse = (v: any) => v === false || v === "false"
@@ -34,75 +38,124 @@ const isEqual = (a: any, b: any) => {
     return a === b
 }
 
-export default (
+const processValue = (value: any) => {
+    if (typeof value === "string") {
+        if (value === "true" || value === "false")
+            return value === "true" ? true : false
+        const num = Number(value)
+        if (!Number.isNaN(num)) return toFixed(num)
+        return value
+    }
+    if (typeof value === "number") return toFixed(value)
+    if (isPoint(value)) return toFixedPoint(value)
+    return value
+}
+
+export default async (
+    handle: Cancellable,
     pane: Pane,
     title: string,
     target: Record<string, any>,
     defaults: Defaults<any>,
-    params = { ...target }
+    params: Record<string, any>,
+    prepend?: boolean
 ) => {
+    if (!prepend) await Promise.resolve()
+
+    const paramKeys = Object.keys(params)
+    if (!paramKeys.length) return {}
+
+    const paramsBackup = { ...params }
+    const paramsDefault: Record<string, any> = {}
+    for (const key of paramKeys) {
+        if (key.startsWith("preset ")) {
+            delete paramsBackup[key]
+            params[key] = getEditorPresets()[key] ?? true
+        } else
+            params[key] = paramsDefault[key] = getDefaultValue(
+                defaults,
+                key,
+                true
+            )
+    }
+
     const folder = pane.addFolder({ title })
+    const options = defaultsOptionsMap.get(defaults)
 
-    for (const [key, value] of Object.entries(params))
-        switch (typeof value) {
-            case "undefined":
-                params[key] = ""
-                break
-
-            case "number":
-                params[key] = toFixed(value)
-                break
-
-            case "object":
-                if (Array.isArray(value)) {
-                    params[key] = JSON.stringify(value)
-                    break
-                }
-                typeof value?.x === "number" && (value.x = toFixed(value.x))
-                typeof value?.y === "number" && (value.y = toFixed(value.y))
-                typeof value?.z === "number" && (value.z = toFixed(value.z))
-                break
-        }
-
-    return Object.fromEntries(
+    const result = Object.fromEntries(
         Object.keys(params).map((key) => {
-            const input = folder.addInput(params, key)
+            const input = folder.addInput(
+                params,
+                key,
+                getEditorPresets()["preset " + key] !== false
+                    ? options?.[key]
+                    : undefined
+            )
+            if (key.startsWith("preset ")) {
+                input.on("change", ({ value }: any) => {
+                    if (skipApply) return
+                    assignEditorPresets({ [key]: value })
+                })
+                return [key, input]
+            }
 
             const resetButton = resetIcon.cloneNode(true) as HTMLElement
             input.element.prepend(resetButton)
+            resetButton.style.opacity = "0.1"
 
-            const defaultValue = getDefaultValue(defaults, key, true)
-
-            const unchanged = isEqual(params[key], defaultValue)
-            resetButton.style.opacity = unchanged ? "0.1" : "0.5"
-            resetButton.style.cursor = unchanged ? "auto" : "pointer"
+            const updateResetButton = throttleTrailing(() => {
+                const unchanged = isEqual(
+                    params[key] ?? paramsDefault[key],
+                    paramsDefault[key]
+                )
+                resetButton.style.opacity = unchanged ? "0.1" : "0.5"
+                resetButton.style.cursor = unchanged ? "auto" : "pointer"
+            }, MONITOR_INTERVAL)
+            updateResetButton()
 
             resetButton.onclick = () => {
-                params[key] = JSON.parse(JSON.stringify(defaultValue))
+                params[key] = structuredClone(paramsDefault[key])
+                target[key] = structuredClone(paramsDefault[key])
+                skipApplyValue()
                 input.refresh()
             }
 
-            input.on("change", ({ value }) => {
-                if (programmatic) return
-
-                const unchanged = isEqual(value, defaultValue)
-                resetButton.style.opacity = unchanged ? "0.1" : "0.5"
-                resetButton.style.cursor = unchanged ? "auto" : "pointer"
-
-                if (typeof value === "string") {
-                    if (value === "true" || value === "false") {
-                        target[key] = value === "true" ? true : false
-                        return
-                    }
-                    const num = parseFloat(value)
-                    if (!Number.isNaN(num)) {
-                        target[key] = num
-                        return
-                    }
-                }
-                target[key] = toFixed(value)
+            input.on("change", ({ value }: any) => {
+                updateResetButton()
+                if (skipApply) return
+                !downPtr[0] && emitEditorEdit("start")
+                target[key] = processValue(value)
+                !downPtr[0] && emitEditorEdit("end")
             })
-            return [key, input] as const
+            return [key, input]
         })
     )
+    Object.assign(params, paramsBackup)
+    skipApplyValue()
+    pane.refresh()
+
+    handle.watch(
+        timer(
+            MONITOR_INTERVAL,
+            Infinity,
+            () => {
+                let changed = false
+                for (const key of paramKeys)
+                    if (
+                        !key.startsWith("preset ") &&
+                        !isEqual(target[key] ?? paramsDefault[key], params[key])
+                    ) {
+                        params[key] = target[key]
+                        changed = true
+                    }
+                if (changed) {
+                    skipApplyValue()
+                    pane.refresh()
+                }
+            },
+            true
+        )
+    )
+
+    return result
 }

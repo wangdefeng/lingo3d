@@ -1,33 +1,54 @@
-import { createEffect } from "@lincode/reactivity"
-import mainCamera from "../../engine/mainCamera"
-import { onBeforeRender } from "../../events/onBeforeRender"
 import IThirdPersonCamera, {
     thirdPersonCameraDefaults,
     thirdPersonCameraSchema
 } from "../../interface/IThirdPersonCamera"
-import { getCameraRendered } from "../../states/useCameraRendered"
-import { getEditing } from "../../states/useEditing"
-import { getEditorMounted } from "../../states/useEditorMounted"
-import CharacterCamera from "../core/CharacterCamera"
-import MeshItem from "../core/MeshItem"
-import StaticObjectManager from "../core/StaticObjectManager"
+import CharacterCamera, {
+    addCharacterCameraSystem,
+    deleteCharacterCameraSystem
+} from "../core/CharacterCamera"
+import { managerActorPtrMap } from "../core/PhysicsObjectManager/physx/pxMaps"
+import {
+    assignPxVec,
+    assignPxVec_
+} from "../core/PhysicsObjectManager/physx/pxMath"
+import getWorldDirection from "../utils/getWorldDirection"
 import getWorldPosition from "../utils/getWorldPosition"
 import getWorldQuaternion from "../utils/getWorldQuaternion"
+import MeshAppendable from "../../api/core/MeshAppendable"
+import { physxPtr } from "../core/PhysicsObjectManager/physx/physxPtr"
+import { getEditorHelper } from "../../states/useEditorHelper"
+import renderSystemWithData from "../../utils/renderSystemWithData"
 
-const setVisible = (
-    target: MeshItem | StaticObjectManager,
-    visible: boolean
-) => {
+const setVisible = (target: MeshAppendable, visible: boolean) =>
     "visible" in target && (target.visible = visible)
-}
 
-let alwaysVisible = false
+const [addCameraSystem, deleteCameraSystem] = renderSystemWithData(
+    (
+        self: ThirdPersonCamera,
+        data: { found: MeshAppendable; tooClose: boolean }
+    ) => {
+        const cam = self.camera
+        const origin = getWorldPosition(self.outerObject3d)
+        const position = getWorldPosition(self.object3d)
 
-createEffect(() => {
-    alwaysVisible =
-        getEditing() ||
-        (!!getEditorMounted() && getCameraRendered() === mainCamera)
-}, [getEditing, getEditorMounted, getCameraRendered])
+        const pxHit = physxPtr[0].pxRaycast?.(
+            assignPxVec(origin),
+            assignPxVec_(getWorldDirection(self.object3d)),
+            position.distanceTo(origin),
+            managerActorPtrMap.get(data.found)
+        )
+        pxHit && position.lerpVectors(position, pxHit.position, 1.1)
+
+        cam.position.copy(position)
+        cam.quaternion.copy(getWorldQuaternion(self.object3d))
+
+        const tooClose = getEditorHelper()
+            ? false
+            : cam.position.distanceTo(origin) < 1
+        tooClose !== data.tooClose && setVisible(data.found, !tooClose)
+        data.tooClose = tooClose
+    }
+)
 
 export default class ThirdPersonCamera
     extends CharacterCamera
@@ -42,56 +63,19 @@ export default class ThirdPersonCamera
         this.innerZ = 300
         this.orbitMode = true
 
-        const cam = this.camera
-
-        import("../core/PhysicsObjectManager/bvh/bvhCameraLoop").then(
-            ({ bvhCameraSet, onBeforeCameraLoop }) => {
-                this.createEffect(() => {
-                    const target = this.targetState.get()
-                    if (!target) {
-                        const handle = onBeforeRender(() => {
-                            cam.position.copy(getWorldPosition(this.object3d))
-                            cam.quaternion.copy(
-                                getWorldQuaternion(this.object3d)
-                            )
-                        })
-                        return () => {
-                            handle.cancel()
-                        }
-                    }
-
-                    bvhCameraSet.add(cam)
-
-                    let tooCloseOld = true
-                    setVisible(target, !tooCloseOld)
-
-                    let first = true
-                    const handle = onBeforeCameraLoop(() => {
-                        const origin = getWorldPosition(this.outerObject3d)
-                        const camPos = getWorldPosition(this.object3d)
-                        const dist = camPos.distanceTo(origin)
-
-                        cam.position.lerp(camPos, first ? 1 : 0.1)
-                        const ratio = first
-                            ? 1
-                            : cam.position.distanceTo(origin) / dist
-                        cam.position.lerpVectors(origin, camPos, ratio)
-
-                        cam.quaternion.copy(getWorldQuaternion(this.object3d))
-
-                        const tooClose = alwaysVisible ? false : ratio < 0.35
-                        tooClose !== tooCloseOld &&
-                            setVisible(target, !tooClose)
-                        tooCloseOld = tooClose
-
-                        first = false
-                    })
-                    return () => {
-                        handle.cancel()
-                        bvhCameraSet.delete(cam)
-                    }
-                }, [this.targetState.get])
+        this.createEffect(() => {
+            const found = this.firstChildState.get()
+            if (!(found instanceof MeshAppendable)) {
+                addCharacterCameraSystem(this)
+                return () => {
+                    deleteCharacterCameraSystem(this)
+                }
             }
-        )
+            setVisible(found, true)
+            addCameraSystem(this, { found, tooClose: false })
+            return () => {
+                deleteCameraSystem(this)
+            }
+        }, [this.firstChildState.get])
     }
 }

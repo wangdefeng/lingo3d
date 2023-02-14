@@ -1,13 +1,14 @@
-import ILight, { lightDefaults, lightSchema } from "./ILight"
-import Defaults from "./utils/Defaults"
+import ILightBase, { lightBaseDefaults, lightBaseSchema } from "./ILightBase"
+import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 
-export default interface IAmbientLight extends ILight {}
+export default interface IAmbientLight extends ILightBase {}
 
 export const ambientLightSchema: Required<ExtractProps<IAmbientLight>> = {
-    ...lightSchema
+    ...lightBaseSchema
 }
 
-export const ambientLightDefaults: Defaults<IAmbientLight> = {
-    ...lightDefaults
-}
+export const ambientLightDefaults = extendDefaults<IAmbientLight>(
+    [lightBaseDefaults],
+    {}
+)

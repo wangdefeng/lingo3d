@@ -4,6 +4,10 @@ import ISpotLight, {
     spotLightDefaults,
     spotLightSchema
 } from "../../interface/ISpotLight"
+import { SHADOW_BIAS } from "../../globals"
+import mainCamera from "../../engine/mainCamera"
+import { getCameraRendered } from "../../states/useCameraRendered"
+import HelperSprite from "../core/utils/HelperSprite"
 
 export default class SpotLight
     extends LightBase<typeof ThreeSpotLight>
@@ -13,9 +17,31 @@ export default class SpotLight
     public static defaults = spotLightDefaults
     public static schema = spotLightSchema
 
+    private targetSprite = new HelperSprite("target")
+
     public constructor() {
         super(ThreeSpotLight, SpotLightHelper)
-        this.innerY = 0
+
+        this.createEffect(() => {
+            const light = this.lightState.get()
+            if (!light) return
+
+            light.shadow.bias = SHADOW_BIAS * 1.5
+            light.position.y = -0.01
+            this.targetSprite.outerObject3d.add(light.target)
+
+            return () => {
+                this.targetSprite.outerObject3d.remove(light.target)
+            }
+        }, [this.lightState.get])
+
+        this.targetSprite.scale = 0.25
+        this.watch(
+            getCameraRendered(
+                (cam) => (this.targetSprite.visible = cam === mainCamera)
+            )
+        )
+        this.then(() => this.targetSprite.dispose())
     }
 
     public get angle() {
@@ -64,5 +90,26 @@ export default class SpotLight
         this.cancelHandle("distance", () =>
             this.lightState.get((light) => light && (light.distance = val))
         )
+    }
+
+    public get targetX() {
+        return this.targetSprite.x
+    }
+    public set targetX(val) {
+        this.targetSprite.x = val
+    }
+
+    public get targetY() {
+        return this.targetSprite.y
+    }
+    public set targetY(val) {
+        this.targetSprite.y = val
+    }
+
+    public get targetZ() {
+        return this.targetSprite.z
+    }
+    public set targetZ(val) {
+        this.targetSprite.z = val
     }
 }

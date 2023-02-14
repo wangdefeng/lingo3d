@@ -1,74 +1,78 @@
-import { h } from "preact"
-import register from "preact-custom-element"
-import { preventTreeShake } from "@lincode/utils"
 import ObjectGroup from "./ObjectGroup"
-import { useEffect } from "preact/hooks"
-import { useDebug, useNodeEditor } from "../states"
-import useInit from "../utils/useInit"
-import {
-    decreaseEditorMounted,
-    increaseEditorMounted
-} from "../../states/useEditorMounted"
-
-preventTreeShake(h)
+import { LIBRARY_WIDTH } from "../../globals"
+import useInitCSS from "../hooks/useInitCSS"
+import useClickable from "../hooks/useClickable"
+import AppBar from "../component/bars/AppBar"
+import Tab from "../component/tabs/Tab"
+import useInitEditor from "../hooks/useInitEditor"
 
 const Library = () => {
-    const elRef = useInit()
-    const [nodeEditor] = useNodeEditor()
-    const [debug] = useDebug()
+    useInitCSS()
+    useInitEditor()
 
-    useEffect(() => {
-        increaseEditorMounted()
-
-        return () => {
-            decreaseEditorMounted()
-        }
-    }, [])
-
-    if (nodeEditor) return null
+    const elRef = useClickable()
 
     return (
         <div
             ref={elRef}
-            className="lingo3d-ui lingo3d-bg"
-            style={{ width: 200, height: "100%", padding: 10 }}
+            className="lingo3d-ui lingo3d-bg lingo3d-library"
+            style={{
+                width: LIBRARY_WIDTH,
+                height: "100%",
+                display: "flex",
+                flexDirection: "column"
+            }}
         >
-            <ObjectGroup
-                names={[
-                    "model",
-                    "dummy",
-                    ...(debug
-                        ? [{ building: "cube" }, { tree: "cylinder" }]
-                        : []),
-                    "svgMesh",
-                    { sprite: "plane" },
-                    "trigger",
-                    "audio",
-                    "reflector",
-                    "cube",
-                    "sphere",
-                    "cone",
-                    "cylinder",
-                    "octahedron",
-                    "tetrahedron",
-                    "torus",
-                    "plane",
-                    "circle",
-                    "areaLight",
-                    "ambientLight",
-                    "skyLight",
-                    "directionalLight",
-                    "pointLight",
-                    "spotLight",
-                    "camera",
-                    "thirdPersonCamera",
-                    "firstPersonCamera",
-                    "orbitCamera"
-                ]}
-            />
+            <AppBar>
+                <Tab half>components</Tab>
+                <Tab half disabled>
+                    materials
+                </Tab>
+            </AppBar>
+            <div style={{ padding: 10, overflowY: "scroll", flexGrow: 1 }}>
+                <ObjectGroup
+                    names={[
+                        "cube",
+                        "sphere",
+                        "cone",
+                        "cylinder",
+                        "octahedron",
+                        "tetrahedron",
+                        "torus",
+                        "plane",
+                        "circle",
+
+                        "group",
+                        "model",
+                        "dummy",
+                        "svgMesh",
+                        "htmlMesh",
+                        "joystick",
+                        // { reticle: "htmlMesh" },
+                        { splashScreen: "screen" },
+                        "text",
+                        "spawnPoint",
+                        "audio",
+                        "reflector",
+                        "water",
+                        { sprite: "plane" },
+                        { spriteSheet: "plane" },
+
+                        "areaLight",
+                        "ambientLight",
+                        "skyLight",
+                        "directionalLight",
+                        "pointLight",
+                        "spotLight",
+                        { environment: "light" },
+                        "camera",
+                        "thirdPersonCamera",
+                        "firstPersonCamera",
+                        "orbitCamera"
+                    ]}
+                />
+            </div>
         </div>
     )
 }
 export default Library
-
-register(Library, "lingo3d-library")

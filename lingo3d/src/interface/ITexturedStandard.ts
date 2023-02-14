@@ -1,40 +1,55 @@
 import { Point } from "@lincode/math"
-import Defaults from "./utils/Defaults"
+import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 import Nullable from "./utils/Nullable"
-
-export type NormalMapType = "objectSpace" | "tangentSpace"
+import { nullableDefault } from "./utils/NullableDefault"
+import Range from "./utils/Range"
 
 export default interface ITexturedStandard {
-    color: string
-    wireframe: boolean
+    color: Nullable<string>
+    opacity: Nullable<number>
+    texture: Nullable<string>
+    alphaMap: Nullable<string>
+    textureRepeat: Nullable<Point | number>
+    textureFlipY: Nullable<boolean>
+    textureRotation: Nullable<number>
+
+    wireframe: Nullable<boolean>
     envMap: Nullable<string>
+    envMapIntensity: Nullable<number>
     aoMap: Nullable<string>
-    aoMapIntensity: number
+    aoMapIntensity: Nullable<number>
     bumpMap: Nullable<string>
-    bumpScale: number
+    bumpScale: Nullable<number>
     displacementMap: Nullable<string>
-    displacementScale: number
-    displacementBias: number
-    emissiveColor: string
-    emissiveMap: Nullable<string>
-    emissiveIntensity: number
+    displacementScale: Nullable<number>
+    displacementBias: Nullable<number>
+    emissive: Nullable<boolean>
+    emissiveIntensity: Nullable<number>
     lightMap: Nullable<string>
-    lightMapIntensity: number
+    lightMapIntensity: Nullable<number>
     metalnessMap: Nullable<string>
-    metalness: number
+    metalness: Nullable<number>
     roughnessMap: Nullable<string>
-    roughness: number
+    roughness: Nullable<number>
     normalMap: Nullable<string>
-    normalScale: Point | number
-    normalMapType: Nullable<NormalMapType>
+    normalScale: Nullable<number>
+    depthTest: Nullable<boolean>
 }
 
 export const texturedStandardSchema: Required<ExtractProps<ITexturedStandard>> =
     {
         color: String,
+        opacity: Number,
+        texture: String,
+        alphaMap: String,
+        textureRepeat: [Object, Number],
+        textureFlipY: Boolean,
+        textureRotation: Number,
+
         wireframe: Boolean,
         envMap: String,
+        envMapIntensity: Number,
         aoMap: String,
         aoMapIntensity: Number,
         bumpMap: String,
@@ -42,8 +57,7 @@ export const texturedStandardSchema: Required<ExtractProps<ITexturedStandard>> =
         displacementMap: String,
         displacementScale: Number,
         displacementBias: Number,
-        emissiveColor: String,
-        emissiveMap: String,
+        emissive: Boolean,
         emissiveIntensity: Number,
         lightMap: String,
         lightMapIntensity: Number,
@@ -52,31 +66,56 @@ export const texturedStandardSchema: Required<ExtractProps<ITexturedStandard>> =
         roughnessMap: String,
         roughness: Number,
         normalMap: String,
-        normalScale: [Object, Number],
-        normalMapType: String
+        normalScale: Number,
+        depthTest: Boolean
     }
 
-export const texturedStandardDefaults: Defaults<ITexturedStandard> = {
-    color: "#ffffff",
-    wireframe: false,
-    envMap: undefined,
-    aoMap: undefined,
-    aoMapIntensity: 1,
-    bumpMap: undefined,
-    bumpScale: 1,
-    displacementMap: undefined,
-    displacementScale: 1,
-    displacementBias: 0,
-    emissiveColor: "#000000",
-    emissiveMap: undefined,
-    emissiveIntensity: 1,
-    lightMap: undefined,
-    lightMapIntensity: 1,
-    metalnessMap: undefined,
-    metalness: 0,
-    roughnessMap: undefined,
-    roughness: 1,
-    normalMap: undefined,
-    normalScale: { x: 1, y: 1 },
-    normalMapType: undefined
-}
+export const texturedStandardDefaults = extendDefaults<ITexturedStandard>(
+    [],
+    {
+        color: nullableDefault("#ffffff"),
+        opacity: nullableDefault(1),
+        texture: undefined,
+        alphaMap: undefined,
+        textureRepeat: nullableDefault({ x: 1, y: 1 }),
+        textureFlipY: nullableDefault(false),
+        textureRotation: nullableDefault(0),
+
+        wireframe: nullableDefault(false),
+        envMap: undefined,
+        envMapIntensity: nullableDefault(1),
+        aoMap: undefined,
+        aoMapIntensity: nullableDefault(1),
+        bumpMap: undefined,
+        bumpScale: nullableDefault(1),
+        displacementMap: undefined,
+        displacementScale: nullableDefault(1),
+        displacementBias: nullableDefault(0),
+        emissive: nullableDefault(false),
+        emissiveIntensity: nullableDefault(1),
+        lightMap: undefined,
+        lightMapIntensity: nullableDefault(1),
+        metalnessMap: undefined,
+        metalness: nullableDefault(0),
+        roughnessMap: undefined,
+        roughness: nullableDefault(1),
+        normalMap: undefined,
+        normalScale: nullableDefault(1),
+        depthTest: nullableDefault(true)
+    },
+    {
+        opacity: new Range(0, 1),
+        textureRotation: new Range(0, 360),
+
+        envMapIntensity: new Range(0, 4),
+        aoMapIntensity: new Range(0, 4),
+        bumpScale: new Range(0, 4),
+        displacementScale: new Range(0, 4),
+        displacementBias: new Range(0, 4),
+        emissiveIntensity: new Range(0, 1),
+        lightMapIntensity: new Range(0, 4),
+        metalness: new Range(-2, 2),
+        roughness: new Range(0, 4),
+        normalScale: new Range(0, 4)
+    }
+)

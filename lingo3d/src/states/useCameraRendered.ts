@@ -1,25 +1,32 @@
 import store, { createEffect } from "@lincode/reactivity"
-import { Camera, OrthographicCamera, PerspectiveCamera } from "three"
+import {
+    Camera,
+    OrthographicCamera,
+    PerspectiveCamera,
+    Quaternion,
+    Vector3
+} from "three"
 import interpolationCamera from "../engine/interpolationCamera"
 import mainCamera from "../engine/mainCamera"
-import { getCameraStack } from "./useCameraStack"
-import { last } from "@lincode/utils"
-import { onBeforeRender } from "../events/onBeforeRender"
-import { getCameraFrom } from "./useCameraFrom"
 import { getResolution } from "./useResolution"
-import { getVR } from "./useVR"
 import { ORTHOGRAPHIC_FRUSTUM } from "../globals"
 import getWorldPosition from "../display/utils/getWorldPosition"
 import getWorldQuaternion from "../display/utils/getWorldQuaternion"
+import fpsAlpha from "../display/utils/fpsAlpha"
+import { getWebXR } from "./useWebXR"
+import { getSplitView } from "./useSplitView"
+import { getCameraComputed } from "./useCameraComputed"
+import renderSystemWithData from "../utils/renderSystemWithData"
 
-export const [setCameraRendered, getCameraRendered] =
+const [setCameraRendered, getCameraRendered] =
     store<PerspectiveCamera>(mainCamera)
+export { getCameraRendered }
 
 export const updateCameraAspect = (camera: Camera) => {
     const [resX, resY] = getResolution()
     const aspect = resX / resY
 
-    if (camera instanceof PerspectiveCamera && !getVR()) {
+    if (camera instanceof PerspectiveCamera && !getWebXR()) {
         camera.aspect = aspect
         camera.updateProjectionMatrix()
     } else if (camera instanceof OrthographicCamera) {
@@ -37,14 +44,73 @@ export const updateCameraAspect = (camera: Camera) => {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
+let cameraLast: PerspectiveCamera | undefined
+
+const [addInterpolationSystem, deleteInterpolationSystem] =
+    renderSystemWithData(
+        (
+            cameraTo: PerspectiveCamera,
+            data: {
+                positionFrom: Vector3
+                quaternionFrom: Quaternion
+                cameraFrom: PerspectiveCamera
+                ratio: number
+                diffMax: number
+            }
+        ) => {
+            const { positionFrom, quaternionFrom, cameraFrom, ratio, diffMax } =
+                data
+
+            const positionTo = getWorldPosition(cameraTo)
+            const quaternionTo = getWorldQuaternion(cameraTo)
+
+            interpolationCamera.position.lerpVectors(
+                positionFrom,
+                positionTo,
+                ratio
+            )
+            interpolationCamera.quaternion.slerpQuaternions(
+                quaternionFrom,
+                quaternionTo,
+                ratio
+            )
+
+            interpolationCamera.zoom = lerp(
+                cameraFrom.zoom,
+                cameraTo.zoom,
+                ratio
+            )
+            interpolationCamera.fov = lerp(cameraFrom.fov, cameraTo.fov, ratio)
+            interpolationCamera.updateProjectionMatrix()
+
+            data.ratio = Math.min((1 - ratio) * fpsAlpha(0.1), diffMax) + ratio
+            if (data.ratio < 0.9999) return
+
+            setCameraRendered(cameraTo)
+            updateCameraAspect(cameraTo)
+            deleteInterpolationSystem(cameraTo)
+        }
+    )
+
 createEffect(() => {
+    if (getSplitView()) {
+        setCameraRendered(mainCamera)
+        return
+    }
     const cameraFrom =
         getCameraRendered() === interpolationCamera
             ? interpolationCamera
-            : getCameraFrom()
-    const cameraTo = last(getCameraStack())!
+            : cameraLast
+
+    const cameraTo = (cameraLast = getCameraComputed())
     const transition = cameraTo.userData.transition
-    if (!cameraFrom || !transition || cameraFrom === cameraTo) {
+    if (
+        !cameraFrom ||
+        !transition ||
+        cameraFrom === cameraTo ||
+        cameraFrom === mainCamera ||
+        cameraTo === mainCamera
+    ) {
         setCameraRendered(cameraTo)
         return
     }
@@ -57,35 +123,16 @@ createEffect(() => {
     interpolationCamera.fov = cameraFrom.fov
     updateCameraAspect(interpolationCamera)
 
-    let alpha = 0
+    let ratio = 0
     const diffMax = typeof transition === "number" ? transition : Infinity
-    const handle = onBeforeRender(() => {
-        const positionTo = getWorldPosition(cameraTo)
-        const quaternionTo = getWorldQuaternion(cameraTo)
-
-        interpolationCamera.position.lerpVectors(
-            positionFrom,
-            positionTo,
-            alpha
-        )
-        interpolationCamera.quaternion.slerpQuaternions(
-            quaternionFrom,
-            quaternionTo,
-            alpha
-        )
-
-        interpolationCamera.zoom = lerp(cameraFrom.zoom, cameraTo.zoom, alpha)
-        interpolationCamera.fov = lerp(cameraFrom.fov, cameraTo.fov, alpha)
-        interpolationCamera.updateProjectionMatrix()
-
-        alpha = Math.min((1 - alpha) * 0.1, diffMax) + alpha
-        if (alpha < 0.999) return
-
-        setCameraRendered(cameraTo)
-        updateCameraAspect(cameraTo)
-        handle.cancel()
+    addInterpolationSystem(cameraTo, {
+        positionFrom,
+        quaternionFrom,
+        cameraFrom,
+        ratio,
+        diffMax
     })
     return () => {
-        handle.cancel()
+        deleteInterpolationSystem(cameraTo)
     }
-}, [getCameraStack])
+}, [getSplitView, getCameraComputed])

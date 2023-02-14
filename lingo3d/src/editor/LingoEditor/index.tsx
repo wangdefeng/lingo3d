@@ -1,61 +1,57 @@
-import { h } from "preact"
-import register from "preact-custom-element"
-import { preventTreeShake } from "@lincode/utils"
 import Toolbar from "../Toolbar"
 import SceneGraph from "../SceneGraph"
 import Editor from "../Editor"
-import NodeEditor from "../NodeEditor"
 import Library from "../Library"
 import HUD from "../HUD"
 import { useEffect, useRef } from "preact/hooks"
 import settings from "../../api/settings"
-import FileBrowser from "../FileBrowser"
-preventTreeShake(h)
+import Stats from "../Stats"
+import WorldBar from "../WorldBar"
+import Panels from "../Panels"
+import { DEBUG } from "../../globals"
+import useSyncState from "../hooks/useSyncState"
+import { getStats } from "../../states/useStats"
+import Retargeter from "../Retargeter"
+import Nodes from "../Nodes"
 
 const LingoEditor = () => {
     const elRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         const el = elRef.current
-        if (!el) return
-        settings.autoMount = el
+        if (el) settings.autoMount = el
     }, [])
+
+    const stats = useSyncState(getStats)
+
+    let editor = "editor"
 
     return (
         <div
-            className="lingo3d-ui"
-            style={{
-                width: "100%",
-                height: "100%",
-                position: "absolute",
-                left: 0,
-                top: 0,
-                display: "flex"
-            }}
+            className="lingo3d-ui lingo3d-lingoeditor lingo3d-absfull"
+            onContextMenu={DEBUG ? undefined : (e) => e.preventDefault()}
         >
             <Toolbar />
-            <div>
-                <div
-                    style={{
-                        // height: "calc(100% - 200px)"
-                        height: "100%"
-                    }}
-                >
-                    <SceneGraph />
-                    <Editor />
-                    <NodeEditor />
-                    <Library />
-                </div>
-                {/* <FileBrowser /> */}
-            </div>
-            <HUD />
+            <SceneGraph />
+            {editor === "retargeter" ? (
+                <Retargeter />
+            ) : editor === "nodes" ? (
+                <Nodes />
+            ) : (
+                <Editor />
+            )}
+            {editor !== "nodes" && <Library />}
+            <Panels />
+
+            <WorldBar />
             <div
+                className="lingo3d-world lingo3d-bg"
                 ref={elRef}
                 style={{ height: "100%", flexGrow: 1, position: "relative" }}
             />
+            {stats && <Stats />}
+            <HUD />
         </div>
     )
 }
 export default LingoEditor
-
-register(LingoEditor, "lingo3d-lingoeditor")

@@ -1,15 +1,16 @@
 import { omit } from "@lincode/utils"
 import createObject from "./createObject"
-import { nonSerializedProperties, SceneGraphNode } from "./types"
+import { SceneGraphNode } from "./types"
 import Loaded from "../../display/core/Loaded"
 import { Object3D } from "three"
 import Reresolvable from "../../display/core/utils/Reresolvable"
+import nonSerializedProperties from "./nonSerializedProperties"
 
 const nodeToObjectManager = (
     node: SceneGraphNode,
     loadedResolvables: Array<Reresolvable<Object3D>> | undefined
 ) => {
-    if (node.type === "animation") return
+    if (node.type === "lingo3d") return
 
     const object = createObject(node.type)
     loadedResolvables &&
@@ -18,7 +19,7 @@ const nodeToObjectManager = (
     Object.assign(object, omit(node, nonSerializedProperties))
     node.children
         ?.map((n) => nodeToObjectManager(n, loadedResolvables))
-        .forEach((c) => c && object.append(c))
+        .forEach((c) => c && object.append(c as any))
     return object
 }
 

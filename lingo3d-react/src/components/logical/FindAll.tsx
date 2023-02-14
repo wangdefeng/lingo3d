@@ -1,51 +1,32 @@
 import FoundManager from "lingo3d/lib/display/core/FoundManager"
-import React, {
-  useContext,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState
-} from "react"
+import React, { useContext, useLayoutEffect, useState } from "react"
 import useDiffProps from "../../hooks/useDiffProps"
 import { applyChanges, ParentContext } from "../../hooks/useManager"
-import { FoundProps } from "../../props"
+import { FoundProps } from "../../props/FoundProps"
 
 const FindAll = React.forwardRef<
   Array<FoundManager>,
   Omit<FoundProps, "name"> & {
-    name: string | RegExp
+    name: string | RegExp | ((name: string) => boolean)
     onLoad?: (managers: Array<FoundManager>) => void
   }
 >(({ name, onLoad, ...p }, ref) => {
   const parent = useContext(ParentContext)
   const [managers, setManagers] = useState<Array<any>>()
 
-  const nameOld = useRef(name)
-  const _name = useMemo(() => {
-    if (
-      typeof name !== "string" &&
-      typeof nameOld !== "string" &&
-      name.toString() === nameOld.toString()
-    )
-      return nameOld.current
-
-    nameOld.current = name
-    return name
-  }, [name])
-
   useLayoutEffect(() => {
-    if (!parent || !_name) return
+    if (!parent || !name) return
 
     if ("loaded" in parent) {
       const handle = parent.loaded.then(() => {
-        setManagers(parent.findAll(_name))
+        setManagers(parent.findAll(name))
       })
       return () => {
         handle.cancel()
       }
     }
-    setManagers(parent.findAll(_name))
-  }, [parent, _name])
+    setManagers(parent.findAll(name))
+  }, [parent])
 
   const [changed, removed] = useDiffProps(p, !managers)
   if (managers)

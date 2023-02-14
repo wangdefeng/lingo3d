@@ -1,5 +1,4 @@
 import { Reactive } from "@lincode/reactivity"
-import { camFar, camNear } from "../../engine/constants"
 import { container } from "../../engine/renderLoop/renderSetup"
 import IOrbitCamera, {
     orbitCameraDefaults,
@@ -7,26 +6,65 @@ import IOrbitCamera, {
 } from "../../interface/IOrbitCamera"
 import { getTransformControlsDragging } from "../../states/useTransformControlsDragging"
 import { onKeyClear } from "../../events/onKeyClear"
-import { onSceneGraphChange } from "../../events/onSceneGraphChange"
 import { getCameraRendered } from "../../states/useCameraRendered"
-import { onBeforeRender } from "../../events/onBeforeRender"
 import { Cancellable } from "@lincode/promiselikes"
-import { idMap } from "../core/StaticObjectManager"
 import { PerspectiveCamera } from "three"
-import OrbitCameraBase from "../core/OrbitCameraBase"
 import { vec2Point } from "../utils/vec2Point"
 import getWorldPosition from "../utils/getWorldPosition"
 import getCenter from "../utils/getCenter"
+import { FAR, NEAR } from "../../globals"
+import MeshAppendable from "../../api/core/MeshAppendable"
+import CameraBase from "../core/CameraBase"
+import renderSystemWithData from "../../utils/renderSystemWithData"
 
-export default class OrbitCamera
-    extends OrbitCameraBase
-    implements IOrbitCamera
-{
+const [addPlaceAtSystem, deletePlaceAtSystem] = renderSystemWithData(
+    (cam: OrbitCamera, data: { found: MeshAppendable }) => {
+        cam.placeAt(vec2Point(getCenter(data.found.object3d)))
+    }
+)
+
+const [addGyrateSystem, deleteGyrateSystem] = renderSystemWithData(
+    (cam: OrbitCamera, data: { speed: number }) => {
+        cam.gyrate(data.speed, 0, true)
+    }
+)
+
+const [addFlySystem, deleteFlySystem] = renderSystemWithData(
+    (cam: OrbitCamera, { downSet }: { downSet: Set<string> }) => {
+        if (downSet.has("Meta") || downSet.has("Control")) return
+
+        const speed = downSet.has("Shift") ? 50 : 10
+
+        if (downSet.has("w")) cam.translateZ(-speed)
+        else if (downSet.has("s")) cam.translateZ(speed)
+
+        if (downSet.has("a") || downSet.has("ArrowLeft")) cam.moveRight(-speed)
+        else if (downSet.has("d") || downSet.has("ArrowRight"))
+            cam.moveRight(speed)
+
+        if (
+            downSet.has("w") ||
+            downSet.has("s") ||
+            downSet.has("a") ||
+            downSet.has("d")
+        ) {
+            const worldPos = vec2Point(getWorldPosition(cam.object3d))
+            cam.innerZ = 0
+            cam.placeAt(worldPos)
+        }
+        if (downSet.has("Meta") || downSet.has("Control")) return
+
+        if (downSet.has("ArrowDown")) cam.y -= speed
+        else if (downSet.has("ArrowUp")) cam.y += speed
+    }
+)
+
+export default class OrbitCamera extends CameraBase implements IOrbitCamera {
     public static componentName = "orbitCamera"
     public static defaults = orbitCameraDefaults
     public static schema = orbitCameraSchema
 
-    public constructor(camera = new PerspectiveCamera(75, 1, camNear, camFar)) {
+    public constructor(camera = new PerspectiveCamera(75, 1, NEAR, FAR)) {
         super(camera)
 
         this.innerZ = 500
@@ -36,55 +74,24 @@ export default class OrbitCamera
         this.camera.rotation.y = 0
 
         this.createEffect(() => {
-            const targetId = this.targetIdState.get()
-            if (!targetId) return
+            const found = this.firstChildState.get()
+            if (!(found instanceof MeshAppendable)) return
 
-            const handle = new Cancellable()
-            const timeout = setTimeout(() => {
-                const find = () => {
-                    const [found] = idMap.get(targetId) ?? [undefined]
-                    if (found) {
-                        this.manualTarget = found
-                        this.targetState.set(found)
-                    }
-                    return found
-                }
-                if (find()) return
-
-                handle.watch(
-                    onSceneGraphChange(() =>
-                        setTimeout(() => find() && handle.cancel())
-                    )
-                )
-            })
+            addPlaceAtSystem(this, { found })
             return () => {
-                clearTimeout(timeout)
-                handle.cancel()
+                deletePlaceAtSystem(this)
             }
-        }, [this.targetIdState.get])
-
-        this.createEffect(() => {
-            const target = this.targetState.get()
-            if (!target) return
-
-            const handle = onBeforeRender(() => {
-                this.placeAt(vec2Point(getCenter(target.nativeObject3d)))
-            })
-            return () => {
-                handle.cancel()
-            }
-        }, [this.targetState.get])
+        }, [this.firstChildState.get])
 
         this.createEffect(() => {
             const autoRotate = this.autoRotateState.get()
             if (getCameraRendered() !== camera || !autoRotate) return
 
-            const speed = typeof autoRotate === "number" ? autoRotate : 2
-            const handle = onBeforeRender(() => {
-                this.gyrate(speed, 0, true)
+            addGyrateSystem(this, {
+                speed: typeof autoRotate === "number" ? autoRotate : 2
             })
             return () => {
-                handle.cancel()
+                deleteGyrateSystem(this)
             }
         }, [getCameraRendered, this.autoRotateState.get])
 
@@ -110,45 +117,16 @@ export default class OrbitCamera
 
             if (this.enableFlyState.get()) {
                 const downSet = new Set<string>()
-
-                handle.watch(
-                    onBeforeRender(() => {
-                        const speed = downSet.has("Shift") ? 50 : 10
-
-                        if (downSet.has("w")) this.translateZ(-speed)
-                        else if (downSet.has("s")) this.translateZ(speed)
-
-                        if (downSet.has("a") || downSet.has("ArrowLeft"))
-                            this.moveRight(-speed)
-                        else if (downSet.has("d") || downSet.has("ArrowRight"))
-                            this.moveRight(speed)
-
-                        if (
-                            downSet.has("w") ||
-                            downSet.has("s") ||
-                            downSet.has("a") ||
-                            downSet.has("d")
-                        ) {
-                            const worldPos = vec2Point(
-                                getWorldPosition(this.object3d)
-                            )
-                            this.innerZ = 0
-                            this.placeAt(worldPos)
-                        }
-
-                        if (downSet.has("ArrowDown")) this.y -= speed
-                        else if (downSet.has("ArrowUp")) this.y += speed
-                    })
-                )
+                addFlySystem(this, { downSet })
 
                 const handleKeyDown = (e: KeyboardEvent) => {
                     downSet.add(
-                        e.key.length === 1 ? e.key.toLowerCase() : e.key
+                        e.key.length === 1 ? e.key.toLocaleLowerCase() : e.key
                     )
                 }
                 const handleKeyUp = (e: KeyboardEvent) => {
                     downSet.delete(
-                        e.key.length === 1 ? e.key.toLowerCase() : e.key
+                        e.key.length === 1 ? e.key.toLocaleLowerCase() : e.key
                     )
                 }
                 document.addEventListener("keydown", handleKeyDown)
@@ -156,6 +134,7 @@ export default class OrbitCamera
                 handle.watch(onKeyClear(() => downSet.clear()))
 
                 handle.then(() => {
+                    deleteFlySystem(this)
                     document.removeEventListener("keydown", handleKeyDown)
                     document.removeEventListener("keyup", handleKeyUp)
                 })
@@ -170,14 +149,6 @@ export default class OrbitCamera
             this.enableFlyState.get,
             this.mouseControlState.get
         ])
-    }
-
-    private targetIdState = new Reactive<string | undefined>(undefined)
-    public get targetId() {
-        return this.targetIdState.get()
-    }
-    public set targetId(val) {
-        this.targetIdState.set(val)
     }
 
     private enableZoomState = new Reactive(false)

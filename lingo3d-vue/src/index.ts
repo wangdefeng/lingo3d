@@ -1,26 +1,9 @@
-import type * as types from "lingo3d"
-export { types }
+import * as Lingo from "lingo3d"
+export { Lingo }
 
-export {
-  screenshot,
-  onAfterRender,
-  onBeforeRender,
-  loop,
-  mainOrbitCamera,
-  keyboard,
-  mouse,
-  createProxy,
-  serialize,
-  deserialize,
-  downloadBlob,
-  downloadText,
-  exportJSON,
-  exportReact,
-  exportVue,
-  openJSON,
-  setWasmPath,
-  clientToWorld
-} from "lingo3d"
+export { screenshot, keyboard, mouse, createProxy, setWasmPath } from "lingo3d"
+
+export { default as createPreload } from "./createPreload"
 
 export { default as World } from "./components/World.vue"
 export { default as Stats } from "./components/Stats.vue"
@@ -41,12 +24,15 @@ export { default as Group } from "./components/display/Group.vue"
 export { default as Model } from "./components/display/Model.vue"
 export { default as Dummy } from "./components/display/Dummy.vue"
 export { default as SvgMesh } from "./components/display/SvgMesh.vue"
+export { default as HTMLMesh } from "./components/display/HTMLMesh.vue"
 export { default as Reflector } from "./components/display/Reflector.vue"
+export { default as Water } from "./components/display/Water.vue"
 export { default as Skybox } from "./components/display/Skybox.vue"
 export { default as Environment } from "./components/display/Environment.vue"
 export { default as Setup } from "./components/display/Setup.vue"
 export { default as Sprite } from "./components/display/Sprite.vue"
 export { default as Trigger } from "./components/display/Trigger.vue"
+export { default as SpawnPoint } from "./components/display/SpawnPoint.vue"
 export { default as Audio } from "./components/display/Audio.vue"
 
 export { default as Camera } from "./components/display/cameras/Camera.vue"

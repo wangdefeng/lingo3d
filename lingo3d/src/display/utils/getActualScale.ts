@@ -1,18 +1,8 @@
-import { Vector3 } from "three"
-import { onAfterRender } from "../../events/onAfterRender"
-import MeshItem from "../core/MeshItem"
+import { Object3D } from "three"
+import computePerFrame from "../../utils/computePerFrame"
+import { vector3 } from "./reusables"
 
-const cache = new WeakMap<MeshItem, Vector3>()
-
-export default (target: MeshItem) => {
-    if (cache.has(target)) return cache.get(target)!.clone()
-
-    const result = target.nativeObject3d.scale
-        .clone()
-        .multiply(target.outerObject3d.scale)
-
-    cache.set(target, result.clone())
-    onAfterRender(() => cache.delete(target), true)
-
-    return result
-}
+export default computePerFrame(
+    (target: { object3d: Object3D; outerObject3d: Object3D }) =>
+        vector3.copy(target.object3d.scale).multiply(target.outerObject3d.scale)
+)

@@ -1,86 +1,58 @@
-import { h } from "preact"
-import register from "preact-custom-element"
-import { preventTreeShake } from "@lincode/utils"
 import TranslateIcon from "./icons/TranslateIcon"
 import RotateIcon from "./icons/RotateIcon"
 import ScaleIcon from "./icons/ScaleIcon"
 import AbsoluteIcon from "./icons/AbsoluteIcon"
 import RelativeIcon from "./icons/RelativeIcon"
-import IconButton from "./IconButton"
-import {
-    useSelectionTarget,
-    useEditorComputed,
-    useTransformControlsSpaceComputed
-} from "../states"
+import ToolbarButton from "./ToolbarButton"
 import CursorIcon from "./icons/CursorIcon"
-import ExportIcon from "./icons/ExportIcon"
 import OpenIcon from "./icons/OpenIcont"
 import ReactIcon from "./icons/ReactIcon"
 import VueIcon from "./icons/VueIcon"
 import exportReact from "../../api/files/exportReact"
 import exportVue from "../../api/files/exportVue"
-import { useEffect } from "preact/hooks"
 import openJSON from "../../api/files/openJSON"
-import exportJSON from "../../api/files/exportJSON"
 import Section from "./Section"
-import useInit from "../utils/useInit"
-import { setEditorMode } from "../../states/useEditorMode"
 import { setTransformControlsSpace } from "../../states/useTransformControlsSpace"
-import { isPositionedItem } from "../../api/core/PositionedItem"
-import SimpleObjectManager from "../../display/core/SimpleObjectManager"
-import PlayIcon from "./icons/PlayIcon"
-import {
-    decreaseEditorMounted,
-    increaseEditorMounted
-} from "../../states/useEditorMounted"
 import MeshIcon from "./icons/MeshIcon"
 import PathIcon from "./icons/PathIcon"
+import FolderIcon from "./icons/FolderIcon"
+import SaveIcon from "./icons/SaveIcon"
+import saveJSON from "../../api/files/saveJSON"
+import openFolder from "../../api/files/openFolder"
+import exportJSON from "../../api/files/exportJSON"
+import JSONIcon from "./icons/JSONIcon"
+import useInitCSS from "../hooks/useInitCSS"
+import useClickable from "../hooks/useClickable"
+import { setEditorMode } from "../../states/useEditorMode"
+import useSyncState from "../hooks/useSyncState"
+import { getSelectionTarget } from "../../states/useSelectionTarget"
+import { getEditorModeComputed } from "../../states/useEditorModeComputed"
+import { getTransformControlsSpaceComputed } from "../../states/useTransformControlsSpaceComputed"
+import { setWorldPlay } from "../../states/useWorldPlay"
+import useInitEditor from "../hooks/useInitEditor"
 
-preventTreeShake(h)
+const Toolbar = () => {
+    useInitCSS()
+    useInitEditor()
 
-type ButtonOptions = {
-    hidden?: boolean
-    onClick?: () => void
-}
+    const elRef = useClickable()
 
-interface ToolbarProps {
-    buttons?: {
-        openFolder?: ButtonOptions
-        openJSON?: ButtonOptions
-        exportJSON?: ButtonOptions
-        exportReact?: ButtonOptions
-        exportVue?: ButtonOptions
-    }
-}
+    const mode = useSyncState(getEditorModeComputed)
+    const space = useSyncState(getTransformControlsSpaceComputed)
+    const target = useSyncState(getSelectionTarget)
 
-const Toolbar = ({ buttons }: ToolbarProps) => {
-    const elRef = useInit()
-
-    const [mode] = useEditorComputed()
-    const [space] = useTransformControlsSpaceComputed()
-    const [target] = useSelectionTarget()
-    const translateOnly =
-        target &&
-        isPositionedItem(target) &&
-        !(target instanceof SimpleObjectManager)
-
-    useEffect(() => {
-        increaseEditorMounted()
-
-        return () => {
-            decreaseEditorMounted()
-        }
-    }, [])
+    const canTranslate = target && "x" in target
+    const canRotate = target && "rotationX" in target
+    const canScale = target && "scaleX" in target
 
     return (
         <div
             ref={elRef}
-            className="lingo3d-ui lingo3d-bg"
+            className="lingo3d-ui lingo3d-bg lingo3d-toolbar"
             style={{
                 width: 50,
                 height: "100%",
-                borderRight: "1px solid rgba(255, 255, 255, 0.05)",
-                overflow: "hidden"
+                overflowY: "scroll"
             }}
         >
             <div
@@ -93,61 +65,56 @@ const Toolbar = ({ buttons }: ToolbarProps) => {
                 }}
             >
                 <Section>
-                    <IconButton
+                    <ToolbarButton
                         active={mode === "select"}
-                        onClick={() => setEditorMode("select")}
+                        onClick={() => {
+                            setWorldPlay(false)
+                            setEditorMode("select")
+                        }}
                     >
                         <CursorIcon />
-                    </IconButton>
-                    <IconButton
+                    </ToolbarButton>
+                    <ToolbarButton
                         active={mode === "translate"}
-                        onClick={() => setEditorMode("translate")}
+                        onClick={() => {
+                            setWorldPlay(false)
+                            setEditorMode("translate")
+                        }}
+                        disabled={!canTranslate}
                     >
                         <TranslateIcon />
-                    </IconButton>
-                    <IconButton
+                    </ToolbarButton>
+                    <ToolbarButton
                         active={mode === "rotate"}
-                        disabled={translateOnly}
-                        onClick={() => setEditorMode("rotate")}
+                        disabled={!canRotate}
+                        onClick={() => {
+                            setWorldPlay(false)
+                            setEditorMode("rotate")
+                        }}
                     >
                         <RotateIcon />
-                    </IconButton>
-                    <IconButton
+                    </ToolbarButton>
+                    <ToolbarButton
                         active={mode === "scale"}
-                        disabled={translateOnly}
-                        onClick={() => setEditorMode("scale")}
+                        disabled={!canScale}
+                        onClick={() => {
+                            setWorldPlay(false)
+                            setEditorMode("scale")
+                        }}
                     >
                         <ScaleIcon />
-                    </IconButton>
-                    {/* <IconButton
-                        active={mode === "mesh"}
-                        onClick={() => setEditorMode("mesh")}
-                    >
-                        <MeshIcon />
-                    </IconButton> */}
-                    <IconButton
-                        active={mode === "path"}
-                        onClick={() => setEditorMode("path")}
-                    >
-                        <PathIcon />
-                    </IconButton>
-                    <IconButton
-                        active={mode === "play"}
-                        onClick={() => setEditorMode("play")}
-                    >
-                        <PlayIcon />
-                    </IconButton>
+                    </ToolbarButton>
                 </Section>
 
                 <Section>
-                    <IconButton
+                    <ToolbarButton
                         active={space === "world"}
                         onClick={() => setTransformControlsSpace("world")}
                         disabled={mode !== "translate" && mode !== "rotate"}
                     >
                         <AbsoluteIcon />
-                    </IconButton>
-                    <IconButton
+                    </ToolbarButton>
+                    <ToolbarButton
                         active={space === "local"}
                         onClick={() => setTransformControlsSpace("local")}
                         disabled={
@@ -157,55 +124,55 @@ const Toolbar = ({ buttons }: ToolbarProps) => {
                         }
                     >
                         <RelativeIcon />
-                    </IconButton>
+                    </ToolbarButton>
                 </Section>
 
                 <Section>
-                    {/* {!buttons?.openFolder?.hidden && (
-                        <IconButton
-                            onClick={buttons?.openFolder?.onClick ?? openFolder}
-                        >
-                            <FolderIcon />
-                        </IconButton>
-                    )} */}
-                    {!buttons?.openJSON?.hidden && (
-                        <IconButton
-                            onClick={buttons?.openJSON?.onClick ?? openJSON}
-                        >
-                            <OpenIcon />
-                        </IconButton>
-                    )}
-                    {!buttons?.exportJSON?.hidden && (
-                        <IconButton
-                            onClick={buttons?.exportJSON?.onClick ?? exportJSON}
-                        >
-                            <ExportIcon />
-                        </IconButton>
-                    )}
+                    {/* <ToolbarButton
+                        active={mode === "mesh"}
+                        onClick={() => {
+                            setWorldPlay(false)
+                            setEditorMode("mesh")
+                        }}
+                    >
+                        <MeshIcon />
+                    </ToolbarButton> */}
+                    <ToolbarButton
+                        active={mode === "curve"}
+                        onClick={() => {
+                            setWorldPlay(false)
+                            setEditorMode("curve")
+                        }}
+                    >
+                        <PathIcon />
+                    </ToolbarButton>
                 </Section>
 
                 <Section>
-                    {!buttons?.exportReact?.hidden && (
-                        <IconButton
-                            onClick={
-                                buttons?.exportReact?.onClick ?? exportReact
-                            }
-                        >
-                            <ReactIcon />
-                        </IconButton>
-                    )}
-                    {!buttons?.exportVue?.hidden && (
-                        <IconButton
-                            onClick={buttons?.exportVue?.onClick ?? exportVue}
-                        >
-                            <VueIcon />
-                        </IconButton>
-                    )}
+                    <ToolbarButton onClick={openFolder}>
+                        <FolderIcon />
+                    </ToolbarButton>
+                    <ToolbarButton onClick={openJSON}>
+                        <OpenIcon />
+                    </ToolbarButton>
+                    <ToolbarButton onClick={saveJSON}>
+                        <SaveIcon />
+                    </ToolbarButton>
+                </Section>
+
+                <Section>
+                    <ToolbarButton onClick={exportJSON}>
+                        <JSONIcon />
+                    </ToolbarButton>
+                    <ToolbarButton onClick={exportReact}>
+                        <ReactIcon />
+                    </ToolbarButton>
+                    <ToolbarButton onClick={exportVue}>
+                        <VueIcon />
+                    </ToolbarButton>
                 </Section>
             </div>
         </div>
     )
 }
 export default Toolbar
-
-register(Toolbar, "lingo3d-toolbar", ["buttons"])

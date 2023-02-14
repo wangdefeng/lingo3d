@@ -1,9 +1,4 @@
-import { appendableRoot } from "../api/core/Appendable"
 import Skybox from "../display/Skybox"
-import {
-    getAmbientOcclusion,
-    setAmbientOcclusion
-} from "../states/useAmbientOcclusion"
 import { getAntiAlias, setAntiAlias } from "../states/useAntiAlias"
 import {
     getBackgroundColor,
@@ -14,17 +9,14 @@ import {
     setBackgroundImage
 } from "../states/useBackgroundImage"
 import { getBloom, setBloom } from "../states/useBloom"
-import { getBloomRadius, setBloomRadius } from "../states/useBloomRadius"
-import { getBloomStrength, setBloomStrength } from "../states/useBloomStrength"
+import {
+    getBloomIntensity,
+    setBloomIntensity
+} from "../states/useBloomIntensity"
 import {
     getBloomThreshold,
     setBloomThreshold
 } from "../states/useBloomThreshold"
-import { getBokeh, setBokeh } from "../states/useBokeh"
-import { getBokehAperture, setBokehAperture } from "../states/useBokehAperture"
-import { getBokehFocus, setBokehFocus } from "../states/useBokehFocus"
-import { getBokehMaxBlur, setBokehMaxBlur } from "../states/useBokehMaxBlur"
-import { getCentripetal, setCentripetal } from "../states/useCentripetal"
 import { getDefaultLight, setDefaultLight } from "../states/useDefaultLight"
 import { getExposure, setExposure } from "../states/useExposure"
 import { getGravity, setGravity } from "../states/useGravity"
@@ -33,21 +25,10 @@ import {
     getGridHelperSize,
     setGridHelperSize
 } from "../states/useGridHelperSize"
-import { getLensBand, setLensBand } from "../states/useLensBand"
-import {
-    getLensDistortion,
-    setLensDistortion
-} from "../states/useLensDistortion"
-import { getLensIor, setLensIor } from "../states/useLensIor"
 import {
     getLogarithmicDepth,
     setLogarithmicDepth
 } from "../states/useLogarithmicDepth"
-import { getMotionBlur, setMotionBlur } from "../states/useMotionBlur"
-import {
-    getMotionBlurStrength,
-    setMotionBlurStrength
-} from "../states/useMotionBlurStrength"
 import { getOutlineColor, setOutlineColor } from "../states/useOutlineColor"
 import {
     getOutlineHiddenColor,
@@ -62,13 +43,14 @@ import {
     getOutlineStrength,
     setOutlineStrength
 } from "../states/useOutlineStrength"
-import {
-    getOutlineThickness,
-    setOutlineThickness
-} from "../states/useOutlineThickness"
 import { getPBR, setPBR } from "../states/usePBR"
 import { getPixelRatio, setPixelRatio } from "../states/usePixelRatio"
-import { getRepulsion, setRepulsion } from "../states/useRepulsion"
+import { getFps, setFps } from "../states/useFps"
+import { getSSR, setSSR } from "../states/useSSR"
+import { getSSRIntensity, setSSRIntensity } from "../states/useSSRIntensity"
+import { getSSAO, setSSAO } from "../states/useSSAO"
+import { getSSAOIntensity, setSSAOIntensity } from "../states/useSSAOIntensity"
+import { getBloomRadius, setBloomRadius } from "../states/useBloomRadius"
 import {
     getShadowDistance,
     setShadowDistance
@@ -77,6 +59,13 @@ import {
     getShadowResolution,
     setShadowResolution
 } from "../states/useShadowResolution"
+import { getEnvironment, setEnvironment } from "../states/useEnvironment"
+import { getStats, setStats } from "../states/useStats"
+import { appendableRoot } from "../api/core/collections"
+import { getBokeh, setBokeh } from "../states/useBokeh"
+import { getBokehScale, setBokehScale } from "../states/useBokehScale"
+import { getVignette, setVignette } from "../states/useVignette"
+import { getUILayer, setUILayer } from "../states/useUILayer"
 
 const defaultSkybox = new Skybox()
 appendableRoot.delete(defaultSkybox)
@@ -89,18 +78,11 @@ export default {
         setDefaultLight(value)
     },
 
-    get shadowResolution() {
-        return getShadowResolution()
+    get environment() {
+        return getEnvironment()
     },
-    set shadowResolution(value) {
-        setShadowResolution(value)
-    },
-
-    get shadowDistance() {
-        return getShadowDistance()
-    },
-    set shadowDistance(value) {
-        setShadowDistance(value)
+    set environment(value) {
+        setEnvironment(value)
     },
 
     get skybox() {
@@ -108,6 +90,13 @@ export default {
     },
     set skybox(value) {
         defaultSkybox.texture = value
+    },
+
+    get uiLayer() {
+        return getUILayer()
+    },
+    set uiLayer(value) {
+        setUILayer(value)
     },
 
     get gridHelper() {
@@ -124,25 +113,18 @@ export default {
         setGridHelperSize(value)
     },
 
+    get stats() {
+        return getStats()
+    },
+    set stats(value) {
+        setStats(value)
+    },
+
     get gravity() {
         return getGravity()
     },
     set gravity(value) {
         setGravity(value)
-    },
-
-    get repulsion() {
-        return getRepulsion()
-    },
-    set repulsion(value) {
-        setRepulsion(value)
-    },
-
-    get centripetal() {
-        return getCentripetal()
-    },
-    set centripetal(value) {
-        setCentripetal(value)
     },
 
     get antiAlias() {
@@ -159,6 +141,13 @@ export default {
         setPixelRatio(value)
     },
 
+    get fps() {
+        return getFps()
+    },
+    set fps(value) {
+        setFps(value)
+    },
+
     get logarithmicDepth() {
         return getLogarithmicDepth()
     },
@@ -173,11 +162,32 @@ export default {
         setExposure(value)
     },
 
+    get shadowResolution() {
+        return getShadowResolution()
+    },
+    set shadowResolution(value) {
+        setShadowResolution(value)
+    },
+
+    get shadowDistance() {
+        return getShadowDistance()
+    },
+    set shadowDistance(value) {
+        setShadowDistance(value)
+    },
+
     get pbr() {
         return getPBR()
     },
     set pbr(value) {
         setPBR(value)
+    },
+
+    get bokehScale() {
+        return getBokehScale()
+    },
+    set bokehScale(value) {
+        setBokehScale(value)
     },
 
     get bloom() {
@@ -187,18 +197,11 @@ export default {
         setBloom(value)
     },
 
-    get bloomStrength() {
-        return getBloomStrength()
+    get bloomIntensity() {
+        return getBloomIntensity()
     },
-    set bloomStrength(value) {
-        setBloomStrength(value)
-    },
-
-    get bloomRadius() {
-        return getBloomRadius()
-    },
-    set bloomRadius(value) {
-        setBloomRadius(value)
+    set bloomIntensity(value) {
+        setBloomIntensity(value)
     },
 
     get bloomThreshold() {
@@ -208,11 +211,39 @@ export default {
         setBloomThreshold(value)
     },
 
-    get ambientOcclusion() {
-        return getAmbientOcclusion()
+    get bloomRadius() {
+        return getBloomRadius()
     },
-    set ambientOcclusion(value) {
-        setAmbientOcclusion(value)
+    set bloomRadius(value) {
+        setBloomRadius(value)
+    },
+
+    get ssr() {
+        return getSSR()
+    },
+    set ssr(value) {
+        setSSR(value)
+    },
+
+    get ssrIntensity() {
+        return getSSRIntensity()
+    },
+    set ssrIntensity(value) {
+        setSSRIntensity(value)
+    },
+
+    get ssao() {
+        return getSSAO()
+    },
+    set ssao(value) {
+        setSSAO(value)
+    },
+
+    get ssaoIntensity() {
+        return getSSAOIntensity()
+    },
+    set ssaoIntensity(value) {
+        setSSAOIntensity(value)
     },
 
     get outlineColor() {
@@ -250,13 +281,6 @@ export default {
         setOutlineStrength(value)
     },
 
-    get outlineThickness() {
-        return getOutlineThickness()
-    },
-    set outlineThickness(value) {
-        setOutlineThickness(value)
-    },
-
     get bokeh() {
         return getBokeh()
     },
@@ -264,60 +288,11 @@ export default {
         setBokeh(value)
     },
 
-    get bokehAperture() {
-        return getBokehAperture()
+    get vignette() {
+        return getVignette()
     },
-    set bokehAperture(value) {
-        setBokehAperture(value)
-    },
-
-    get bokehFocus() {
-        return getBokehFocus()
-    },
-    set bokehFocus(value) {
-        setBokehFocus(value)
-    },
-
-    get bokehMaxBlur() {
-        return getBokehMaxBlur()
-    },
-    set bokehMaxBlur(value) {
-        setBokehMaxBlur(value)
-    },
-
-    get lensDistortion() {
-        return getLensDistortion()
-    },
-    set lensDistortion(val) {
-        setLensDistortion(val)
-    },
-
-    get lensIor() {
-        return getLensIor()
-    },
-    set lensIor(val) {
-        setLensIor(val)
-    },
-
-    get lensBand() {
-        return getLensBand()
-    },
-    set lensBand(val) {
-        setLensBand(val)
-    },
-
-    get motionBlur() {
-        return getMotionBlur()
-    },
-    set motionBlur(val) {
-        setMotionBlur(val)
-    },
-
-    get motionBlurStrength() {
-        return getMotionBlurStrength()
-    },
-    set motionBlurStrength(val) {
-        setMotionBlurStrength(val)
+    set vignette(value) {
+        setVignette(value)
     },
 
     get texture() {

@@ -1,45 +1,68 @@
-import { h } from "preact"
-import register from "preact-custom-element"
-import { preventTreeShake } from "@lincode/utils"
 import HotKey from "./HotKey"
-import { useCameraRendered, useEditorMounted } from "../states"
 import mainCamera from "../../engine/mainCamera"
 import { createPortal } from "preact/compat"
-import { container } from "../../engine/renderLoop/renderSetup"
-
-preventTreeShake(h)
+import useInitCSS from "../hooks/useInitCSS"
+import Spinner from "../component/Spinner"
+import InfoScreen from "./InfoScreen"
+import useSyncState from "../hooks/useSyncState"
+import { getCameraRendered } from "../../states/useCameraRendered"
+import { getLoadingUnpkgCount } from "../../states/useLoadingUnpkgCount"
+import { getPaused } from "../../states/usePaused"
+import useInitEditor from "../hooks/useInitEditor"
+import { overlayContainer } from "../../engine/renderLoop/renderSetup"
 
 const HUD = () => {
-    const [editorMounted] = useEditorMounted()
-    const [cameraRendered] = useCameraRendered()
+    useInitCSS()
+    useInitEditor()
+
+    const cameraRendered = useSyncState(getCameraRendered)
+    const loadingUnpkgCount = useSyncState(getLoadingUnpkgCount)
+    const paused = useSyncState(getPaused)
 
     return createPortal(
         <div
-            className="lingo3d-ui"
-            style={{
-                position: "absolute",
-                width: "100%",
-                height: "100%",
-                pointerEvents: "none",
-                padding: 10
-            }}
+            className="lingo3d-ui lingo3d-absfull"
+            style={{ pointerEvents: "none", padding: 10 }}
         >
-            {!!editorMounted && cameraRendered === mainCamera && (
+            <InfoScreen mounted={!!loadingUnpkgCount}>
+                <Spinner size={14} />
+                loading remote data
+            </InfoScreen>
+            <InfoScreen
+                mounted={paused}
+                style={{ background: "rgba(18, 19, 22, 0.75)" }}
+                fadeIn
+            >
+                paused
+            </InfoScreen>
+            {cameraRendered === mainCamera && (
                 <div style={{ opacity: 0.5 }}>
-                    <HotKey hotkey="W" hotkeyFunction="move forward" />
-                    <HotKey hotkey="S" hotkeyFunction="move backwards" />
-                    <HotKey hotkey="A" hotkeyFunction="move left" />
-                    <HotKey hotkey="D" hotkeyFunction="move right" />
-                    <HotKey hotkey="↑" hotkeyFunction="move up" />
-                    <HotKey hotkey="↓" hotkeyFunction="move down" />
-                    <HotKey hotkey="C" hotkeyFunction="center selected" />
-                    <HotKey hotkey="SHIFT" hotkeyFunction="Accelerate" />
+                    <HotKey hotkey="⇧" description="accelerate" />
+                    <HotKey hotkey="W" description="move forward" />
+                    <HotKey hotkey="S" description="move backwards" />
+                    <HotKey hotkey="A" description="move left" />
+                    <HotKey hotkey="D" description="move right" />
+                    <HotKey hotkey="↑" description="move up" />
+                    <HotKey hotkey="↓" description="move down" />
+                    <HotKey hotkey="C" description="center selected" />
+                    <HotKey hotkey="⌫" description="delete selected" />
+                    <div style={{ display: "flex", gap: 4 }}>
+                        <HotKey hotkey="⌘" />
+                        <HotKey hotkey="C" description="copy selected" />
+                    </div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                        <HotKey hotkey="⌘" />
+                        <HotKey hotkey="O" description="open folder" />
+                    </div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                        <HotKey hotkey="⌘" />
+                        <HotKey hotkey="S" description="save scene" />
+                    </div>
+                    <HotKey hotkey="G" description="toggle grid" />
                 </div>
             )}
         </div>,
-        container
+        overlayContainer
     )
 }
 export default HUD
-
-register(HUD, "lingo3d-hud")

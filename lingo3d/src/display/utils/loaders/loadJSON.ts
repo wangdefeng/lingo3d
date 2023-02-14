@@ -1,10 +1,10 @@
 import { assert, forceGet } from "@lincode/utils"
 import { FileLoader } from "three"
 import {
-    increaseLoadingCount,
-    decreaseLoadingCount
-} from "../../../states/useLoadingCount"
-import { handleProgress } from "./bytesLoaded"
+    decreaseLoadingUnpkgCount,
+    increaseLoadingUnpkgCount
+} from "../../../states/useLoadingUnpkgCount"
+import { handleProgress } from "./utils/bytesLoaded"
 
 const cache = new Map<string, Promise<Record<string, any> | Array<any>>>()
 const loader = new FileLoader()
@@ -15,23 +15,20 @@ export default (url: string) =>
         url,
         () =>
             new Promise<Record<string, any> | Array<any>>((resolve, reject) => {
-                increaseLoadingCount()
-
+                const unpkg = url.startsWith("https://unpkg.com/")
+                unpkg && increaseLoadingUnpkgCount()
                 loader.load(
                     url,
                     (data) => {
-                        decreaseLoadingCount()
-
                         try {
                             assert(typeof data === "string")
-                            resolve(Object.freeze(JSON.parse(data)))
+                            const parsed = JSON.parse(data)
+                            unpkg && decreaseLoadingUnpkgCount()
+                            resolve(parsed)
                         } catch {}
                     },
                     handleProgress(url),
-                    () => {
-                        decreaseLoadingCount()
-                        reject()
-                    }
+                    reject
                 )
             })
     )

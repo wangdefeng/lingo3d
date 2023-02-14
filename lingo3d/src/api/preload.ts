@@ -1,12 +1,18 @@
 import { getExtensionType } from "@lincode/filetypes"
-import { assertExhaustive, splitFileName } from "@lincode/utils"
 import {
     addLoadedBytesChangedEventListeners,
     removeLoadedBytesChangedEventListeners
-} from "../display/utils/loaders/bytesLoaded"
-import { lazyLoadFBX, lazyLoadGLTF } from "../display/utils/loaders/lazyLoad"
+} from "../display/utils/loaders/utils/bytesLoaded"
 import loadTexturePromise from "../display/utils/loaders/loadTexturePromise"
 import { getLoadingCount } from "../states/useLoadingCount"
+
+const preloadModelPromise = (src: string) =>
+    new Promise<void>(async (resolve) => {
+        const { default: Model } = await import("../display/Model")
+        const model = new Model(true)
+        model.src = src
+        model.onLoad = resolve
+    })
 
 export default async (
     urls: Array<string>,
@@ -24,7 +30,7 @@ export default async (
             totalBytes = parseFloat(total) * 1024 * 1024
         else if (total.endsWith("gb"))
             totalBytes = parseFloat(total) * 1024 * 1024 * 1024
-        else throw new Error("invalid preload total value: " + total)
+        else throw new Error("Invalid preload total value: " + total)
     }
 
     const handleLoadedBytesChanged = (bytes: number) => {
@@ -34,31 +40,10 @@ export default async (
     }
     addLoadedBytesChangedEventListeners(handleLoadedBytesChanged)
 
-    for (const url of urls) {
-        const filetype = getExtensionType(url)
-        if (!filetype) continue
-
-        switch (filetype) {
-            case "image":
-                promises.push(loadTexturePromise(url))
-                break
-
-            case "model":
-                const extension = splitFileName(url)[1]?.toLowerCase()
-                if (extension === "fbx")
-                    promises.push((await lazyLoadFBX()).default(url, false))
-                else if (extension === "gltf" || extension === "glb")
-                    promises.push((await lazyLoadGLTF()).default(url, false))
-                break
-
-            case "audio":
-            case "plainText":
-            case "scene":
-                break
-
-            default:
-                assertExhaustive(filetype)
-        }
+    for (const src of urls) {
+        const filetype = getExtensionType(src)
+        if (filetype === "image") promises.push(loadTexturePromise(src))
+        else if (filetype === "model") promises.push(preloadModelPromise(src))
     }
 
     await Promise.all(promises)

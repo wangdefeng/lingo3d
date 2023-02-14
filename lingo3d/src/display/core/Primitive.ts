@@ -1,42 +1,32 @@
 import { applyMixins } from "@lincode/utils"
-import { Mesh, MeshStandardMaterial, BufferGeometry } from "three"
-import ObjectManager from "./ObjectManager"
-import TexturedBasicMixin from "./mixins/TexturedBasicMixin"
-import TexturedStandardMixin from "./mixins/TexturedStandardMixin"
+import { Mesh, BufferGeometry } from "three"
+import TexturedStandardMixin, {
+    StandardMesh
+} from "./mixins/TexturedStandardMixin"
 import IPrimitive, {
     primitiveDefaults,
     primitiveSchema
 } from "../../interface/IPrimitive"
+import { standardMaterial } from "../utils/reusables"
+import MixinType from "./mixins/utils/MixinType"
+import PhysicsObjectManager from "./PhysicsObjectManager"
 
-abstract class Primitive extends ObjectManager<Mesh> implements IPrimitive {
+abstract class Primitive
+    extends PhysicsObjectManager<StandardMesh>
+    implements IPrimitive
+{
     public static defaults = primitiveDefaults
     public static schema = primitiveSchema
 
-    protected material: MeshStandardMaterial
-    protected transparent?: boolean
-
-    public constructor(geometry: BufferGeometry, transparent?: boolean) {
-        const material = new MeshStandardMaterial(
-            transparent ? { transparent: true } : undefined
-        )
-        const mesh = new Mesh(geometry, material)
+    public constructor(geometry: BufferGeometry) {
+        const mesh = new Mesh(geometry, standardMaterial)
         mesh.castShadow = true
         mesh.receiveShadow = true
         super(mesh)
-        this.material = material
-        this.transparent = transparent
-    }
-
-    public override dispose() {
-        if (this.done) return this
-        super.dispose()
-        this.material.dispose()
-        return this
     }
 }
 interface Primitive
-    extends ObjectManager<Mesh>,
-        TexturedBasicMixin,
-        TexturedStandardMixin {}
-applyMixins(Primitive, [TexturedStandardMixin, TexturedBasicMixin])
+    extends PhysicsObjectManager<StandardMesh>,
+        MixinType<TexturedStandardMixin> {}
+applyMixins(Primitive, [TexturedStandardMixin])
 export default Primitive

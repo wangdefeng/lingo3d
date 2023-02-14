@@ -1,25 +1,21 @@
-import { preventTreeShake, upperFirst } from "@lincode/utils"
-import { h } from "preact"
+import { upperFirst } from "@lincode/utils"
 import createObject from "../../api/serializer/createObject"
 import { GameObjectType } from "../../api/serializer/types"
-import { container } from "../../engine/renderLoop/renderSetup"
-import { emitSelectionTarget } from "../../events/onSelectionTarget"
-import { point2Vec } from "../../display/utils/vec2Point"
-import clientToWorld from "../../display/utils/clientToWorld"
+import SpotLight from "../../display/lights/SpotLight"
+import drag, { setDragImage } from "../utils/drag"
+import IconImage from "./IconImage"
 
-preventTreeShake(h)
+const setDraggingItem = drag<GameObjectType>((val) => {
+    const result = createObject(val)
 
-let draggingItem: string | undefined
-
-container.addEventListener("dragover", (e) => e.preventDefault())
-container.addEventListener("dragenter", (e) => e.preventDefault())
-container.addEventListener("drop", (e) => {
-    if (!draggingItem) return
-    const manager = createObject(draggingItem as GameObjectType)
-    manager.outerObject3d.position.copy(
-        point2Vec(clientToWorld(e.clientX, e.clientY))
-    )
-    emitSelectionTarget(manager)
+    if (result instanceof SpotLight) {
+        queueMicrotask(() => {
+            result.targetX = result.x
+            result.targetY = result.y - 100
+            result.targetZ = result.z
+        })
+    }
+    return result
 })
 
 type ObjectIconProps = {
@@ -30,8 +26,12 @@ type ObjectIconProps = {
 const ObjectIcon = ({ name, iconName = name }: ObjectIconProps) => {
     return (
         <div
-            onDragStart={() => (draggingItem = name)}
-            onDragEnd={() => (draggingItem = undefined)}
+            draggable
+            onDragStart={(e) => {
+                setDraggingItem(name as GameObjectType)
+                setDragImage(e)
+            }}
+            onDragEnd={() => setDraggingItem(undefined)}
             style={{
                 width: "50%",
                 display: "flex",
@@ -41,10 +41,7 @@ const ObjectIcon = ({ name, iconName = name }: ObjectIconProps) => {
                 paddingBottom: 20
             }}
         >
-            <img
-                style={{ width: 50, height: 50 }}
-                src={`https://unpkg.com/lingo3d-editor@1.0.2/assets/${iconName}.png`}
-            />
+            <IconImage iconName={iconName} />
             <div
                 style={{
                     marginTop: 6,

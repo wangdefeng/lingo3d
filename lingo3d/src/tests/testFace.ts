@@ -1,7 +1,5 @@
 import { PointLight, SkyLight, settings, Sky, Model } from ".."
 
-export default {}
-
 const model = new Model()
 model.src = "face.glb"
 model.scale = 5
@@ -27,6 +25,5 @@ light3.intensity = 0.5
 
 const sky = new Sky()
 
-settings.ambientOcclusion = true
 settings.bloom = true
-settings.bloomStrength = 0.1
+settings.bloomIntensity = 0.1

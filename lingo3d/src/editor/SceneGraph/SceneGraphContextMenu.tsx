@@ -1,163 +1,279 @@
-import { preventTreeShake } from "@lincode/utils"
-import { Fragment, h } from "preact"
-import { useEffect, useState } from "preact/hooks"
-import { Object3D } from "three"
-import Appendable from "../../api/core/Appendable"
-import Loaded from "../../display/core/Loaded"
-import { isMeshItem } from "../../display/core/MeshItem"
-import Dummy, { dummyTypeMap } from "../../display/Dummy"
-import { onSelectionTarget } from "../../events/onSelectionTarget"
-import { DUMMY_URL, YBOT_URL } from "../../globals"
-import { setSceneGraphExpanded } from "../../states/useSceneGraphExpanded"
-import { setSceneGraphTarget } from "../../states/useSceneGraphTarget"
+import { useEffect, useLayoutEffect, useState } from "preact/hooks"
+import {
+    emitSelectionTarget,
+    onSelectionTarget
+} from "../../events/onSelectionTarget"
 import {
     addSelectionFrozen,
-    clearSelectionFrozen
+    clearSelectionFrozen,
+    getSelectionFrozen,
+    removeSelectionFrozen
 } from "../../states/useSelectionFrozen"
+import ContextMenu from "../component/ContextMenu"
+import ContextMenuItem from "../component/ContextMenu/ContextMenuItem"
+import { Point } from "@lincode/math"
+import Timeline from "../../display/Timeline"
+import mousePosition from "../utils/mousePosition"
+import { getTimeline, setTimeline } from "../../states/useTimeline"
+import useSyncState from "../hooks/useSyncState"
+import { getSelectionTarget } from "../../states/useSelectionTarget"
+import { getTimelineData } from "../../states/useTimelineData"
+import { getMultipleSelectionTargets } from "../../states/useMultipleSelectionTargets"
+import search from "./utils/search"
+import createJoint from "./utils/createJoint"
+import JointBase from "../../display/core/JointBase"
+import PhysicsObjectManager from "../../display/core/PhysicsObjectManager"
+import selectAllJointed from "./utils/selectAllJointed"
+import SpriteSheet from "../../display/SpriteSheet"
 import downloadBlob from "../../api/files/downloadBlob"
-import ContextMenu from "../ContextMenu"
-import MenuItem from "../ContextMenu/MenuItem"
-import { useSelectionFrozen, useSelectionTarget } from "../states"
-
-preventTreeShake(h)
-
-const traverseUp = (obj: Object3D, expandedSet: Set<Object3D>) => {
-    expandedSet.add(obj)
-    const nextParent = obj.userData.manager?.parent?.outerObject3d ?? obj.parent
-    nextParent && traverseUp(nextParent, expandedSet)
-}
-
-const search = (n: string, target: Loaded | Appendable) => {
-    const name = n.toLowerCase()
-    let found: Object3D | undefined
-    if (target instanceof Loaded)
-        target.loadedGroup.traverse((item) => {
-            if (found) return
-            item.name.toLowerCase().includes(name) && (found = item)
-        })
-    else
-        target.outerObject3d.traverse((item) => {
-            if (found) return
-            item.name.toLowerCase().includes(name) && (found = item)
-        })
-    if (!found) return
-
-    const expandedSet = new Set<Object3D>()
-    traverseUp(found, expandedSet)
-    setSceneGraphExpanded(expandedSet)
-    setSceneGraphTarget(found)
-}
+import {
+    getSelectionFocus,
+    setSelectionFocus
+} from "../../states/useSelectionFocus"
+import MeshAppendable from "../../api/core/MeshAppendable"
+import { getSelectionNativeTarget } from "../../states/useSelectionNativeTarget"
+import { rightClickPtr } from "../../api/mouse"
 
 const SceneGraphContextMenu = () => {
-    const [data, setData] = useState<
-        { x: number; y: number; target: Appendable | undefined } | undefined
-    >(undefined)
-    const [showSearch, setShowSearch] = useState(false)
-    const [selectionTarget] = useSelectionTarget()
-    const [[selectionFrozen]] = useSelectionFrozen()
+    const [position, setPosition] = useState<
+        Point & { search?: boolean; createJoint?: boolean }
+    >()
+    const selectionTarget = useSyncState(getSelectionTarget)
+    const nativeTarget = useSyncState(getSelectionNativeTarget)
+    const [selectionFrozen] = useSyncState(getSelectionFrozen)
+    const [timelineData] = useSyncState(getTimelineData)
+    const timeline = useSyncState(getTimeline)
+    const [multipleSelectionTargets] = useSyncState(getMultipleSelectionTargets)
+    const selectionFocus = useSyncState(getSelectionFocus)
 
     useEffect(() => {
-        let [clientX, clientY] = [0, 0]
-        const cb = (e: MouseEvent) =>
-            ([clientX, clientY] = [e.clientX, e.clientY])
-        document.addEventListener("mousemove", cb)
-
-        const handle = onSelectionTarget(({ target, rightClick }) => {
-            rightClick && setData({ x: clientX, y: clientY, target })
-        })
+        const handle = onSelectionTarget(
+            () => rightClickPtr[0] && setPosition(mousePosition)
+        )
         return () => {
             handle.cancel()
-            document.removeEventListener("mousemove", cb)
         }
     }, [])
 
-    useEffect(() => {
-        !data && setShowSearch(false)
-    }, [data])
+    const [ready, setReady] = useState(false)
 
-    if (!data) return null
+    useLayoutEffect(() => {
+        setReady(false)
+        const timeout = setTimeout(() => setReady(true), 1)
+
+        return () => {
+            clearTimeout(timeout)
+        }
+    }, [selectionTarget, nativeTarget])
+
+    if (!position || !ready) return null
 
     return (
-        <ContextMenu data={data} setData={setData}>
-            {showSearch ? (
-                <input
-                    ref={(el) => el?.focus()}
-                    style={{ all: "unset", padding: 6 }}
-                    onKeyDown={(e) => {
-                        e.stopPropagation()
-                        if (e.key !== "Enter" && e.key !== "Escape") return
-                        e.key === "Enter" &&
-                            selectionTarget &&
-                            search(
-                                (e.target as HTMLInputElement).value,
-                                selectionTarget
-                            )
-                        setData(undefined)
-                    }}
-                />
+        <ContextMenu
+            position={position}
+            setPosition={setPosition}
+            input={position.search && "Child name"}
+            onInput={(value) =>
+                position.search &&
+                selectionTarget &&
+                search(value, selectionTarget)
+            }
+        >
+            {position.createJoint ? (
+                <>
+                    <ContextMenuItem
+                        onClick={() => {
+                            createJoint("fixedJoint")
+                            setPosition(undefined)
+                        }}
+                    >
+                        Fixed joint
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                        onClick={() => {
+                            createJoint("sphericalJoint")
+                            setPosition(undefined)
+                        }}
+                    >
+                        Spherical joint
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                        onClick={() => {
+                            createJoint("revoluteJoint")
+                            setPosition(undefined)
+                        }}
+                    >
+                        Revolute joint
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                        onClick={() => {
+                            createJoint("prismaticJoint")
+                            setPosition(undefined)
+                        }}
+                    >
+                        Prismatic joint
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                        onClick={() => {
+                            createJoint("d6Joint")
+                            setPosition(undefined)
+                        }}
+                    >
+                        D6 joint
+                    </ContextMenuItem>
+                </>
             ) : (
-                <Fragment>
-                    {data.target && (
-                        <Fragment>
-                            <MenuItem
-                                setData={undefined}
-                                onClick={() => setShowSearch(true)}
-                            >
-                                Search children
-                            </MenuItem>
-
-                            {/* {selectionTarget instanceof Dummy && (
-                                <MenuItem onClick={() => {
-                                    setRetargetBones(selectionTarget)
-                                    setSelectionLocked(true)
-                                }}>
-                                    Convert to Mixamo
-                                </MenuItem>
-                            )} */}
-
-                            <MenuItem
-                                setData={setData}
-                                onClick={() =>
-                                    isMeshItem(selectionTarget) &&
-                                    addSelectionFrozen(selectionTarget)
-                                }
-                            >
-                                Freeze selection
-                            </MenuItem>
-
-                            {selectionTarget instanceof Dummy &&
-                                dummyTypeMap.has(selectionTarget) && (
-                                    <MenuItem
-                                        setData={setData}
-                                        onClick={async () => {
-                                            const url =
-                                                dummyTypeMap.get(
-                                                    selectionTarget
-                                                ) === "dummy"
-                                                    ? YBOT_URL
-                                                    : DUMMY_URL +
-                                                      "readyplayerme/reference.fbx"
-
-                                            const res = await fetch(url)
+                <>
+                    {multipleSelectionTargets.size ? (
+                        <ContextMenuItem
+                            disabled={multipleSelectionTargets.size === 1}
+                            onClick={() => {
+                                // createJoint("d6Joint")
+                                // setPosition(undefined)
+                                setPosition({ ...position, createJoint: true })
+                            }}
+                        >
+                            Create joint
+                        </ContextMenuItem>
+                    ) : selectionTarget instanceof Timeline ? (
+                        <ContextMenuItem
+                            disabled={selectionTarget === timeline}
+                            onClick={() => {
+                                setTimeline(selectionTarget)
+                                setPosition(undefined)
+                            }}
+                        >
+                            {selectionTarget === timeline
+                                ? "Already editing"
+                                : "Edit timeline"}
+                        </ContextMenuItem>
+                    ) : (
+                        selectionTarget &&
+                        !nativeTarget && (
+                            <>
+                                {selectionTarget instanceof SpriteSheet && (
+                                    <ContextMenuItem
+                                        onClick={() => {
                                             downloadBlob(
-                                                "model.fbx",
-                                                await res.blob()
+                                                "spriteSheet.png",
+                                                selectionTarget.toBlob()
                                             )
+                                            setPosition(undefined)
                                         }}
                                     >
-                                        Download for Mixamo
-                                    </MenuItem>
+                                        Save image
+                                    </ContextMenuItem>
                                 )}
-                        </Fragment>
+
+                                <ContextMenuItem
+                                    onClick={() =>
+                                        setPosition({
+                                            ...position,
+                                            search: true
+                                        })
+                                    }
+                                >
+                                    Search children
+                                </ContextMenuItem>
+
+                                {selectionTarget instanceof MeshAppendable && (
+                                    <ContextMenuItem
+                                        disabled={!!selectionFocus}
+                                        onClick={() => {
+                                            setSelectionFocus(
+                                                selectionTarget as any
+                                            )
+                                            emitSelectionTarget(undefined)
+                                            setPosition(undefined)
+                                        }}
+                                    >
+                                        Enter group
+                                    </ContextMenuItem>
+                                )}
+
+                                <ContextMenuItem
+                                    disabled={
+                                        !timelineData ||
+                                        selectionTarget.uuid in timelineData
+                                    }
+                                    onClick={() => {
+                                        timeline?.mergeData({
+                                            [selectionTarget.uuid]: {}
+                                        })
+                                        setPosition(undefined)
+                                    }}
+                                >
+                                    {timelineData &&
+                                    selectionTarget.uuid in timelineData
+                                        ? "Already in timeline"
+                                        : "Add to timeline"}
+                                </ContextMenuItem>
+
+                                <ContextMenuItem
+                                    disabled={
+                                        !(
+                                            selectionTarget instanceof
+                                                JointBase ||
+                                            selectionTarget instanceof
+                                                PhysicsObjectManager
+                                        )
+                                    }
+                                    onClick={() => {
+                                        selectAllJointed(
+                                            selectionTarget instanceof JointBase
+                                                ? selectionTarget.fromManager ??
+                                                      selectionTarget.toManager
+                                                : selectionTarget instanceof
+                                                  PhysicsObjectManager
+                                                ? selectionTarget
+                                                : undefined
+                                        )
+                                        setPosition(undefined)
+                                    }}
+                                >
+                                    Select all jointed
+                                </ContextMenuItem>
+
+                                <ContextMenuItem
+                                    onClick={() => {
+                                        selectionFrozen.has(selectionTarget)
+                                            ? removeSelectionFrozen(
+                                                  selectionTarget
+                                              )
+                                            : addSelectionFrozen(
+                                                  selectionTarget
+                                              )
+                                        setPosition(undefined)
+                                    }}
+                                >
+                                    {selectionFrozen.has(selectionTarget)
+                                        ? "Unfreeze selection"
+                                        : "Freeze selection"}
+                                </ContextMenuItem>
+                            </>
+                        )
                     )}
-                    <MenuItem
-                        setData={setData}
+                    <ContextMenuItem
                         disabled={!selectionFrozen.size}
-                        onClick={() => clearSelectionFrozen()}
+                        onClick={() => {
+                            clearSelectionFrozen()
+                            setPosition(undefined)
+                        }}
                     >
                         Unfreeze all
-                    </MenuItem>
-                </Fragment>
+                    </ContextMenuItem>
+
+                    <ContextMenuItem
+                        disabled={!selectionFocus}
+                        onClick={() => {
+                            setSelectionFocus(undefined)
+                            emitSelectionTarget(undefined)
+                            setPosition(undefined)
+                        }}
+                    >
+                        Exit group
+                    </ContextMenuItem>
+                </>
             )}
         </ContextMenu>
     )

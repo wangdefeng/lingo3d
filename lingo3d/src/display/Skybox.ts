@@ -1,13 +1,12 @@
 import {
-    getSkyboxStack,
     pullSkyboxStack,
     pushSkyboxStack,
-    setSkyboxStack
+    refreshSkyboxStack
 } from "../states/useSkyboxStack"
 import ISkybox, { skyboxDefaults, skyboxSchema } from "../interface/ISkybox"
-import EventLoopItem from "../api/core/EventLoopItem"
+import Appendable from "../api/core/Appendable"
 
-export default class Skybox extends EventLoopItem implements ISkybox {
+export default class Skybox extends Appendable implements ISkybox {
     public static componentName = "skybox"
     public static defaults = skyboxDefaults
     public static schema = skyboxSchema
@@ -17,11 +16,9 @@ export default class Skybox extends EventLoopItem implements ISkybox {
         pushSkyboxStack(this)
     }
 
-    public override dispose() {
-        if (this.done) return this
-        super.dispose()
+    protected override _dispose() {
+        super._dispose()
         pullSkyboxStack(this)
-        return this
     }
 
     private _texture?: string | Array<string>
@@ -30,6 +27,6 @@ export default class Skybox extends EventLoopItem implements ISkybox {
     }
     public set texture(value) {
         this._texture = value
-        setSkyboxStack([...getSkyboxStack()])
+        refreshSkyboxStack()
     }
 }

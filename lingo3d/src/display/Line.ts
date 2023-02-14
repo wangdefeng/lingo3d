@@ -3,17 +3,15 @@ import { Reactive } from "@lincode/reactivity"
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry"
 import { Line2 } from "three/examples/jsm/lines/Line2"
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial"
-import EventLoopItem from "../api/core/EventLoopItem"
-import { scaleDown, scaleUp } from "../engine/constants"
-import {
-    addBloom,
-    deleteBloom
-} from "../engine/renderLoop/effectComposer/selectiveBloomPass/renderSelectiveBloom"
 import scene from "../engine/scene"
+import {
+    addSelectiveBloom,
+    deleteSelectiveBloom
+} from "../engine/renderLoop/effectComposer/selectiveBloomEffect"
+import Appendable from "../api/core/Appendable"
+import { CM2M } from "../globals"
 
-export default class Line extends EventLoopItem {
-    private material = new LineMaterial({ linewidth: 0.001 })
-
+export default class Line extends Appendable {
     public constructor() {
         super()
 
@@ -22,33 +20,31 @@ export default class Line extends EventLoopItem {
             if (!from || !to) return
 
             const geometry = new LineGeometry().setPositions([
-                from.x * scaleDown,
-                from.y * scaleDown,
-                from.z * scaleDown,
-                to.x * scaleDown,
-                to.y * scaleDown,
-                to.z * scaleDown
+                from.x * CM2M,
+                from.y * CM2M,
+                from.z * CM2M,
+                to.x * CM2M,
+                to.y * CM2M,
+                to.z * CM2M
             ])
-            const line: any = new Line2(geometry, this.material)
-
+            const material = new LineMaterial({
+                linewidth: this._thickness * CM2M
+            })
+            const line = new Line2(geometry, material)
             scene.add(line)
-            bloom && addBloom(line)
+
+            bloom && addSelectiveBloom(line)
 
             return () => {
                 scene.remove(line)
-                deleteBloom(line)
+                geometry.dispose()
+                material.dispose()
+                bloom && deleteSelectiveBloom(line)
             }
-        }, [this.refresh.get])
+        }, [this.refreshState.get])
     }
 
-    public override dispose() {
-        if (this.done) return this
-        super.dispose()
-        this.material.dispose()
-        return this
-    }
-
-    private refresh = new Reactive({})
+    private refreshState = new Reactive({})
 
     private _bloom?: boolean
     public get bloom() {
@@ -56,7 +52,7 @@ export default class Line extends EventLoopItem {
     }
     public set bloom(value) {
         this._bloom = value
-        this.refresh.set({})
+        this.refreshState.set({})
     }
 
     private _from?: Point3d
@@ -65,7 +61,7 @@ export default class Line extends EventLoopItem {
     }
     public set from(value) {
         this._from = value
-        this.refresh.set({})
+        this.refreshState.set({})
     }
 
     private _to?: Point3d
@@ -74,13 +70,15 @@ export default class Line extends EventLoopItem {
     }
     public set to(value) {
         this._to = value
-        this.refresh.set({})
+        this.refreshState.set({})
     }
 
+    private _thickness = 1
     public get thickness() {
-        return this.material.linewidth * scaleUp
+        return this._thickness
     }
-    public set thickness(val) {
-        this.material.linewidth = val * scaleDown
+    public set thickness(value) {
+        this._thickness = value
+        this.refreshState.set({})
     }
 }

@@ -4,14 +4,12 @@ import { PerspectiveCamera } from "three"
 import { setCameraDistance } from "../../states/useCameraDistance"
 import { getViewportSize } from "../../states/useViewportSize"
 import mainCamera from "../mainCamera"
-import { getVR } from "../../states/useVR"
+import { getWebXR } from "../../states/useWebXR"
 import { getResolution } from "../../states/useResolution"
 import {
     getCameraRendered,
     updateCameraAspect
 } from "../../states/useCameraRendered"
-
-export default {}
 
 const getZ = (height: number, camera: PerspectiveCamera) =>
     Math.abs((height * 0.5) / Math.cos(camera.fov * 0.6 * deg2Rad))
@@ -39,4 +37,4 @@ createEffect(() => {
         setCameraDistance(getZ(vh, mainCamera))
         // Object.assign(referenceOutline.style, { width: size1.width + "px", height: size1.height + "px" })
     }
-}, [getResolution, getViewportSize, getCameraRendered, getVR])
+}, [getResolution, getViewportSize, getCameraRendered, getWebXR])

@@ -1,6 +1,4 @@
-import { Cube, Cylinder, pillShape, Torus } from "../index"
-
-export default {}
+import { Cube, Cylinder, Torus } from "../index"
 
 const pole2 = new Cylinder()
 pole2.scaleX = pole2.scaleZ = 0.2
@@ -17,13 +15,11 @@ torus.physics = true
 const pole = new Cylinder()
 pole.scaleX = pole.scaleZ = 0.2
 pole.physics = true
-pole.physicsShape = pillShape
 
 const floor = new Cube()
 floor.width = floor.depth = 9999
 floor.y = -100
-floor.physics = true
-floor.mass = 0
+floor.physics = "map"
 floor.color = "blue"
 
 torus.onMouseOver = () => {

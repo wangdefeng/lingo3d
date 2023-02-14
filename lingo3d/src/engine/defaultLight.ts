@@ -1,57 +1,36 @@
-import { Cancellable } from "@lincode/promiselikes"
 import { createEffect } from "@lincode/reactivity"
-import { last } from "@lincode/utils"
-import {
-    EquirectangularReflectionMapping,
-    WebGLCubeRenderTarget,
-    CubeCamera
-} from "three"
-import { appendableRoot } from "../api/core/Appendable"
+import { EquirectangularReflectionMapping } from "three"
 import Environment from "../display/Environment"
-import getWorldPosition from "../display/utils/getWorldPosition"
 import loadTexture from "../display/utils/loaders/loadTexture"
-import { onBeforeRender } from "../events/onBeforeRender"
-import { TEXTURES_URL } from "../globals"
-import { getCameraRendered } from "../states/useCameraRendered"
-import { getDefaultLight } from "../states/useDefaultLight"
+import { environmentPreset } from "../interface/IEnvironment"
+import { getEnvironment } from "../states/useEnvironment"
 import { getEnvironmentStack } from "../states/useEnvironmentStack"
 import { getRenderer } from "../states/useRenderer"
 import scene from "./scene"
-
-export default {}
+import { appendableRoot } from "../api/core/collections"
+import unsafeGetValue from "../utils/unsafeGetValue"
+import { TEXTURES_URL } from "../api/assetsPath"
+import("../display/lights/DefaultSkyLight")
 
 const defaultEnvironment = new Environment()
+defaultEnvironment.texture = undefined
+defaultEnvironment.helper = false
 appendableRoot.delete(defaultEnvironment)
 
-const cubeRenderTarget = new WebGLCubeRenderTarget(256)
-const cubeCamera = new CubeCamera(1, 100000, cubeRenderTarget)
+export const environmentToUrl = (value: string) =>
+    value in environmentPreset
+        ? TEXTURES_URL() + unsafeGetValue(environmentPreset, value)
+        : value
 
 createEffect(() => {
-    const environment = last(getEnvironmentStack())?.texture
-    if (!environment) return
+    const environment = getEnvironmentStack().at(-1)
+    const renderer = getRenderer()
 
-    if (environment === "dynamic") {
-        const handle = onBeforeRender(() => {
-            const camera = getCameraRendered()
-            const renderer = getRenderer()!
+    if (!environment?.texture || !renderer) return
 
-            cubeCamera.position.copy(getWorldPosition(camera))
-            cubeCamera.matrixWorld.copy(camera.matrixWorld)
-
-            cubeCamera.update(renderer, scene)
-            renderer.render(scene, camera)
-        })
-
-        scene.environment = cubeRenderTarget.texture
-
-        return () => {
-            handle.cancel()
-            scene.environment = null
-        }
-    }
     let proceed = true
     const texture = loadTexture(
-        environment === "studio" ? TEXTURES_URL + "studio.jpg" : environment,
+        environmentToUrl(environment.texture),
         () => proceed && (scene.environment = texture)
     )
     texture.mapping = EquirectangularReflectionMapping
@@ -60,47 +39,14 @@ createEffect(() => {
         proceed = false
         scene.environment = null
     }
-}, [getEnvironmentStack])
+}, [getEnvironmentStack, getRenderer])
 
 createEffect(() => {
-    const defaultLight = getDefaultLight()
-    if (!defaultLight) return
+    const environment = getEnvironment()
+    if (!environment) return
 
-    if (typeof defaultLight === "string" && defaultLight !== "default") {
-        if (defaultLight === "dynamic") defaultEnvironment.texture = "dynamic"
-        else defaultEnvironment.texture = defaultLight
-
-        return () => {
-            defaultEnvironment.texture = undefined
-        }
-    }
-
-    const handle = new Cancellable()
-
-    import("../display/lights/SkyLight").then((module) => {
-        const SkyLight = module.default
-        const light = new SkyLight()
-        appendableRoot.delete(light)
-
-        light.helper = false
-        light.groundColor = "#666666"
-
-        handle.then(() => light.dispose())
-    })
-    import("../display/lights/DirectionalLight").then((module) => {
-        const DirectionalLight = module.default
-        const light = new DirectionalLight()
-        appendableRoot.delete(light)
-
-        light.helper = false
-        light.y = 1000
-        light.z = 1000
-        light.intensity = 0.5
-
-        handle.then(() => light.dispose())
-    })
-
+    defaultEnvironment.texture = environment
     return () => {
-        handle.cancel()
+        defaultEnvironment.texture = undefined
     }
-}, [getDefaultLight])
+}, [getEnvironment])

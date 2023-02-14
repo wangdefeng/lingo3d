@@ -2,7 +2,7 @@ import IPositioned, {
     positionedDefaults,
     positionedSchema
 } from "./IPositioned"
-import Defaults from "./utils/Defaults"
+import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 import Nullable from "./utils/Nullable"
 
@@ -35,8 +35,7 @@ export const audioSchema: Required<ExtractProps<IAudio>> = {
     rolloffFactor: Number
 }
 
-export const audioDefaults: Defaults<IAudio> = {
-    ...positionedDefaults,
+export const audioDefaults = extendDefaults<IAudio>([positionedDefaults], {
     src: undefined,
     autoplay: false,
     paused: false,
@@ -48,4 +47,4 @@ export const audioDefaults: Defaults<IAudio> = {
     maxDistance: 10000,
     distanceModel: "inverse",
     rolloffFactor: 1
-}
+})

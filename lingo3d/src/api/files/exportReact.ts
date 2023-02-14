@@ -10,7 +10,7 @@ const serializeReact = (nodes: Array<SceneGraphNode>) => {
 
         let props = ""
         for (const [key, value] of Object.entries(node)) {
-            if (key === "children" || key === "type" || !value) continue
+            if (key === "children" || key === "type") continue
 
             if (typeof value === "string") props += ` ${key}="${value}"`
             else if (value === true) props += ` ${key}`
@@ -34,15 +34,13 @@ export default async () => {
     const parser = (await import("prettier/parser-babel")).default
 
     const code = prettier.format(
-        `
-        const App = () => {
+        `const App = () => {
             return (
                 <World>
-                    ${serializeReact(serialize())}
+                    ${serializeReact(await serialize())}
                 </World>
             )
-        }
-    `,
+        }`,
         { parser: "babel", plugins: [parser] }
     )
 

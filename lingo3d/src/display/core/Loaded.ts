@@ -1,29 +1,34 @@
 import { Group, Mesh, Object3D } from "three"
 import { boxGeometry } from "../primitives/Cube"
 import { wireframeMaterial } from "../utils/reusables"
-import ObjectManager from "./ObjectManager"
 import ILoaded from "../../interface/ILoaded"
+import Reresolvable from "./utils/Reresolvable"
+import toResolvable from "../utils/toResolvable"
+import { Point3d } from "@lincode/math"
 import {
     addOutline,
     deleteOutline
-} from "../../engine/renderLoop/effectComposer/outlinePass"
+} from "../../engine/renderLoop/effectComposer/outlineEffect"
 import {
-    addBloom,
-    deleteBloom
-} from "../../engine/renderLoop/effectComposer/selectiveBloomPass/renderSelectiveBloom"
-import Reresolvable from "./utils/Reresolvable"
-import { Cancellable } from "@lincode/promiselikes"
-import toResolvable from "../utils/toResolvable"
-import MeshItem from "./MeshItem"
+    addSelectiveBloom,
+    deleteSelectiveBloom
+} from "../../engine/renderLoop/effectComposer/selectiveBloomEffect"
+import { PhysicsOptions } from "../../interface/IPhysicsObjectManager"
+import cookTrimeshGeometry from "./PhysicsObjectManager/physx/cookTrimeshGeometry"
+import { StandardMesh } from "./mixins/TexturedStandardMixin"
+import MeshAppendable from "../../api/core/MeshAppendable"
+import { physxPtr } from "./PhysicsObjectManager/physx/physxPtr"
+import PhysicsObjectManager from "./PhysicsObjectManager"
 
 export default abstract class Loaded<T = Object3D>
-    extends ObjectManager<Mesh>
+    extends PhysicsObjectManager<StandardMesh>
     implements ILoaded
 {
     public loadedGroup = new Group()
+    public loadedObject3d?: Object3D
 
-    public constructor() {
-        super(new Mesh(boxGeometry, wireframeMaterial))
+    public constructor(unmounted?: boolean) {
+        super(new Mesh(boxGeometry, wireframeMaterial), unmounted)
         this.outerObject3d.add(this.loadedGroup)
     }
 
@@ -31,7 +36,7 @@ export default abstract class Loaded<T = Object3D>
 
     protected abstract load(src: string): Promise<T>
 
-    protected abstract resolveLoaded(data: T): Group
+    protected abstract resolveLoaded(data: T, src: string): Group
 
     protected _src?: string
     public get src() {
@@ -39,15 +44,19 @@ export default abstract class Loaded<T = Object3D>
     }
     public set src(val) {
         this._src = val
-        this.loaded.done && this.loadedGroup.clear()
-
+        if (this.loaded.done) {
+            this.loadedGroup.clear()
+            this.loadedObject3d = undefined
+        }
         this.cancelHandle(
             "src",
             val &&
                 (() =>
                     toResolvable(this.load(val)).then((loaded) => {
-                        const loadedObject3d = this.resolveLoaded(loaded)
-                        this.loadedGroup.add(loadedObject3d)
+                        const loadedObject3d = this.resolveLoaded(loaded, val)
+                        this.loadedGroup.add(
+                            (this.loadedObject3d = loadedObject3d)
+                        )
                         this.loaded.resolve(loadedObject3d)
 
                         this.object3d.visible = !!this._boxVisible
@@ -150,12 +159,10 @@ export default abstract class Loaded<T = Object3D>
     }
 
     public override get frustumCulled() {
-        return this.outerObject3d.frustumCulled
+        return super.frustumCulled
     }
     public override set frustumCulled(val) {
-        if (this.outerObject3d.frustumCulled === val) return
         this.outerObject3d.frustumCulled = val
-
         this.cancelHandle("frustumCulled", () =>
             this.loaded.then(() => {
                 super.frustumCulled = val
@@ -163,21 +170,33 @@ export default abstract class Loaded<T = Object3D>
         )
     }
 
-    public override get physics() {
-        return this._physics ?? false
+    public override get castShadow() {
+        return super.castShadow
     }
-    public override set physics(val) {
-        if (this._physics === val) return
-        this._physics = val
-
-        const handle = this.cancelHandle("physics", () =>
+    public override set castShadow(val) {
+        //@ts-ignore
+        this._castShadow = val
+        this.cancelHandle("castShadow", () =>
             this.loaded.then(() => {
-                this.initPhysics(val, handle!)
+                super.castShadow = val
             })
         )
     }
 
-    private _boxVisible?: boolean
+    public override get receiveShadow() {
+        return super.receiveShadow
+    }
+    public override set receiveShadow(val) {
+        //@ts-ignore
+        this._receiveShadow = val
+        this.cancelHandle("receiveShadow", () =>
+            this.loaded.then(() => {
+                super.receiveShadow = val
+            })
+        )
+    }
+
+    protected _boxVisible?: boolean
     public get boxVisible() {
         return this._boxVisible ?? this.object3d.visible
     }
@@ -186,12 +205,11 @@ export default abstract class Loaded<T = Object3D>
         this.object3d.visible = val
     }
 
-    private _outline?: boolean
     public override get outline() {
-        return !!this._outline
+        return super.outline
     }
     public override set outline(val) {
-        if (this._outline === val) return
+        //@ts-ignore
         this._outline = val
 
         this.cancelHandle("outline", () =>
@@ -206,62 +224,51 @@ export default abstract class Loaded<T = Object3D>
         )
     }
 
-    private _bloom?: boolean
     public override get bloom() {
-        return !!this._bloom
+        return super.bloom
     }
     public override set bloom(val) {
-        if (this._bloom === val) return
+        //@ts-ignore
         this._bloom = val
 
         this.cancelHandle("bloom", () =>
             this.loaded.then((loaded) => {
                 if (!val) return
 
-                addBloom(loaded)
+                addSelectiveBloom(loaded)
                 return () => {
-                    deleteBloom(loaded)
+                    deleteSelectiveBloom(loaded)
                 }
             })
         )
     }
 
-    private managerSet?: boolean
-    protected override addToRaycastSet(set: Set<Object3D>) {
-        const handle = new Cancellable()
-
-        queueMicrotask(() => {
-            if (handle.done) return
-
-            if (this._physics === "map" || this._physics === "map-debug")
-                handle.watch(
-                    this.loaded.then((loaded) => {
-                        if (!this.managerSet) {
-                            this.managerSet = true
-                            loaded.traverse(
-                                (child) => (child.userData.manager ??= this)
-                            )
-                        }
-                        set.add(loaded)
-                        return () => {
-                            set.delete(loaded)
-                        }
-                    })
-                )
-            else handle.watch(super.addToRaycastSet(set))
-        })
-        return handle
-    }
-
-    protected override refreshFactors() {
-        this.cancelHandle("refreshFactorsLoaded", () =>
-            this.loaded.then(() => void super.refreshFactors())
+    public override placeAt(object: MeshAppendable | Point3d | string) {
+        this.cancelHandle("placeAt", () =>
+            this.loaded.then(() => void super.placeAt(object))
         )
     }
-}
 
-export const getLoadedObject = (item: Loaded | MeshItem) => {
-    if ("loadedGroup" in item) return item.loadedGroup
-    if ("object3d" in item) return item.object3d
-    return item.outerObject3d
+    public override refreshPhysics() {
+        this.cancelHandle("refreshPhysics", () =>
+            this.loaded.then(() => super.refreshPhysics())
+        )
+    }
+
+    protected override getPxShape(mode: PhysicsOptions, actor: any): any {
+        if (mode === "map") {
+            const { material, shapeFlags, PxRigidActorExt, pxFilterData } =
+                physxPtr[0]
+
+            const shape = PxRigidActorExt.prototype.createExclusiveShape(
+                actor,
+                cookTrimeshGeometry(this._src, this),
+                material,
+                shapeFlags
+            )
+            shape.setSimulationFilterData(pxFilterData)
+            return shape
+        }
+        return super.getPxShape(mode, actor)
+    }
 }

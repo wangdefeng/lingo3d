@@ -1,32 +1,95 @@
-import { Object3D, PerspectiveCamera, Quaternion } from "three"
-import { camNear, camFar } from "../../engine/constants"
+import { Object3D, PerspectiveCamera } from "three"
 import scene from "../../engine/scene"
-import { onBeforeRender } from "../../events/onBeforeRender"
 import ICharacterCamera, {
     characterCameraDefaults,
     characterCameraSchema,
     LockTargetRotationValue
 } from "../../interface/ICharacterCamera"
-import { getSelectionTarget } from "../../states/useSelectionTarget"
-import { getTransformControlsDragging } from "../../states/useTransformControlsDragging"
-import OrbitCameraBase from "./OrbitCameraBase"
-import { euler, halfPi, quaternion } from "../utils/reusables"
-import MeshItem from "./MeshItem"
-import { getLoadedObject } from "./Loaded"
+import { euler, quaternion } from "../utils/reusables"
+import { FAR, NEAR, PI } from "../../globals"
+import fpsAlpha from "../utils/fpsAlpha"
+import { positionChangedXZ } from "../utils/trackObject"
+import CameraBase, { updateAngleSystem } from "./CameraBase"
+import MeshAppendable from "../../api/core/MeshAppendable"
+import renderSystem from "../../utils/renderSystem"
+import getWorldPosition from "../utils/getWorldPosition"
 import getWorldQuaternion from "../utils/getWorldQuaternion"
-import { getEditorModeComputed } from "../../states/useEditorModeComputed"
+import renderSystemWithData from "../../utils/renderSystemWithData"
+import { isPositionedManager } from "./PositionedManager"
 
-const dirObj = new Object3D()
+export const [addCharacterCameraSystem, deleteCharacterCameraSystem] =
+    renderSystem((self: CharacterCamera) => {
+        self.camera.position.copy(getWorldPosition(self.object3d))
+        self.camera.quaternion.copy(getWorldQuaternion(self.object3d))
+    })
+
+const rotateTarget = (
+    self: CharacterCamera,
+    target: MeshAppendable,
+    slerp: boolean
+) => {
+    euler.setFromQuaternion(self.midObject3d.quaternion)
+    euler.x = 0
+    euler.z = 0
+    euler.y += PI
+
+    if (slerp) {
+        quaternion.setFromEuler(euler)
+        target.quaternion.slerp(quaternion, fpsAlpha(0.1))
+        return
+    }
+    target.outerObject3d.setRotationFromEuler(euler)
+}
+
+const followTargetRotation = (
+    self: CharacterCamera,
+    target: MeshAppendable,
+    slerp: boolean
+) => {
+    euler.setFromQuaternion(target.quaternion)
+    euler.y += PI
+
+    if (slerp) {
+        quaternion.setFromEuler(euler)
+        self.midObject3d.quaternion.slerp(quaternion, fpsAlpha(0.1))
+    } else self.midObject3d.setRotationFromEuler(euler)
+
+    updateAngleSystem(self)
+}
+
+const [addCameraSystem, deleteCameraSystem] = renderSystemWithData(
+    (self: CharacterCamera, { found }: { found: MeshAppendable }) => {
+        self.position.copy(found.position)
+
+        if (!self.lockTargetRotation) return
+
+        if (self.lockTargetRotation === "follow") {
+            followTargetRotation(self, found, false)
+            return
+        }
+        if (self.lockTargetRotation === "dynamic-lock") {
+            positionChangedXZ(found.outerObject3d) &&
+                rotateTarget(self, found, true)
+            return
+        }
+        if (self.lockTargetRotation === "dynamic-follow") {
+            positionChangedXZ(found.outerObject3d) &&
+                followTargetRotation(self, found, true)
+            return
+        }
+        rotateTarget(self, found, false)
+    }
+)
 
 export default class CharacterCamera
-    extends OrbitCameraBase
+    extends CameraBase
     implements ICharacterCamera
 {
     public static defaults = characterCameraDefaults
     public static schema = characterCameraSchema
 
     public constructor() {
-        super(new PerspectiveCamera(75, 1, camNear, camFar))
+        super(new PerspectiveCamera(75, 1, NEAR, FAR))
 
         const midObject3d = (this.midObject3d = new Object3D())
         this.outerObject3d.add(midObject3d)
@@ -37,130 +100,40 @@ export default class CharacterCamera
         this.then(() => scene.remove(cam))
 
         this.createEffect(() => {
-            const target = this.targetState.get()
-            if (!target) return
-
-            if ("frustumCulled" in target) target.frustumCulled = false
-        }, [this.targetState.get])
-
-        const followTargetRotation = (target: MeshItem, slerp: boolean) => {
-            euler.setFromQuaternion(target.outerObject3d.quaternion)
-            euler.y += Math.PI
-
-            if (slerp) {
-                quaternion.setFromEuler(euler)
-                midObject3d.quaternion.slerp(quaternion, 0.1)
-            } else midObject3d.setRotationFromEuler(euler)
-
-            this.updateAngle()
-        }
-
-        const lockTargetRotation = (
-            target: MeshItem,
-            slerp: boolean,
-            quat: Quaternion | undefined
-        ) => {
-            euler.setFromQuaternion(this.midObject3d.quaternion)
-            euler.x = 0
-            euler.z = 0
-            euler.y += Math.PI
-
-            if (quat) {
-                const innerObject = getLoadedObject(target)
-                quaternion.copy(target.outerObject3d.quaternion)
-                const innerRotationY = innerObject.rotation.y
-
-                target.outerObject3d.quaternion.copy(quat)
-                innerObject.rotation.y = euler.y
-                euler.setFromQuaternion(getWorldQuaternion(innerObject))
-
-                innerObject.rotation.y = innerRotationY
-                target.outerObject3d.quaternion.copy(quaternion)
-            }
-
-            if (slerp) {
-                quaternion.setFromEuler(euler)
-                target.outerObject3d.quaternion.slerp(quaternion, 0.1)
-            } else target.outerObject3d.setRotationFromEuler(euler)
-        }
-
-        let transformControlRotating = false
+            const found = this.firstChildState.get()
+            if (!found) return
+            if ("frustumCulled" in found) found.frustumCulled = false
+        }, [this.firstChildState.get])
 
         this.createEffect(() => {
-            const target = this.targetState.get()
-            if (!target) return
+            const found = this.firstChildState.get()
+            if (!(found instanceof MeshAppendable)) return
 
-            followTargetRotation(target, false)
+            followTargetRotation(this, found, false)
 
-            let [xOld, yOld, zOld] = [0, 0, 0]
-            const targetMoved = () => {
-                const { x, y, z } = target.outerObject3d.position
-                const result = x !== xOld || y !== yOld || z !== zOld
-                ;[xOld, yOld, zOld] = [x, y, z]
-                return result
-            }
-
-            const handle = onBeforeRender(() => {
-                this.outerObject3d.position.copy(target.outerObject3d.position)
-
-                //@ts-ignore
-                const dir = target.bvhDir
-                let quat: Quaternion | undefined
-                if (dir) {
-                    dirObj.lookAt(dir)
-                    dirObj.rotateX(halfPi)
-                    quat = dirObj.quaternion
-                    this.outerObject3d.quaternion.copy(quat)
-                }
-
-                if (!this.lockTargetRotation) return
-
-                if (
-                    this.lockTargetRotation === "follow" ||
-                    transformControlRotating
-                ) {
-                    followTargetRotation(target, false)
-                    return
-                }
-                if (this.lockTargetRotation === "dynamic-lock") {
-                    targetMoved() && lockTargetRotation(target, true, quat)
-                    return
-                }
-                if (this.lockTargetRotation === "dynamic-follow") {
-                    targetMoved() && followTargetRotation(target, true)
-                    return
-                }
-                lockTargetRotation(target, false, quat)
-            })
+            addCameraSystem(this, { found })
             return () => {
-                handle.cancel()
+                deleteCameraSystem(this)
             }
-        }, [this.targetState.get])
+        }, [this.firstChildState.get])
 
         this.createEffect(() => {
-            const target = this.targetState.get()
-            const selectionTarget = getSelectionTarget()
-            const dragging = getTransformControlsDragging()
-            const mode = getEditorModeComputed()
+            const found = this.firstChildState.get()
+            if (!isPositionedManager(found)) return
 
-            const rotating =
-                target &&
-                target === selectionTarget &&
-                dragging &&
-                mode === "rotate"
-            if (!rotating) return
-
-            transformControlRotating = true
-
-            return () => {
-                transformControlRotating = false
+            let { lockTargetRotation } = this
+            found.onTransformControls = (phase, mode) => {
+                if (mode !== "rotate") return
+                if (phase === "start") {
+                    lockTargetRotation = this.lockTargetRotation
+                    this.lockTargetRotation = "follow"
+                } else if (phase === "end")
+                    this.lockTargetRotation = lockTargetRotation
             }
-        }, [
-            this.targetState.get,
-            getSelectionTarget,
-            getTransformControlsDragging,
-            getEditorModeComputed
-        ])
+            return () => {
+                found.onTransformControls = undefined
+            }
+        }, [this.firstChildState.get])
     }
 
     public lockTargetRotation: LockTargetRotationValue = true

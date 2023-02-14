@@ -1,5 +1,5 @@
 import store, { createEffect } from "@lincode/reactivity"
-import { VSMShadowMap, WebGLRenderer } from "three"
+import { PCFSoftShadowMap, WebGLRenderer } from "three"
 import isChromium from "../api/utils/isChromium"
 import isMobile from "../api/utils/isMobile"
 import { getBackgroundColor } from "./useBackgroundColor"
@@ -13,11 +13,10 @@ createEffect(() => {
         powerPreference: "high-performance",
         alpha: getBackgroundColor() === "transparent",
         logarithmicDepthBuffer:
-            isChromium && !isMobile ? getLogarithmicDepth() : false,
-        antialias: true
+            isChromium && !isMobile ? getLogarithmicDepth() : false
     })
     renderer.shadowMap.enabled = true
-    renderer.shadowMap.type = VSMShadowMap
+    renderer.shadowMap.type = PCFSoftShadowMap
     setRenderer(renderer)
 
     return () => {

@@ -1,30 +1,38 @@
 import { createEffect } from "@lincode/reactivity"
 import { BoxHelper } from "three"
-import { onBeforeRender } from "../events/onBeforeRender"
+import {
+    addUpdateSystem,
+    deleteUpdateSystem
+} from "../display/core/utils/updateSystem"
 import { getMultipleSelectionTargets } from "../states/useMultipleSelectionTargets"
+import { getSelectionNativeTarget } from "../states/useSelectionNativeTarget"
 import { getSelectionTarget } from "../states/useSelectionTarget"
 import scene from "./scene"
 
-export default {}
-
 createEffect(() => {
-    const target = getSelectionTarget()
+    const selectionTarget = getSelectionTarget()
+    const target =
+        getSelectionNativeTarget() ??
+        (selectionTarget && "object3d" in selectionTarget
+            ? selectionTarget.object3d
+            : undefined)
+
     if (!target) return
 
-    const boxHelper = new BoxHelper(target.nativeObject3d)
+    const boxHelper = new BoxHelper(target)
     const frame = requestAnimationFrame(() => scene.add(boxHelper))
-    const handle = onBeforeRender(() => boxHelper.update())
+    addUpdateSystem(boxHelper)
 
     return () => {
         cancelAnimationFrame(frame)
         scene.remove(boxHelper)
-        handle.cancel()
+        deleteUpdateSystem(boxHelper)
     }
-}, [getSelectionTarget])
+}, [getSelectionTarget, getSelectionNativeTarget])
 
 createEffect(() => {
-    const targets = getMultipleSelectionTargets()
-    if (!targets.length) return
+    const [targets] = getMultipleSelectionTargets()
+    if (!targets.size) return
 
     const boxHelpers: Array<BoxHelper> = []
     for (const target of targets) {
@@ -33,13 +41,12 @@ createEffect(() => {
         boxHelpers.push(boxHelper)
     }
 
-    const handle = onBeforeRender(() => {
-        for (const boxHelper of boxHelpers) boxHelper.update()
-    })
+    for (const boxHelper of boxHelpers) addUpdateSystem(boxHelper)
 
     return () => {
-        for (const boxHelper of boxHelpers) scene.remove(boxHelper)
-
-        handle.cancel()
+        for (const boxHelper of boxHelpers) {
+            deleteUpdateSystem(boxHelper)
+            scene.remove(boxHelper)
+        }
     }
 }, [getMultipleSelectionTargets])

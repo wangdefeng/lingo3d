@@ -1,6 +1,5 @@
 import CameraBase from "."
 import { container } from "../../../engine/renderLoop/renderSetup"
-import { PerspectiveCamera } from "three"
 import {
     getCameraPointerLock,
     setCameraPointerLock
@@ -8,9 +7,9 @@ import {
 import { mouseEvents } from "../../../api/mouse"
 import { getCameraRendered } from "../../../states/useCameraRendered"
 import isMobile from "../../../api/utils/isMobile"
-import { getEditing } from "../../../states/useEditing"
+import { getWorldPlayComputed } from "../../../states/useWorldPlayComputed"
 
-export default function (this: CameraBase<PerspectiveCamera>) {
+export default function (this: CameraBase) {
     if (this.done) return
 
     this.createEffect(() => {
@@ -115,7 +114,7 @@ export default function (this: CameraBase<PerspectiveCamera>) {
         if (
             this.mouseControlState.get() !== true ||
             camera !== this.camera ||
-            getEditing()
+            !getWorldPlayComputed()
         )
             return
 
@@ -137,5 +136,5 @@ export default function (this: CameraBase<PerspectiveCamera>) {
             document.exitPointerLock()
             setCameraPointerLock(undefined)
         }
-    }, [this.mouseControlState.get, getCameraRendered, getEditing])
+    }, [this.mouseControlState.get, getCameraRendered, getWorldPlayComputed])
 }

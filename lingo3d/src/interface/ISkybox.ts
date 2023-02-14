@@ -1,18 +1,23 @@
-import IEventLoop, { eventLoopDefaults, eventLoopSchema } from "./IEventLoop"
-import Defaults from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 import Nullable from "./utils/Nullable"
+import { extendDefaults } from "./utils/Defaults"
+import { environmentChoices, EnvironmentPreset } from "./IEnvironment"
+import IAppendable, {
+    appendableDefaults,
+    appendableSchema
+} from "./IAppendable"
 
-export default interface ISkybox extends IEventLoop {
-    texture: Nullable<string | Array<string>>
+export default interface ISkybox extends IAppendable {
+    texture: Nullable<string | EnvironmentPreset | Array<string>>
 }
 
 export const skyboxSchema: Required<ExtractProps<ISkybox>> = {
-    ...eventLoopSchema,
+    ...appendableSchema,
     texture: [String, Array]
 }
 
-export const skyboxDefaults: Defaults<ISkybox> = {
-    ...eventLoopDefaults,
-    texture: undefined
-}
+export const skyboxDefaults = extendDefaults<ISkybox>(
+    [appendableDefaults],
+    { texture: undefined },
+    { texture: environmentChoices }
+)

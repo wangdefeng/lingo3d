@@ -1,16 +1,12 @@
 import store, { createEffect, Reactive } from "@lincode/reactivity"
 import { AudioListener, PositionalAudio } from "three"
-import PositionedItem from "../api/core/PositionedItem"
-import mainCamera from "../engine/mainCamera"
-import scene from "../engine/scene"
-import {
-    onSelectionTarget,
-    emitSelectionTarget
-} from "../events/onSelectionTarget"
+import PositionedManager from "./core/PositionedManager"
 import IAudio, { audioDefaults, audioSchema } from "../interface/IAudio"
 import { getCameraRendered } from "../states/useCameraRendered"
-import makeAudioSprite from "./core/utils/makeAudioSprite"
+import { addSelectionHelper } from "./core/utils/raycast/selectionCandidates"
+import HelperSprite from "./core/utils/HelperSprite"
 import loadAudio from "./utils/loaders/loadAudio"
+import { getEditorHelper } from "../states/useEditorHelper"
 
 const [setAudioListener, getAudioListener] = store<AudioListener | undefined>(
     undefined
@@ -29,7 +25,7 @@ createEffect(() => {
 }, [getCameraRendered, getAudioListener])
 
 export default class Audio
-    extends PositionedItem<PositionalAudio>
+    extends PositionedManager<PositionalAudio>
     implements IAudio
 {
     public static componentName = "audio"
@@ -40,22 +36,15 @@ export default class Audio
         !getAudioListener() && setAudioListener(new AudioListener())
         const sound = new PositionalAudio(getAudioListener()!)
         super(sound)
-        scene.add(sound)
 
         this.createEffect(() => {
-            if (getCameraRendered() !== mainCamera) return
+            if (!getEditorHelper) return
 
-            const sprite = makeAudioSprite()
-            this.outerObject3d.add(sprite.outerObject3d)
-
-            const handle = onSelectionTarget(({ target }) => {
-                target === sprite && emitSelectionTarget(this)
-            })
+            const handle = addSelectionHelper(new HelperSprite("audio"), this)
             return () => {
-                sprite.dispose()
                 handle.cancel()
             }
-        }, [getCameraRendered])
+        }, [getEditorHelper])
 
         const [setReady, getReady] = store(false)
 
@@ -97,11 +86,9 @@ export default class Audio
         ])
     }
 
-    public override dispose() {
-        if (this.done) return this
-        super.dispose()
+    protected override _dispose() {
+        super._dispose()
         this.outerObject3d.buffer && this.outerObject3d.disconnect()
-        return this
     }
 
     public play() {

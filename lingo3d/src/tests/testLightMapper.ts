@@ -1,14 +1,11 @@
 import { createEffect } from "@lincode/reactivity"
 import * as THREE from "three"
-//@ts-ignore
 import { ProgressiveLightMap } from "three/examples/jsm/misc/ProgressiveLightMap"
 import Octahedron from "../display/primitives/Octahedron"
 import Plane from "../display/primitives/Plane"
 import { onBeforeRender } from "../events/onBeforeRender"
 import { getCameraRendered } from "../states/useCameraRendered"
 import { getRenderer } from "../states/useRenderer"
-
-export default {}
 
 // ShadowMap + LightMap Res and Number of Directional Lights
 const shadowMapRes = 512,
@@ -47,14 +44,14 @@ for (let l = 0; l < lightCount; l++) {
 }
 
 const ground = new Plane()
-ground.rotationX = -90
+ground.rotationX = 270
 ground.scale = 100
 ground.y = -50
 
 const groundMesh = ground.object3d
 
 // const groundMesh = new THREE.Mesh(
-//     new THREE.PlaneGeometry(999 * scaleDown, 999 * scaleDown),
+//     new THREE.PlaneGeometry(999 * CM2M, 999 * CM2M),
 //     new THREE.MeshStandardMaterial({ color: 0xffffff, depthWrite: true })
 // )
 lightmapObjects.push(groundMesh)

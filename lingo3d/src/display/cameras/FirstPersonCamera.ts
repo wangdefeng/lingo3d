@@ -1,9 +1,9 @@
-import CharacterCamera from "../core/CharacterCamera"
-import SimpleObjectManager from "../core/SimpleObjectManager"
+import CharacterCamera, {
+    addCharacterCameraSystem,
+    deleteCharacterCameraSystem
+} from "../core/CharacterCamera"
 import { Reactive } from "@lincode/reactivity"
-import getWorldPosition from "../utils/getWorldPosition"
-import getWorldQuaternion from "../utils/getWorldQuaternion"
-import { onBeforeRender } from "../../events/onBeforeRender"
+import ObjectManager from "../core/ObjectManager"
 
 export default class FirstPersonCamera extends CharacterCamera {
     public static componentName = "firstPersonCamera"
@@ -11,30 +11,19 @@ export default class FirstPersonCamera extends CharacterCamera {
     public constructor() {
         super()
 
-        const cam = this.camera
-
-        this.watch(
-            onBeforeRender(() => {
-                cam.position.copy(getWorldPosition(this.object3d))
-                cam.quaternion.copy(getWorldQuaternion(this.object3d))
-            })
-        )
+        addCharacterCameraSystem(this)
+        this.then(() => deleteCharacterCameraSystem(this))
 
         this.createEffect(() => {
-            const target = this.targetState.get()
+            const found = this.firstChildState.get()
             const innerYSet = this.innerYSetState.get()
-            if (
-                !target ||
-                !(target instanceof SimpleObjectManager) ||
-                innerYSet
-            )
-                return
-            super.innerY = target.height * 0.4
+            if (!(found instanceof ObjectManager) || innerYSet) return
+            super.innerY = found.height * 0.4
 
             return () => {
                 super.innerY = 0
             }
-        }, [this.targetState.get, this.innerYSetState.get])
+        }, [this.firstChildState, this.innerYSetState.get])
     }
 
     private innerYSetState = new Reactive(false)

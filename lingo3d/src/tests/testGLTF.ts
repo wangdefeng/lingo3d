@@ -1,12 +1,9 @@
-import ThirdPersonCamera from "../display/cameras/ThirdPersonCamera"
+import settings from "../api/settings"
 import Model from "../display/Model"
-import Cube from "../display/primitives/Cube"
 
-export default {}
+const model = new Model()
+model.src = "car/porsche.glb"
+model.animationRepeat = 2
+model.onAnimationFinish = () => console.log("done")
 
-const cube = new Cube()
-
-const cam = new ThirdPersonCamera()
-
-cam.append(cube)
-cam.activate()
+settings.environment = "day"

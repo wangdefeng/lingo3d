@@ -1,8 +1,9 @@
-import { YBOT_URL } from "../globals"
+import { YBOT_URL } from "../api/assetsPath"
 import IModel, { modelDefaults, modelSchema } from "./IModel"
-import Defaults from "./utils/Defaults"
+import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 import Nullable from "./utils/Nullable"
+import Range from "./utils/Range"
 
 export type StrideMode = "aim" | "free"
 
@@ -25,20 +26,26 @@ export const dummySchema: Required<ExtractProps<IDummy>> = {
     strideMode: String
 }
 
-export const dummyDefaults: Defaults<IDummy> = {
-    ...modelDefaults,
-    spineName: undefined,
-    preset: "default",
-    strideForward: 0,
-    strideRight: 0,
-    strideMove: false,
-    strideMode: "aim",
-    scale: 1.7,
-    scaleX: 1.7,
-    scaleY: 1.7,
-    scaleZ: 1.7,
-    width: 20,
-    depth: 20,
-    animation: "idle",
-    src: YBOT_URL
-}
+export const dummyDefaults = extendDefaults<IDummy>(
+    [modelDefaults],
+    {
+        spineName: undefined,
+        preset: "default",
+        strideForward: 0,
+        strideRight: 0,
+        strideMove: false,
+        strideMode: "aim",
+        scale: 1.7,
+        scaleX: 1.7,
+        scaleY: 1.7,
+        scaleZ: 1.7,
+        width: 20,
+        depth: 20,
+        animation: "idle",
+        src: YBOT_URL
+    },
+    {
+        strideForward: new Range(-10, 10),
+        strideRight: new Range(-10, 10)
+    }
+)

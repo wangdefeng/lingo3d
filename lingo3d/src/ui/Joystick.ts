@@ -1,6 +1,4 @@
-import EventLoopItem from "../api/core/EventLoopItem"
 import nipplejs from "nipplejs"
-import { container } from "../engine/renderLoop/renderSetup"
 import IJoystick, {
     joystickDefaults,
     joystickSchema
@@ -11,8 +9,10 @@ import createElement from "../utils/createElement"
 import { Cancellable } from "@lincode/promiselikes"
 import store, { Reactive } from "@lincode/reactivity"
 import { onBeforeRender } from "../events/onBeforeRender"
+import Appendable from "../api/core/Appendable"
+import { uiContainer } from "../engine/renderLoop/renderSetup"
 
-export default class Joystick extends EventLoopItem implements IJoystick {
+export default class Joystick extends Appendable implements IJoystick {
     public static componentName = "joystick"
     public static defaults = joystickDefaults
     public static schema = joystickSchema
@@ -53,7 +53,7 @@ export default class Joystick extends EventLoopItem implements IJoystick {
             const zone = createElement<HTMLDivElement>(`
                 <div style="width: 150px; height: 150px; position: absolute; bottom: 25px; left: 25px;"></div>
             `)
-            container.appendChild(zone)
+            uiContainer.appendChild(zone)
 
             const prevent = (e: Event) => {
                 e.preventDefault()
@@ -64,8 +64,9 @@ export default class Joystick extends EventLoopItem implements IJoystick {
             zone.onpointerdown = prevent
 
             const handle = new Cancellable()
-
             setTimeout(() => {
+                if (handle.done) return
+
                 const manager = nipplejs.create({
                     zone,
                     mode: "static",
@@ -90,6 +91,7 @@ export default class Joystick extends EventLoopItem implements IJoystick {
             })
             return () => {
                 handle.cancel()
+                zone.remove()
             }
         }, [])
     }

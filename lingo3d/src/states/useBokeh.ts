@@ -1,11 +1,3 @@
-import store, { createEffect } from "@lincode/reactivity"
-import { getBokehRefresh } from "./useBokehRefresh"
-import { getCameraRendered } from "./useCameraRendered"
+import store from "@lincode/reactivity"
 
-export const bokehDefault = false
-
-export const [setBokeh, getBokeh] = store(bokehDefault)
-
-createEffect(() => {
-    setBokeh(getCameraRendered().userData.bokeh ?? bokehDefault)
-}, [getCameraRendered, getBokehRefresh])
+export const [setBokeh, getBokeh] = store(false)

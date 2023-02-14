@@ -1,24 +1,24 @@
-import IObjectManager, {
-    objectManagerDefaults,
-    objectManagerSchema
-} from "./IObjectManager"
+import { ExtractProps } from "./utils/extractProps"
+import { extendDefaults } from "./utils/Defaults"
 import ITexturedBasic, {
     texturedBasicDefaults,
     texturedBasicSchema
 } from "./ITexturedBasic"
-import Defaults from "./utils/Defaults"
-import { ExtractProps } from "./utils/extractProps"
+import IPhysicsObjectManager, {
+    physicsObjectManagerDefaults,
+    physicsObjectManagerSchema
+} from "./IPhysicsObjectManager"
 
-export default interface ISprite extends IObjectManager, ITexturedBasic {}
+export default interface ISprite
+    extends IPhysicsObjectManager,
+        ITexturedBasic {}
 
 export const spriteSchema: Required<ExtractProps<ISprite>> = {
-    ...objectManagerSchema,
+    ...physicsObjectManagerSchema,
     ...texturedBasicSchema
 }
 
-export const spriteDefaults: Defaults<ISprite> = {
-    ...objectManagerDefaults,
-    ...texturedBasicDefaults,
-    scaleZ: 0,
-    depth: 0
-}
+export const spriteDefaults = extendDefaults<ISprite>(
+    [physicsObjectManagerDefaults, texturedBasicDefaults],
+    { scaleZ: 0, depth: 0 }
+)

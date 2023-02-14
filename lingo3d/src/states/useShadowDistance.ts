@@ -1,5 +1,6 @@
 import store from "@lincode/reactivity"
 
-export const [setShadowDistance, getShadowDistance] = store<number | undefined>(
-    undefined
-)
+export type ShadowDistance = "near" | "medium" | "far"
+
+export const [setShadowDistance, getShadowDistance] =
+    store<ShadowDistance>("medium")
