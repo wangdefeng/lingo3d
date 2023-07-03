@@ -1,7 +1,6 @@
-import { deg2Rad, endPoint, Point3d, rad2Deg } from "@lincode/math"
+import { rad2Deg } from "@lincode/math"
 import store, { Reactive } from "@lincode/reactivity"
 import { interpret } from "xstate"
-import { onRender } from "../../events/onRender"
 import IDummy, {
     dummyDefaults,
     dummySchema,
@@ -10,25 +9,18 @@ import IDummy, {
 import FoundManager from "../core/FoundManager"
 import AnimationManager from "../core/AnimatedObjectManager/AnimationManager"
 import Model from "../Model"
-import { euler } from "../utils/reusables"
 import poseMachine from "./poseMachine"
-import fpsAlpha from "../utils/fpsAlpha"
-import { Animation } from "../../interface/IAnimatedObjectManager"
-import { groundedControllerManagers } from "../core/PhysicsObjectManager/physx/physxLoop"
-import { DUMMY_URL, YBOT_URL } from "../../api/assetsPath"
-import renderSystemWithData from "../../utils/renderSystemWithData"
-
-const [addGroundedSystem, deleteGroundedSystem] = renderSystemWithData(
-    (self: Dummy, data: { poseService: { send: (val: string) => void } }) => {
-        groundedControllerManagers.has(self) &&
-            data.poseService.send("JUMP_STOP")
-    }
-)
+import dirPath from "../../api/path/dirPath"
+import { indexChildrenNames } from "../../memo/indexChildrenNames"
+import { dummyUrlPtr, ybotUrlPtr } from "../../pointers/assetsPathPointers"
+import { dummyGroundedSystem } from "../../systems/dummyGroundedSystem"
+import { dummySystem } from "../../systems/dummySystem"
 
 export default class Dummy extends Model implements IDummy {
     public static override componentName = "dummy"
     public static override defaults = dummyDefaults
     public static override schema = dummySchema
+    public static includeKeys = ["strideRight", "strideForward", "strideMove"]
 
     private poseService = interpret(poseMachine)
 
@@ -37,11 +29,8 @@ export default class Dummy extends Model implements IDummy {
         this.width = 20
         this.depth = 20
         this.scale = 1.7
-
-        this.createEffect(() => {
-            super.animation =
-                this.animationState.get() ?? this.poseAnimationState.get()
-        }, [this.animationState.get, this.poseAnimationState.get])
+        this.src = ybotUrlPtr[0]
+        this.runtimeDefaults = { src: ybotUrlPtr[0] }
 
         const [setType, getType] = store<
             "mixamo" | "readyplayerme" | "other" | undefined
@@ -50,35 +39,35 @@ export default class Dummy extends Model implements IDummy {
 
         this.createEffect(() => {
             const spineName = this.spineNameState.get()
-            super.src = this.srcState.get()
 
             setSpine(undefined)
             setType(undefined)
 
-            const handle = this.loaded.then((loaded) => {
+            const handle = this.$events.on("loaded", (loaded) => {
+                this.runtimeDefaults = { src: ybotUrlPtr[0] }
                 setType("other")
 
                 if (spineName) {
-                    setSpine(this.find(spineName, true))
+                    setSpine(this.find(spineName))
 
                     if (spineName === "mixamorigSpine") setType("mixamo")
                     else if (
                         spineName === "Spine" &&
-                        (loaded.getObjectByName("Wolf3D_Body") ||
-                            loaded.getObjectByName("Wolf3D_Avatar"))
+                        (indexChildrenNames(loaded).get("Wolf3D_Body") ||
+                            indexChildrenNames(loaded).get("Wolf3D_Avatar"))
                     )
                         setType("readyplayerme")
                     return
                 }
                 if (
-                    loaded.getObjectByName("Wolf3D_Body") ||
-                    loaded.getObjectByName("Wolf3D_Avatar")
+                    indexChildrenNames(loaded).get("Wolf3D_Body") ||
+                    indexChildrenNames(loaded).get("Wolf3D_Avatar")
                 ) {
-                    setSpine(this.find("Spine", true))
+                    setSpine(this.find("Spine"))
                     setType("readyplayerme")
                     return
                 }
-                const spine = this.find("mixamorigSpine", true)
+                const spine = this.find("mixamorigSpine")
                 setSpine(spine)
                 spine && setType("mixamo")
             })
@@ -96,17 +85,16 @@ export default class Dummy extends Model implements IDummy {
             const preset = this.presetState.get()
             const prefix = preset === "rifle" ? "rifle-" : ""
 
-            const src = this.srcState.get()
-            const parts = src.split("/")
-            parts.pop()
-            let url = parts.join("/") + "/"
+            const { src } = this
+            let url = dirPath(src) + "/"
 
-            if (type === "readyplayerme") url = DUMMY_URL() + "readyplayerme/"
-            else if (src !== YBOT_URL()) {
+            if (type === "readyplayerme")
+                url = dummyUrlPtr[0] + "readyplayerme/"
+            else if (src !== ybotUrlPtr[0]) {
                 super.animations = this.animationsState.get()
-                this.poseAnimationState.set(getPose())
+                this.animation = getPose()
                 return () => {
-                    this.poseAnimationState.set(undefined)
+                    super.animations = {}
                 }
             }
             super.animations = {
@@ -117,10 +105,8 @@ export default class Dummy extends Model implements IDummy {
                 death: url + "death.fbx",
                 ...this.animationsState.get()
             }
-            this.poseAnimationState.set(getPose())
-
+            this.animation = getPose()
             return () => {
-                this.poseAnimationState.set(undefined)
                 super.animations = {}
             }
         }, [
@@ -134,13 +120,13 @@ export default class Dummy extends Model implements IDummy {
 
         this.createEffect(() => {
             const pose = getPose()
-            this.poseAnimationState.set(pose)
+            this.animation = pose
             if (pose !== "jumping") return
 
             this.velocityY = this.jumpHeight
-            addGroundedSystem(this, { poseService })
+            dummyGroundedSystem.add(this, { poseService })
             return () => {
-                deleteGroundedSystem(this)
+                dummyGroundedSystem.delete(this)
             }
         }, [getPose])
 
@@ -153,7 +139,7 @@ export default class Dummy extends Model implements IDummy {
         this.then(() => poseService.stop())
 
         this.createEffect(() => {
-            const { loadedObject3d } = this
+            const { $loadedObject3d: loadedObject3d } = this
             if (!loadedObject3d) return
 
             const { strideForward, strideRight, strideMove } = this
@@ -179,40 +165,17 @@ export default class Dummy extends Model implements IDummy {
             const spineQuaternion = spine?.quaternion.clone()
             const loadedItemQuaternion = loadedObject3d.quaternion.clone()
 
-            const handle = onRender(() => {
-                poseService.send(
-                    backwards ? "RUN_BACKWARDS_START" : "RUN_START"
-                )
-
-                const quaternionOld = loadedObject3d.quaternion.clone()
-
-                let spinePoint: Point3d | undefined
-                if (strideMode === "aim" && spine && spineQuaternion) {
-                    loadedObject3d.quaternion.copy(loadedItemQuaternion)
-                    spine.quaternion.copy(spineQuaternion)
-                    spinePoint = spine.pointAt(1000)
-                }
-
-                loadedObject3d.quaternion.setFromEuler(
-                    euler.set(0, angle * deg2Rad, 0)
-                )
-                const quaternionNew = loadedObject3d.quaternion.clone()
-                loadedObject3d.quaternion
-                    .copy(quaternionOld)
-                    .slerp(quaternionNew, fpsAlpha(0.2))
-
-                spinePoint && spine?.lookAt(spinePoint)
-
-                if (!strideMove) return
-
-                const { x, y } = endPoint(
-                    0,
-                    0,
-                    angle + 90,
-                    Math.max(Math.abs(strideForward), Math.abs(strideRight))
-                )
-                this.moveForward(backwards ? y : -y)
-                this.moveRight(backwards ? x : -x)
+            dummySystem.add(this, {
+                poseService,
+                backwards,
+                strideMode,
+                spine,
+                spineQuaternion,
+                loadedItemQuaternion,
+                strideMove,
+                angle,
+                strideForward,
+                strideRight
             })
             return () => {
                 if (
@@ -222,7 +185,7 @@ export default class Dummy extends Model implements IDummy {
                 )
                     loadedObject3d.quaternion.set(0, 0, 0, 0)
 
-                handle.cancel()
+                dummySystem.delete(this)
             }
         }, [
             this.animationsState.get,
@@ -232,15 +195,6 @@ export default class Dummy extends Model implements IDummy {
             this.strideRightState.get,
             getSpine
         ])
-    }
-
-    private poseAnimationState = new Reactive<Animation | undefined>(undefined)
-    private animationState = new Reactive<Animation | undefined>(undefined)
-    public override get animation() {
-        return this.animationState.get()
-    }
-    public override set animation(val) {
-        this.animationState.set(val)
     }
 
     private spineNameState = new Reactive<string | undefined>(undefined)
@@ -256,11 +210,12 @@ export default class Dummy extends Model implements IDummy {
     }
     public override set resize(val) {}
 
-    private srcState = new Reactive(YBOT_URL())
+    private srcState = new Reactive<string | undefined>(undefined)
     public override get src() {
-        return this.srcState.get()
+        return super.src!
     }
     public override set src(val) {
+        super.src = val
         this.srcState.set(val)
     }
 

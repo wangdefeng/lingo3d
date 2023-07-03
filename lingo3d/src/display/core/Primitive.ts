@@ -20,9 +20,9 @@ abstract class Primitive
 
     public constructor(geometry: BufferGeometry) {
         const mesh = new Mesh(geometry, standardMaterial)
+        super(mesh)
         mesh.castShadow = true
         mesh.receiveShadow = true
-        super(mesh)
     }
 }
 interface Primitive

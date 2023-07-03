@@ -1,29 +1,28 @@
-import ILightBase, { lightBaseDefaults, lightBaseSchema } from "./ILightBase"
 import { ExtractProps } from "./utils/extractProps"
 import { extendDefaults } from "./utils/Defaults"
-import { ShadowDistance } from "../states/useShadowDistance"
-import Nullable from "./utils/Nullable"
-import { nullableDefault } from "./utils/NullableDefault"
-import { shadowDistanceChoices } from "./IDirectionalLight"
+import Range from "./utils/Range"
+import { ColorString } from "./ITexturedStandard"
+import IMeshAppendable, {
+    meshAppendableDefaults,
+    meshAppendableSchema
+} from "./IMeshAppendable"
 
-export default interface ISkyLight extends ILightBase {
-    groundColor: string
-    shadowDistance: Nullable<ShadowDistance>
+export default interface ISkyLight extends IMeshAppendable {
+    intensity: number
+    color: ColorString
+    shadows: boolean
 }
 
 export const skyLightSchema: Required<ExtractProps<ISkyLight>> = {
-    ...lightBaseSchema,
-    shadowDistance: String,
-    groundColor: String
+    ...meshAppendableSchema,
+    intensity: Number,
+    color: String,
+    shadows: Boolean
 }
 
 export const skyLightDefaults = extendDefaults<ISkyLight>(
-    [lightBaseDefaults],
-    {
-        groundColor: "#ffffff",
-        shadowDistance: nullableDefault("medium")
-    },
-    {
-        shadowDistance: shadowDistanceChoices
-    }
+    [meshAppendableDefaults],
+    { intensity: 1, color: "#ffffff", shadows: true },
+    { intensity: new Range(0, 10) },
+    { color: true }
 )

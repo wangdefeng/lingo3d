@@ -1,4 +1,5 @@
-import Character from "../display/Character"
+import Model from "../display/Model"
+import { ybotUrlPtr } from "../pointers/assetsPathPointers"
 
-const character = new Character()
-character.src = "player2.glb"
+const dummy = new Model()
+dummy.src = "player2.glb"

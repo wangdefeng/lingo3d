@@ -1,63 +1,58 @@
 import { createEffect } from "@lincode/reactivity"
 import {
     emitTransformControls,
-    onTransformControls,
-    TransformControlsMode,
-    TransformControlsPhase
+    onTransformControls
 } from "../../events/onTransformControls"
 import { getSelectionTarget } from "../../states/useSelectionTarget"
 import { getTransformControlsSnap } from "../../states/useTransformControlsSnap"
-import { container } from "../renderLoop/renderSetup"
 import scene from "../scene"
 import { lazy } from "@lincode/utils"
 import { Cancellable } from "@lincode/promiselikes"
 import { setTransformControlsDragging } from "../../states/useTransformControlsDragging"
 import { getTransformControlsSpaceComputed } from "../../states/useTransformControlsSpaceComputed"
 import { getCameraRendered } from "../../states/useCameraRendered"
-import { getSelectionNativeTarget } from "../../states/useSelectionNativeTarget"
-import { ssrExcludeSet } from "../renderLoop/effectComposer/ssrEffect/renderSetup"
 import { getEditorModeComputed } from "../../states/useEditorModeComputed"
 import { CM2M } from "../../globals"
 import { deg2Rad } from "@lincode/math"
-import { getMultipleSelectionTargets } from "../../states/useMultipleSelectionTargets"
+import { container } from "../renderLoop/containers"
+import { ssrExcludeSet } from "../../collections/ssrExcludeSet"
+import { cameraRenderedPtr } from "../../pointers/cameraRenderedPtr"
+import { selectionTargetPtr } from "../../pointers/selectionTargetPtr"
+import { renderCheckExcludeSet } from "../../collections/renderCheckExcludeSet"
+import { transformControlsModePtr } from "../../pointers/transformControlsModePtr"
+import { vector3 } from "../../display/utils/reusables"
+import { snapRaycastSystem } from "../../systems/snapRaycastSystem"
 
 const lazyTransformControls = lazy(async () => {
     const { TransformControls } = await import("./TransformControls")
     const transformControls = new TransformControls(
-        getCameraRendered(),
+        cameraRenderedPtr[0],
         container
     )
-    //@ts-ignore
     getCameraRendered((camera) => (transformControls.camera = camera))
-    //@ts-ignore
     transformControls.enabled = false
 
-    let dragging = false
     transformControls.addEventListener("dragging-changed", ({ value }) => {
-        dragging = value
-        setTransformControlsDragging(dragging)
-        emitTransformControls(dragging ? "start" : "end")
+        setTransformControlsDragging(value)
+        emitTransformControls(value ? "start" : "end")
     })
-    transformControls.addEventListener(
-        "change",
-        () => dragging && emitTransformControls("move")
-    )
     return transformControls
 })
 
 createEffect(() => {
-    const selectionTarget = getSelectionTarget()
+    const [selectionTarget] = selectionTargetPtr
     const target =
-        getSelectionNativeTarget() ??
-        (selectionTarget && "outerObject3d" in selectionTarget
+        selectionTarget && "outerObject3d" in selectionTarget
             ? selectionTarget.outerObject3d
-            : undefined)
+            : undefined
 
     if (!target) return
 
     const _mode = getEditorModeComputed()
     const mode = _mode === "curve" ? "translate" : _mode
     if (mode !== "translate" && mode !== "rotate" && mode !== "scale") return
+
+    transformControlsModePtr[0] = mode
 
     const space = getTransformControlsSpaceComputed()
     const snap = !getTransformControlsSnap()
@@ -70,44 +65,70 @@ createEffect(() => {
         transformControls.setSpace(space)
         transformControls.setScaleSnap(snap ? 10 * CM2M : null)
         transformControls.setRotationSnap(snap ? 15 * deg2Rad : null)
-        transformControls.setTranslationSnap(snap ? 10 * CM2M : null)
+        // transformControls.setTranslationSnap(snap ? 10 * CM2M : null)
 
         scene.add(transformControls)
         transformControls.attach(target)
-        //@ts-ignore
         transformControls.enabled = true
 
         ssrExcludeSet.add(transformControls)
+        renderCheckExcludeSet.add(transformControls)
+
+        const handle0 = onTransformControls((phase) => {
+            if (phase !== "start" || mode !== "translate") {
+                snapRaycastSystem.delete(transformControls)
+                return
+            }
+            const {
+                space,
+                axis,
+                _worldQuaternionInv,
+                _quaternionStart,
+                _parentScale,
+                _parentQuaternionInv,
+                pointEnd,
+                pointStart
+            } = transformControls as any
+            if (!(axis === "X" || axis === "Y" || axis === "Z")) {
+                snapRaycastSystem.delete(transformControls)
+                return
+            }
+            vector3.copy(pointEnd).sub(pointStart)
+
+            if (space === "local" && axis !== "XYZ")
+                vector3.applyQuaternion(_worldQuaternionInv)
+
+            if (axis!.indexOf("X") === -1) vector3.x = 0
+            if (axis!.indexOf("Y") === -1) vector3.y = 0
+            if (axis!.indexOf("Z") === -1) vector3.z = 0
+
+            if (space === "local" && axis !== "XYZ") {
+                vector3.applyQuaternion(_quaternionStart).divide(_parentScale)
+            } else {
+                vector3
+                    .applyQuaternion(_parentQuaternionInv)
+                    .divide(_parentScale)
+            }
+            snapRaycastSystem.add(transformControls, {
+                direction0: vector3.clone().normalize(),
+                direction1: vector3.clone().multiplyScalar(-1).normalize()
+            })
+        })
 
         handle.then(() => {
             scene.remove(transformControls)
             transformControls.detach()
-            //@ts-ignore
             transformControls.enabled = false
             ssrExcludeSet.delete(transformControls)
+            renderCheckExcludeSet.delete(transformControls)
+            handle0.cancel()
         })
-    })
-
-    const callbacks: Array<
-        (phase: TransformControlsPhase, mode: TransformControlsMode) => void
-    > = []
-    target.userData.onTransformControls &&
-        callbacks.push(target.userData.onTransformControls)
-
-    for (const target of getMultipleSelectionTargets()[0])
-        target.userData.onTransformControls &&
-            callbacks.push(target.userData.onTransformControls)
-
-    const handle1 = onTransformControls((phase) => {
-        for (const cb of callbacks) cb(phase, mode)
     })
     return () => {
         handle.cancel()
-        handle1.cancel()
     }
 }, [
     getSelectionTarget,
-    getSelectionNativeTarget,
     getEditorModeComputed,
     getTransformControlsSpaceComputed,
     getTransformControlsSnap

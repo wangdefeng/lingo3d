@@ -1,10 +1,11 @@
 import IModel from "../../interface/IModel"
+import IPrimitive from "../../interface/IPrimitive"
 
 export type GameObjectType =
     | "group"
     | "model"
     | "dummy"
-    | "building"
+    | "dummyIK"
     | "tree"
     | "svgMesh"
     | "htmlMesh"
@@ -12,6 +13,8 @@ export type GameObjectType =
     | "reticle"
     | "splashScreen"
     | "text"
+    | "mouse"
+    | "keyboard"
     | "reflector"
     | "water"
     | "curve"
@@ -31,6 +34,8 @@ export type GameObjectType =
     | "defaultSkyLight"
     | "pointLight"
     | "spotLight"
+    | "pooledPointLight"
+    | "pooledSpotLight"
     | "camera"
     | "orbitCamera"
     | "thirdPersonCamera"
@@ -47,18 +52,28 @@ export type GameObjectType =
     | "skybox"
     | "environment"
     | "setup"
+    | "template"
+    | "script"
     | "timeline"
     | "timelineAudio"
+    | "gameGraph"
+    | "connector"
+    | "mathNode"
+    | "numberNode"
+    | "addNode"
+    | "projectionNode"
+    | "spawnNode"
+    | "loopNode"
+    | "templateNode"
 
-type VersionNode = {
-    type: "lingo3d"
-    version: string
-}
-
-type Node = {
-    type: GameObjectType
+type VersionNode = { type: "lingo3d"; version: string }
+type FindNode = {
+    type: "find"
+    name: string
+    id?: string
     children?: Array<AppendableNode>
 }
-type AppendableNode = Partial<IModel> & Node
-
-export type SceneGraphNode = AppendableNode | VersionNode
+type Node = { type: GameObjectType; children?: Array<AppendableNode> }
+export type AppendableNode = Partial<IModel & IPrimitive & { source: string }> &
+    Node
+export type SceneGraphNode = AppendableNode | VersionNode | FindNode

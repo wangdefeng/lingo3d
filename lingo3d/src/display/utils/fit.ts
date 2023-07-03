@@ -1,27 +1,25 @@
 import { Object3D, Vector3 } from "three"
-import getCenter from "./getCenter"
-import measure from "./measure"
+import { measure } from "../../memo/measure"
 
 const cache = new Map<string, [number, Vector3, Vector3]>()
 
 export default (gltf: Object3D, src: string) => {
     if (cache.has(src)) {
-        const [ratio, center, result] = cache.get(src)!
+        const [ratio, center, size] = cache.get(src)!
         gltf.scale.multiplyScalar(ratio)
         gltf.position.copy(center).multiplyScalar(-1)
-        return result
+        return [size, center]
     }
 
-    const measuredSize = measure(gltf, src).clone()
+    let [size, center] = measure(src, { target: gltf })
+    const ratio = 1 / size.y
 
-    const ratio = 1 / measuredSize.y
+    center = center.clone().multiplyScalar(ratio)
+    size = size.clone().multiplyScalar(ratio)
+
     gltf.scale.multiplyScalar(ratio)
-
-    const center = getCenter(gltf)
     gltf.position.copy(center).multiplyScalar(-1)
 
-    measuredSize.multiplyScalar(ratio)
-
-    cache.set(src, [ratio, center, measuredSize])
-    return measuredSize
+    cache.set(src, [ratio, center, size])
+    return [size, center]
 }

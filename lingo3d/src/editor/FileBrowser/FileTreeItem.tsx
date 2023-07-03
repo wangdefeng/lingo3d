@@ -5,33 +5,37 @@ import {
     setFileBrowserDir
 } from "../../states/useFileBrowserDir"
 import FolderIcon from "./icons/FolderIcon"
-import pathMap from "./pathMap"
+import { useSignal } from "@preact/signals"
+import { fileStructurePathMap } from "../../collections/fileStructurePathMap"
+import { FileStructure } from "../../states/useFileStructure"
 
 type FileTreeItemProps = {
-    fileStructure: any
-    firstFolderName: string
+    fileStructure: FileStructure
+    rootFolderName: string
     folderName?: string
     myPath?: string
 }
 
 const FileTreeItem = ({
     fileStructure,
-    firstFolderName,
+    rootFolderName,
     folderName,
     myPath
 }: FileTreeItemProps) => {
-    const fileEntries = Object.entries<any>(fileStructure)
     const fileBrowserDir = useSyncState(getFileBrowserDir)
+    const expandedSignal = useSignal(true)
 
     const children = () =>
-        fileEntries.map(([name, fileOrFolder]) =>
+        Object.entries<any>(fileStructure).map(([name, fileOrFolder]) =>
             fileOrFolder instanceof File ? null : (
                 <FileTreeItem
                     key={name}
                     fileStructure={fileOrFolder}
-                    firstFolderName={firstFolderName}
+                    rootFolderName={rootFolderName}
                     folderName={name}
-                    myPath={firstFolderName + pathMap.get(fileOrFolder)}
+                    myPath={
+                        rootFolderName + fileStructurePathMap.get(fileOrFolder)
+                    }
                 />
             )
         )
@@ -40,7 +44,7 @@ const FileTreeItem = ({
     return (
         <BaseTreeItem
             label={folderName}
-            expanded
+            expandedSignal={expandedSignal}
             selected={myPath === fileBrowserDir}
             onClick={() => setFileBrowserDir(myPath)}
             IconComponent={FolderIcon}

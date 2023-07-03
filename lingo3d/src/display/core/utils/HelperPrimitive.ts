@@ -1,44 +1,26 @@
 import { BufferGeometry } from "three"
-import { eraseAppendable } from "../../../api/core/collections"
-import MeshAppendable from "../../../api/core/MeshAppendable"
-import {
-    TransformControlsMode,
-    TransformControlsPhase
-} from "../../../events/onTransformControls"
-import {
-    positionedDefaults,
-    positionedSchema
-} from "../../../interface/IPositioned"
+import MeshAppendable from "../MeshAppendable"
 import Primitive from "../Primitive"
+import { ssrExcludeSet } from "../../../collections/ssrExcludeSet"
+import { selectionRedirectMap } from "../../../collections/selectionRedirectMap"
 
-//@ts-ignore
 export default abstract class HelperPrimitive extends Primitive {
-    public static componentName = "helper"
-    public static override defaults = positionedDefaults
-    public static override schema = positionedSchema
-
-    public target?: MeshAppendable
-
-    public constructor(geometry: BufferGeometry) {
-        super(geometry)
-        eraseAppendable(this)
-        this.opacity = 0.5
-        this.castShadow = false
-        this.receiveShadow = false
-    }
-
-    public override get onTransformControls() {
-        return this.userData.onTransformControls
-    }
-    public override set onTransformControls(
-        cb:
-            | ((
-                  phase: TransformControlsPhase,
-                  mode: TransformControlsMode
-              ) => void)
-            | undefined
+    public constructor(
+        geometry: BufferGeometry,
+        owner: MeshAppendable | undefined
     ) {
-        super.onTransformControls = cb
-        if (this.target) this.target.userData.onTransformControls = cb
+        super(geometry)
+        ssrExcludeSet.add(this.outerObject3d)
+        this.$ghost(false)
+        this.opacity = 0.5
+
+        if (!owner) return
+        selectionRedirectMap.set(this, owner)
+        owner.append(this)
+    }
+
+    protected override disposeNode() {
+        super.disposeNode()
+        ssrExcludeSet.delete(this.outerObject3d)
     }
 }

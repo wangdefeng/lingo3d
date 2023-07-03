@@ -1,5 +1,3 @@
-import { Color, HemisphereLight } from "three"
-import LightBase, { mapShadowResolution } from "../core/LightBase"
 import ISkyLight, {
     skyLightDefaults,
     skyLightSchema
@@ -8,100 +6,65 @@ import { Reactive } from "@lincode/reactivity"
 import { CSM } from "three/examples/jsm/csm/CSM"
 import scene from "../../engine/scene"
 import { getCameraRendered } from "../../states/useCameraRendered"
-import {
-    getShadowDistance,
-    ShadowDistance
-} from "../../states/useShadowDistance"
-import {
-    getShadowResolution,
-    ShadowResolution
-} from "../../states/useShadowResolution"
 import DirectionalLight from "./DirectionalLight"
-import { eraseAppendable } from "../../api/core/collections"
-import { assertExhaustive } from "@lincode/utils"
-import renderSystemWithData from "../../utils/renderSystemWithData"
+import AmbientLight from "./AmbientLight"
+import { cameraRenderedPtr } from "../../pointers/cameraRenderedPtr"
+import { ColorString } from "../../interface/ITexturedStandard"
+import MeshAppendable from "../core/MeshAppendable"
+import { skyLightSystem } from "../../systems/skyLightSystem"
 
-const [addLightSystem, deleteLightSystem] = renderSystemWithData(
-    (self: SkyLight, data: { csm: CSM }) => {
-        const lightDirection = self.position
-            .clone()
-            .normalize()
-            .multiplyScalar(-1)
-
-        data.csm.lightDirection = lightDirection
-        data.csm.update()
-    }
-)
-
-const mapCSMOptions = (
-    shadowDistance: ShadowDistance,
-    shadowResolution: ShadowResolution
-) => {
-    switch (shadowDistance) {
-        case "near":
-            return {
-                maxFar: 10,
-                shadowMapSize: mapShadowResolution(shadowResolution) * 2,
-                shadowBias: -0.00003
-            }
-        case "medium":
-            return {
-                maxFar: 30,
-                shadowMapSize: mapShadowResolution(shadowResolution) * 2,
-                shadowBias: -0.0001
-            }
-        case "far":
-            return {
-                maxFar: 100,
-                shadowMapSize: mapShadowResolution(shadowResolution) * 2,
-                shadowBias: -0.0001
-            }
-        default:
-            assertExhaustive(shadowDistance)
-    }
-}
-
-export default class SkyLight
-    extends LightBase<typeof HemisphereLight>
-    implements ISkyLight
-{
+export default class SkyLight extends MeshAppendable implements ISkyLight {
     public static componentName = "skyLight"
     public static defaults = skyLightDefaults
     public static schema = skyLightSchema
 
+    public $backLight: DirectionalLight
+    public $csm?: CSM
+    private _ambientLight: AmbientLight
+
     public constructor() {
-        super(HemisphereLight)
+        super()
+
+        skyLightSystem.add(this)
+
+        const backLight = (this.$backLight = new DirectionalLight())
+        backLight.$ghost()
+
+        const ambientLight = (this._ambientLight = new AmbientLight())
+        ambientLight.$ghost()
 
         this.createEffect(() => {
-            if (!this.castShadowState.get()) {
-                const directionalLight = new DirectionalLight()
-                directionalLight.intensity = 0.5
-                this.append(directionalLight)
-                eraseAppendable(directionalLight)
-                const handle = this.helperState.get(
-                    (val) => (directionalLight.helper = val)
-                )
+            const intensity = this.intensityState.get()
+            const color = this.colorState.get()
+
+            backLight.intensity = intensity * 0.25
+            ambientLight.intensity = intensity * 0.25
+            backLight.color = color
+            ambientLight.color = color
+
+            if (!this.shadowsState.get()) {
+                const light = new DirectionalLight()
+                light.$ghost()
+                light.intensity = intensity
+                light.color = color
+                this.append(light)
                 return () => {
-                    directionalLight.dispose()
-                    handle.cancel()
+                    light.dispose()
                 }
             }
-
-            const csm = new CSM({
-                ...mapCSMOptions(
-                    this.shadowDistanceState.get() ?? getShadowDistance(),
-                    this.shadowResolutionState.get() ?? getShadowResolution()
-                ),
+            const csm = (this.$csm = new CSM({
+                maxFar: 50,
+                shadowMapSize: 2048,
+                shadowBias: -0.0002,
                 cascades: 1,
                 parent: scene,
-                camera: getCameraRendered(),
-                lightIntensity: 0.5
-            })
+                camera: cameraRenderedPtr[0],
+                lightIntensity: intensity
+            }))
+            for (const light of csm.lights) light.color.set(color)
 
-            addLightSystem(this, { csm })
             const handle = getCameraRendered((val) => (csm.camera = val))
             return () => {
-                deleteLightSystem(this)
                 handle.cancel()
                 csm.dispose()
                 for (const light of csm.lights) {
@@ -110,34 +73,39 @@ export default class SkyLight
                 }
             }
         }, [
-            this.castShadowState.get,
-            this.shadowDistanceState.get,
-            getShadowDistance,
-            getShadowResolution
+            this.intensityState.get,
+            this.colorState.get,
+            this.shadowsState.get
         ])
     }
 
-    private shadowDistanceState = new Reactive<ShadowDistance | undefined>(
-        undefined
-    )
-    public get shadowDistance() {
-        return this.shadowDistanceState.get()
-    }
-    public set shadowDistance(val) {
-        this.shadowDistanceState.set(val)
+    protected override disposeNode() {
+        super.disposeNode()
+        this.$backLight.dispose()
+        this._ambientLight.dispose()
     }
 
-    public get groundColor() {
-        const light = this.lightState.get()
-        if (!light) return "#ffffff"
-
-        return "#" + light.groundColor.getHexString()
+    private intensityState = new Reactive(1)
+    public get intensity() {
+        return this.intensityState.get()
     }
-    public set groundColor(val) {
-        this.cancelHandle("groundColor", () =>
-            this.lightState.get(
-                (light) => light && (light.groundColor = new Color(val))
-            )
-        )
+    public set intensity(val) {
+        this.intensityState.set(Math.max(val, 0.1))
+    }
+
+    private colorState = new Reactive<ColorString>("#ffffff")
+    public get color() {
+        return this.colorState.get()
+    }
+    public set color(val) {
+        this.colorState.set(val)
+    }
+
+    private shadowsState = new Reactive(true)
+    public get shadows() {
+        return this.shadowsState.get()
+    }
+    public set shadows(val) {
+        this.shadowsState.set(val)
     }
 }

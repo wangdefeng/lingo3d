@@ -1,24 +1,31 @@
 import { ComponentChildren } from "preact"
-import { useState, useRef, useMemo, useContext, useEffect } from "preact/hooks"
+import { useState, useRef, useMemo } from "preact/hooks"
 import CollapseIcon from "../icons/CollapseIcon"
 import ExpandIcon from "../icons/ExpandIcon"
-import { TreeItemContext } from "./TreeItemContextProviter"
-import useClick from "../../hooks/useClick"
-import Appendable from "../../../api/core/Appendable"
-import { setDragImage } from "../../utils/drag"
+import Appendable from "../../../display/core/Appendable"
+import { setDragImage } from "../../utils/dragToCreate"
+import MeshAppendable from "../../../display/core/MeshAppendable"
+import { Object3D } from "three"
+import { draggingItemPtr } from "../../../pointers/draggingItemPtr"
+import useMouseDown from "../../hooks/useMouseDown"
+import { TREE_ITEM_HEIGHT } from "../../../globals"
+import { Signal } from "@preact/signals"
 
-export type BaseTreeItemProps = {
+export type Props = {
     label?: string
     selected?: boolean
     children?: ComponentChildren
     onCollapse?: () => void
     onExpand?: () => void
-    onClick?: () => void
-    onContextMenu?: () => void
-    onDrop?: (draggingItem?: any) => void
-    myDraggingItem?: any
+    onClick?: (e: MouseEvent) => void
+    onMouseDown?: (e: MouseEvent) => void
+    onContextMenu?: (e: MouseEvent) => void
+    onDrop?: (draggingItem: Appendable | MeshAppendable) => void
+    onDragStart?: () => void
+    onDragEnd?: () => void
+    myDraggingItem?: Appendable | MeshAppendable | Object3D
     draggable?: boolean
-    expanded?: boolean
+    expandedSignal?: Signal<boolean>
     expandable?: boolean
     outlined?: boolean
     IconComponent?: any
@@ -32,51 +39,44 @@ const BaseTreeItem = ({
     onCollapse,
     onExpand,
     onClick,
+    onMouseDown,
     onContextMenu,
     onDrop,
+    onDragStart,
+    onDragEnd,
     myDraggingItem,
     draggable,
-    expanded: expandedProp,
+    expandedSignal,
     expandable = !!children,
     outlined,
     IconComponent,
-    height
-}: BaseTreeItemProps) => {
+    height = TREE_ITEM_HEIGHT
+}: Props) => {
     const expandIconStyle = {
         opacity: expandable ? 0.5 : 0.05,
         cursor: "pointer"
     }
-
-    const [expanded, setExpanded] = useState(!!expandedProp)
-    useEffect(() => {
-        setExpanded(!!expandedProp)
-    }, [expandedProp])
-
-    const startRef = useClick(onClick)
+    const startRef = useMouseDown(onClick)
     const endRef = useRef<HTMLDivElement>(null)
 
     const highlightWidth = useMemo(() => {
         if (!selected || !startRef.current || !endRef.current) return
-
         const boundsStart = startRef.current.getBoundingClientRect()
         const boundsEnd = endRef.current.getBoundingClientRect()
         return boundsEnd.right - boundsStart.left + 4
-    }, [selected, expanded])
+    }, [selected, expandedSignal?.value])
 
     const collapse = () => {
-        setExpanded(false)
+        if (expandedSignal) expandedSignal.value = false
         onCollapse?.()
     }
     const expand = () => {
-        setExpanded(true)
+        if (expandedSignal) expandedSignal.value = true
         onExpand?.()
     }
 
-    const context = useContext(TreeItemContext)
     const canSetDragOver = () =>
-        draggable &&
-        context.draggingItem &&
-        context.draggingItem !== myDraggingItem
+        draggable && draggingItemPtr[0] && draggingItemPtr[0] !== myDraggingItem
 
     const [dragOver, setDragOver] = useState(false)
 
@@ -85,12 +85,14 @@ const BaseTreeItem = ({
             draggable={draggable}
             onDragStart={(e) => {
                 e.stopPropagation()
-                context.draggingItem = myDraggingItem
+                draggingItemPtr[0] = myDraggingItem
                 setDragImage(e)
+                onDragStart?.()
             }}
             onDragEnd={(e) => {
                 e.stopPropagation()
-                context.draggingItem = undefined
+                draggingItemPtr[0] = undefined
+                onDragEnd?.()
             }}
             onDragOver={(e) => {
                 e.stopPropagation()
@@ -113,30 +115,27 @@ const BaseTreeItem = ({
                 setDragOver(false)
 
                 if (
-                    !context.draggingItem.traverseSome(
+                    draggingItemPtr[0] instanceof Appendable &&
+                    !draggingItemPtr[0].traverseSome(
                         (child: Appendable) => myDraggingItem === child
                     )
                 )
-                    onDrop?.(context.draggingItem)
+                    onDrop?.(draggingItemPtr[0])
             }}
             style={{
                 color: "rgba(255, 255, 255, 0.75)",
                 marginLeft: 8,
                 borderLeft: "1px solid rgba(255, 255, 255, 0.05)",
-                background: dragOver ? "rgba(255, 255, 255, 0.5)" : "none"
+                backgroundColor: dragOver
+                    ? "rgba(255, 255, 255, 0.5)"
+                    : undefined
             }}
         >
             <div
                 ref={startRef}
-                onDblClick={(e: MouseEvent) => {
-                    e.stopPropagation()
-                    expanded ? collapse() : expand()
-                }}
-                onContextMenu={(e) => {
-                    e.stopPropagation()
-                    e.preventDefault()
-                    onContextMenu?.()
-                }}
+                onMouseDown={onMouseDown}
+                onDblClick={expandedSignal?.value ? collapse : expand}
+                onContextMenu={onContextMenu}
                 style={{
                     display: "flex",
                     alignItems: "center",
@@ -153,7 +152,7 @@ const BaseTreeItem = ({
                     height
                 }}
             >
-                {expanded ? (
+                {expandedSignal?.value ? (
                     <CollapseIcon style={expandIconStyle} onClick={collapse} />
                 ) : (
                     <ExpandIcon style={expandIconStyle} onClick={expand} />
@@ -163,7 +162,7 @@ const BaseTreeItem = ({
                     {label}
                 </div>
             </div>
-            {expanded &&
+            {expandedSignal?.value &&
                 (typeof children === "function" ? children() : children)}
         </div>
     )

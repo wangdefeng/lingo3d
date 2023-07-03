@@ -1,5 +1,6 @@
 import useInitCSS from "../hooks/useInitCSS"
 import useInitEditor from "../hooks/useInitEditor"
+import { sceneGraphWidthSignal } from "../signals/sizeSignals"
 import RulerBar from "./RulerBar"
 import Scroller from "./Scroller"
 import TimelineBar from "./TimelineBar"
@@ -21,24 +22,15 @@ const TimelineEditor = () => {
                 }}
             >
                 <div
-                    style={{
-                        width: 200,
-                        display: "flex",
-                        flexDirection: "column"
-                    }}
+                    className="lingo3d-flexcol"
+                    style={{ width: sceneGraphWidthSignal.value }}
                 >
                     <TimelineBar />
                     <div style={{ flexGrow: 1 }}>
                         <TimelineGraph />
                     </div>
                 </div>
-                <div
-                    style={{
-                        flexGrow: 1,
-                        display: "flex",
-                        flexDirection: "column"
-                    }}
-                >
+                <div className="lingo3d-flexcol" style={{ flexGrow: 1 }}>
                     <RulerBar />
                     <div style={{ flexGrow: 1 }}>
                         <Scroller />

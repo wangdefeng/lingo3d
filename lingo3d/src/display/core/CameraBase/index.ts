@@ -1,70 +1,78 @@
-import { CameraHelper, PerspectiveCamera, Quaternion } from "three"
-import ObjectManager from "../ObjectManager"
-import { ray, euler, quaternion, quaternion_ } from "../../utils/reusables"
+import { CameraHelper, PerspectiveCamera } from "three"
+import GimbalObjectManager from "../GimbalObjectManager"
+import { ray, euler } from "../../utils/reusables"
 import ICameraBase, { MouseControl } from "../../../interface/ICameraBase"
-import { deg2Rad, Point3d } from "@lincode/math"
+import { deg2Rad } from "@lincode/math"
 import { MIN_POLAR_ANGLE, MAX_POLAR_ANGLE, PI, PI_HALF } from "../../../globals"
 import { Reactive } from "@lincode/reactivity"
-import { Cancellable } from "@lincode/promiselikes"
 import scene from "../../../engine/scene"
 import { pushCameraList, pullCameraList } from "../../../states/useCameraList"
 import {
     pullCameraStack,
     pushCameraStack
 } from "../../../states/useCameraStack"
-import getWorldPosition from "../../utils/getWorldPosition"
-import getWorldQuaternion from "../../utils/getWorldQuaternion"
-import getWorldDirection from "../../utils/getWorldDirection"
-import { addSelectionHelper } from "../utils/raycast/selectionCandidates"
+import getWorldPosition from "../../../memo/getWorldPosition"
+import getWorldDirection from "../../../memo/getWorldDirection"
 import HelperSprite from "../utils/HelperSprite"
-import { setManager } from "../../../api/utils/getManager"
-import throttleSystem from "../../../utils/throttleSystem"
-import MeshAppendable from "../../../api/core/MeshAppendable"
-import { getEditorHelper } from "../../../states/useEditorHelper"
+import { setManager } from "../utils/getManager"
+import MeshAppendable from "../MeshAppendable"
 import { getCameraRendered } from "../../../states/useCameraRendered"
-
-export const updateAngleSystem = throttleSystem((target: CameraBase) =>
-    target.gyrate(0, 0)
-)
+import { cameraRenderedPtr } from "../../../pointers/cameraRenderedPtr"
+import { Point3dType } from "../../../utils/isPoint"
+import { ssrExcludeSet } from "../../../collections/ssrExcludeSet"
+import { cameraTransitionSet } from "../../../collections/cameraTransitionSet"
+import { renderCheckExcludeSet } from "../../../collections/renderCheckExcludeSet"
+import { configCameraSystem } from "../../../systems/configSystems/configCameraSystem"
+import { gyrateResetSystem } from "../../../systems/configSystems/gyrateResetSystem"
+import { getWorldMode } from "../../../states/useWorldMode"
+import { worldModePtr } from "../../../pointers/worldModePtr"
 
 export default abstract class CameraBase<
         T extends PerspectiveCamera = PerspectiveCamera
     >
-    extends ObjectManager
+    extends GimbalObjectManager
     implements ICameraBase
 {
     public midObject3d = this.outerObject3d
 
-    public constructor(public camera: T) {
+    public constructor(public $camera: T) {
         super()
-        this.object3d.add(camera)
-        setManager(camera, this)
-
-        pushCameraList(camera)
-        this.then(() => {
-            pullCameraStack(camera)
-            pullCameraList(camera)
-        })
+        this.object3d.add($camera)
+        setManager($camera, this)
+        pushCameraList($camera)
 
         this.createEffect(() => {
-            if (!getEditorHelper() || getCameraRendered() === camera) return
+            if (
+                worldModePtr[0] !== "editor" ||
+                cameraRenderedPtr[0] === $camera ||
+                this.$disableSceneGraph
+            )
+                return
 
-            const helper = new CameraHelper(camera)
+            const helper = new CameraHelper($camera)
+            ssrExcludeSet.add(helper)
+            renderCheckExcludeSet.add(helper)
             scene.add(helper)
 
-            const sprite = new HelperSprite("camera")
-            const handle = addSelectionHelper(sprite, this)
+            const sprite = new HelperSprite("camera", this)
             helper.add(sprite.outerObject3d)
             return () => {
                 helper.dispose()
+                ssrExcludeSet.delete(helper)
+                renderCheckExcludeSet.delete(helper)
                 scene.remove(helper)
-                handle.cancel()
+                sprite.dispose()
             }
-        }, [getEditorHelper, getCameraRendered])
+        }, [getWorldMode, getCameraRendered])
     }
 
-    //@ts-ignore
-    public override lookAt(target: MeshAppendable | Point3d): void
+    protected override disposeNode(): void {
+        super.disposeNode()
+        pullCameraStack(this.$camera)
+        pullCameraList(this.$camera)
+    }
+
+    public override lookAt(target: MeshAppendable | Point3dType): void
     public override lookAt(x: number, y: number | undefined, z: number): void
     public override lookAt(a0: any, a1?: any, a2?: any) {
         super.lookAt(a0, a1, a2)
@@ -74,36 +82,22 @@ export default abstract class CameraBase<
         this.outerObject3d.setRotationFromEuler(angle)
     }
 
+    private _fov = 75
     public get fov() {
-        return this.camera.fov
+        return this._fov
     }
     public set fov(val) {
-        this.camera.fov = val
-        this.camera.updateProjectionMatrix?.()
+        this._fov = val
+        configCameraSystem.add(this)
     }
 
+    private _zoom = 1
     public get zoom() {
-        return this.camera.zoom
+        return this._zoom
     }
     public set zoom(val) {
-        this.camera.zoom = val
-        this.camera.updateProjectionMatrix?.()
-    }
-
-    public get near() {
-        return this.camera.near
-    }
-    public set near(val) {
-        this.camera.near = val
-        this.camera.updateProjectionMatrix?.()
-    }
-
-    public get far() {
-        return this.camera.far
-    }
-    public set far(val) {
-        this.camera.far = val
-        this.camera.updateProjectionMatrix?.()
+        this._zoom = val
+        configCameraSystem.add(this)
     }
 
     private _active?: boolean
@@ -112,32 +106,24 @@ export default abstract class CameraBase<
     }
     public set active(val) {
         this._active = val
-        pullCameraStack(this.camera)
-        val && pushCameraStack(this.camera)
+        pullCameraStack(this.$camera)
+        val && pushCameraStack(this.$camera)
     }
 
     public get transition() {
-        return this.camera.userData.transition as boolean | number | undefined
+        return cameraTransitionSet.has(this.$camera)
     }
     public set transition(val) {
-        this.camera.userData.transition = val
+        val
+            ? cameraTransitionSet.add(this.$camera)
+            : cameraTransitionSet.delete(this.$camera)
     }
 
     protected override getRay() {
         return ray.set(
-            getWorldPosition(this.camera),
-            getWorldDirection(this.camera)
+            getWorldPosition(this.$camera),
+            getWorldDirection(this.$camera)
         )
-    }
-
-    public override append(object: MeshAppendable) {
-        this.appendNode(object)
-        this.camera.add(object.outerObject3d)
-    }
-
-    public override attach(object: MeshAppendable) {
-        this.appendNode(object)
-        this.camera.attach(object.outerObject3d)
     }
 
     protected orbitMode?: boolean
@@ -159,28 +145,13 @@ export default abstract class CameraBase<
         manager.setRotationFromEuler(euler)
     }
 
-    private gyrateHandle?: Cancellable
-    public gyrate(movementX: number, movementY: number, noDamping?: boolean) {
-        if (this.enableDamping) {
-            movementX *= 0.5
-            movementY *= 0.5
-        }
-        if (this.orbitMode) this._gyrate(movementX, movementY)
-        else {
-            this._gyrate(movementX, 0)
-            this._gyrate(0, movementY, true)
-        }
-        if (!this.enableDamping || noDamping || !(movementX || movementY))
+    public gyrate(movementX: number, movementY: number) {
+        if (this.orbitMode) {
+            this._gyrate(movementX, movementY)
             return
-
-        this.gyrateHandle?.cancel()
-
-        let factor = 1
-        const handle = (this.gyrateHandle = this.registerOnLoop(() => {
-            factor *= 0.95
-            this._gyrate(movementX * factor, movementY * factor)
-            factor <= 0.001 && handle.cancel()
-        }))
+        }
+        this._gyrate(movementX, 0)
+        this._gyrate(0, movementY, true)
     }
 
     private _minPolarAngle = MIN_POLAR_ANGLE
@@ -189,7 +160,7 @@ export default abstract class CameraBase<
     }
     public set minPolarAngle(val) {
         this._minPolarAngle = val
-        updateAngleSystem(this)
+        gyrateResetSystem.add(this)
     }
 
     private _maxPolarAngle = MAX_POLAR_ANGLE
@@ -198,7 +169,7 @@ export default abstract class CameraBase<
     }
     public set maxPolarAngle(val) {
         this._maxPolarAngle = val
-        updateAngleSystem(this)
+        gyrateResetSystem.add(this)
     }
 
     private _minAzimuthAngle = -Infinity
@@ -207,7 +178,7 @@ export default abstract class CameraBase<
     }
     public set minAzimuthAngle(val) {
         this._minAzimuthAngle = val
-        updateAngleSystem(this)
+        gyrateResetSystem.add(this)
     }
 
     private _maxAzimuthAngle = Infinity
@@ -216,13 +187,14 @@ export default abstract class CameraBase<
     }
     public set maxAzimuthAngle(val) {
         this._maxAzimuthAngle = val
-        updateAngleSystem(this)
+        gyrateResetSystem.add(this)
     }
 
     public setPolarAngle(angle: number) {
         const { _minPolarAngle, _maxPolarAngle } = this
         this.minPolarAngle = this.maxPolarAngle = angle
-        this.queueMicrotask(() => {
+        queueMicrotask(() => {
+            if (this.done) return
             this.minPolarAngle = _minPolarAngle
             this.maxPolarAngle = _maxPolarAngle
         })
@@ -231,7 +203,8 @@ export default abstract class CameraBase<
     public setAzimuthAngle(angle: number) {
         const { _minAzimuthAngle, _maxAzimuthAngle } = this
         this.minAzimuthAngle = this.maxAzimuthAngle = angle
-        this.queueMicrotask(() => {
+        queueMicrotask(() => {
+            if (this.done) return
             this.minAzimuthAngle = _minAzimuthAngle
             this.maxAzimuthAngle = _maxAzimuthAngle
         })
@@ -255,7 +228,7 @@ export default abstract class CameraBase<
         val && this.setAzimuthAngle(val)
     }
 
-    public enableDamping = false
+    public inertia = false
 
     protected mouseControlState = new Reactive<MouseControl>(false)
     private mouseControlInit?: boolean
@@ -270,61 +243,6 @@ export default abstract class CameraBase<
 
         import("./enableMouseControl").then((module) =>
             module.default.call(this)
-        )
-    }
-
-    private _gyroControl?: boolean
-    public get gyroControl() {
-        return !!this._gyroControl
-    }
-    public set gyroControl(val) {
-        this._gyroControl = val
-
-        const deviceEuler = euler
-        const deviceQuaternion = quaternion
-        const screenTransform = quaternion_
-        const worldTransform = new Quaternion(
-            -Math.sqrt(0.5),
-            0,
-            0,
-            Math.sqrt(0.5)
-        )
-
-        const quat = getWorldQuaternion(this.object3d)
-        const orient = 0
-
-        const cb = (e: DeviceOrientationEvent) => {
-            this.object3d.quaternion.copy(quat)
-            deviceEuler.set(
-                (e.beta ?? 0) * deg2Rad,
-                (e.alpha ?? 0) * deg2Rad,
-                -(e.gamma ?? 0) * deg2Rad,
-                "YXZ"
-            )
-
-            this.object3d.quaternion.multiply(
-                deviceQuaternion.setFromEuler(deviceEuler)
-            )
-
-            const minusHalfAngle = -orient * 0.5
-            screenTransform.set(
-                0,
-                Math.sin(minusHalfAngle),
-                0,
-                Math.cos(minusHalfAngle)
-            )
-
-            this.object3d.quaternion.multiply(screenTransform)
-            this.object3d.quaternion.multiply(worldTransform)
-        }
-        val && window.addEventListener("deviceorientation", cb)
-        this.cancelHandle(
-            "gyroControl",
-            val &&
-                (() =>
-                    new Cancellable(() =>
-                        window.removeEventListener("deviceorientation", cb)
-                    ))
         )
     }
 }

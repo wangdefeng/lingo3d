@@ -1,23 +1,39 @@
-import { objectURLFileMap } from "../../display/core/utils/objectURL"
 import { equalsDefaultValue } from "../../interface/utils/getDefaultValue"
-import { getFileCurrent } from "../../states/useFileCurrent"
-import Appendable from "../core/Appendable"
-import relativePath from "../path/relativePath"
+import Appendable from "../../display/core/Appendable"
 import toFixed, { toFixedPoint } from "./toFixed"
-import { SceneGraphNode } from "./types"
+import { AppendableNode, SceneGraphNode } from "./types"
 import { VERSION } from "../../globals"
-import { nonSerializedAppendables, appendableRoot } from "../core/collections"
-import { isPoint } from "./isPoint"
+import { isPoint } from "../../utils/isPoint"
 import nonSerializedProperties from "./nonSerializedProperties"
+import unsafeGetValue from "../../utils/unsafeGetValue"
+import Model from "../../display/Model"
+import getStaticProperties from "../../display/utils/getStaticProperties"
+import { appendableRoot } from "../../collections/appendableRoot"
+import { isTemplate, isTemplateNode } from "../../collections/typeGuards"
 
-const serialize = (children: Array<any> | Set<any>, skipUUID?: boolean) => {
-    const dataParent: Array<SceneGraphNode> = []
+const serialize = (
+    children: Array<Appendable | Model> | Set<Appendable | Model>,
+    skipUUID: boolean,
+    skipTemplateCheck: boolean,
+    skipDescendants: boolean
+) => {
+    const dataParent: Array<AppendableNode> = []
     for (const child of children) {
-        if (nonSerializedAppendables.has(child)) continue
+        if (child.$disableSerialize) continue
+        const { componentName, schema } = getStaticProperties(child)
 
-        const { componentName, schema, defaults } = child.constructor
+        const data: Record<string, any> = skipTemplateCheck
+            ? { type: componentName }
+            : isTemplateNode(child)
+            ? {
+                  type: "templateNode",
+                  source: componentName,
+                  spawnNode: child.spawnNode
+              }
+            : isTemplate(child)
+            ? { type: "template", source: componentName }
+            : { type: componentName }
 
-        const data: Record<string, any> = { type: componentName }
         for (const [key, type] of Object.entries(schema)) {
             if (
                 type === Function ||
@@ -28,52 +44,52 @@ const serialize = (children: Array<any> | Set<any>, skipUUID?: boolean) => {
                 continue
 
             let value: any
-            if (key === "animations") {
+            if (key === "animations" && "serializeAnimations" in child) {
                 value = child.serializeAnimations
                 if (!value) continue
-            } else if (key === "animation") {
+            } else if (key === "animation" && "serializeAnimation" in child) {
                 value = child.serializeAnimation
                 if (!value) continue
-            } else value = child[key]
+            } else value = unsafeGetValue(child, key)
 
             const t = typeof value
-            if (equalsDefaultValue(value, defaults, key) || t === "function")
+            if (equalsDefaultValue(value, child, key) || t === "function")
                 continue
 
-            const fileCurrent = getFileCurrent()
-            if (
-                t === "string" &&
-                value.startsWith("blob:http") &&
-                fileCurrent
-            ) {
-                const file = objectURLFileMap.get(value)!
-                value = relativePath(
-                    fileCurrent.webkitRelativePath,
-                    file.webkitRelativePath
-                )
-            } else if (t === "number") value = toFixed(value)
+            if (t === "number") value = toFixed(value)
             else if (isPoint(value, t)) value = toFixedPoint(value)
             else if (Array.isArray(value) && value.some((v) => isPoint(v)))
                 value = value.map((v) => (isPoint(v) ? toFixedPoint(v) : v))
 
             data[key] = value
         }
-        if (child.children) {
-            const dataChildren = serialize(child.children, skipUUID)
+        if (!skipDescendants && child.children) {
+            const dataChildren = serialize(
+                child.children,
+                skipUUID,
+                skipTemplateCheck,
+                skipDescendants
+            )
             if (dataChildren.length) data.children = dataChildren
         }
-        dataParent.push(data as SceneGraphNode)
+        dataParent.push(data as AppendableNode)
     }
     return dataParent
 }
 
-export default (
-    versionStamp?: boolean,
-    children: Array<Appendable> | Set<Appendable> | Appendable = appendableRoot,
-    skipUUID?: boolean
-) => {
-    if (children instanceof Appendable) return serialize([children], skipUUID)
-    const result = serialize(children, skipUUID)
+export const serializeAppendable = (
+    appendable: Appendable,
+    skipUUID = true,
+    skipDescendants = false
+) => serialize([appendable], skipUUID, true, skipDescendants)[0]
+
+export default (versionStamp?: boolean) => {
+    const result: Array<SceneGraphNode> = serialize(
+        appendableRoot,
+        false,
+        false,
+        false
+    )
     versionStamp && result.unshift({ type: "lingo3d", version: VERSION })
     return result
 }

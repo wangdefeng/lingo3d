@@ -1,25 +1,29 @@
 import { Cancellable } from "@lincode/promiselikes"
-import Appendable from "../../api/core/Appendable"
-import MeshAppendable from "../../api/core/MeshAppendable"
-import Dummy from "../../display/Dummy"
-import { defaultsOwnKeysRecordMap } from "../../interface/utils/Defaults"
-import unsafeGetValue from "../../utils/unsafeGetValue"
-import addInputs from "./addInputs"
+import Appendable from "../../display/core/Appendable"
+import MeshAppendable from "../../display/core/MeshAppendable"
+import getStaticProperties from "../../display/utils/getStaticProperties"
+import addInputs, { Connection } from "./addInputs"
 import createParams from "./createParams"
 import splitObject from "./splitObject"
 import { Pane } from "./tweakpane"
+import { defaultsOwnKeysRecordMap } from "../../collections/defaultsCollections"
 
 export default (
-    handle: Cancellable,
     pane: Pane,
-    selectionTarget: Appendable | MeshAppendable
+    selectionTarget: Appendable | MeshAppendable,
+    includeKeys: Array<string> | undefined,
+    connection?: Connection,
+    toggle?: boolean
 ) => {
-    const { schema, defaults, componentName } = unsafeGetValue(
+    const handle = new Cancellable()
+    const { defaults, componentName } = getStaticProperties(selectionTarget)
+    const [params, manager] = createParams(
         selectionTarget,
-        "constructor"
+        includeKeys,
+        !connection && !toggle
     )
     const [ownParams, ownRest] = splitObject(
-        createParams(schema, defaults, selectionTarget),
+        params,
         Object.keys(defaultsOwnKeysRecordMap.get(defaults) ?? {})
     )
 
@@ -33,10 +37,11 @@ export default (
             handle,
             pane,
             "general",
-            selectionTarget,
-            defaults,
+            manager,
             generalParams,
-            true
+            true,
+            connection,
+            toggle
         )
 
     const [physicsParams, physicsRest] = splitObject(generalRest, [
@@ -49,9 +54,11 @@ export default (
             handle,
             pane,
             "physics",
-            selectionTarget,
-            defaults,
-            physicsParams
+            manager,
+            physicsParams,
+            false,
+            connection,
+            toggle
         )
 
     const [transformParams0, transformRest] = splitObject(physicsRest, [
@@ -94,51 +101,72 @@ export default (
             handle,
             pane,
             "transform",
-            selectionTarget,
-            defaults,
-            transformParams
+            manager,
+            transformParams,
+            false,
+            connection,
+            toggle
         )
         innerTransformParams &&
             addInputs(
                 handle,
                 pane,
                 "inner transform",
-                selectionTarget,
-                defaults,
-                innerTransformParams
+                manager,
+                innerTransformParams,
+                false,
+                connection,
+                toggle
             )
     }
 
-    const [animationParams, animationRest] = splitObject(transformRest, [
+    const [interactionParams, interactionRest] = splitObject(transformRest, [
+        "hitTarget"
+    ])
+    interactionParams &&
+        addInputs(
+            handle,
+            pane,
+            "interaction",
+            manager,
+            interactionParams,
+            false,
+            connection,
+            toggle
+        )
+
+    const [animationParams, animationRest] = splitObject(interactionRest, [
         "animation",
-        "animationPaused",
-        "animationRepeat"
+        "animationPaused"
     ])
     animationParams &&
         addInputs(
             handle,
             pane,
             "animation",
-            selectionTarget,
-            defaults,
-            animationParams
+            manager,
+            animationParams,
+            false,
+            connection,
+            toggle
         )
 
     const [displayParams, displayRest] = splitObject(animationRest, [
         "visible",
         "innerVisible",
-        "frustumCulled",
-        "castShadow",
-        "receiveShadow"
+        "reflectionVisible",
+        "castShadow"
     ])
     displayParams &&
         addInputs(
             handle,
             pane,
             "display",
-            selectionTarget,
-            defaults,
-            displayParams
+            manager,
+            displayParams,
+            false,
+            connection,
+            toggle
         )
 
     const [effectsParams, effectsRest] = splitObject(displayRest, [
@@ -150,9 +178,11 @@ export default (
             handle,
             pane,
             "effects",
-            selectionTarget,
-            defaults,
-            effectsParams
+            manager,
+            effectsParams,
+            false,
+            connection,
+            toggle
         )
 
     const [adjustMaterialParams, adjustMaterialRest] = splitObject(
@@ -170,19 +200,23 @@ export default (
             handle,
             pane,
             "adjust material",
-            selectionTarget,
-            defaults,
-            adjustMaterialParams
+            manager,
+            adjustMaterialParams,
+            false,
+            connection,
+            toggle
         )
 
     const [materialParams, materialRest] = splitObject(adjustMaterialRest, [
-        ...("textureRotation" in selectionTarget
+        ...("textureRotation" in manager
             ? ["opacity", "color", "texture"]
             : []),
         "textureRepeat",
         "textureFlipY",
         "textureRotation",
         "wireframe",
+        "depthTest",
+        "blending",
         "emissive",
         "emissiveIntensity"
     ])
@@ -191,9 +225,11 @@ export default (
             handle,
             pane,
             "material",
-            selectionTarget,
-            defaults,
-            materialParams
+            manager,
+            materialParams,
+            false,
+            connection,
+            toggle
         )
 
     const [pbrMaterialParams, pbrMaterialRest] = splitObject(materialRest, [
@@ -214,51 +250,33 @@ export default (
         "lightMapIntensity",
         "envMap",
         "envMapIntensity",
-        "alphaMap",
-        "depthTest"
+        "alphaMap"
     ])
     pbrMaterialParams &&
         addInputs(
             handle,
             pane,
             "pbr material",
-            selectionTarget,
-            defaults,
-            pbrMaterialParams
+            manager,
+            pbrMaterialParams,
+            false,
+            connection,
+            toggle
         )
 
     Object.assign(pbrMaterialRest, ownParams)
 
-    if (selectionTarget instanceof Dummy) {
-        pbrMaterialRest.stride = {
-            x: selectionTarget.strideRight,
-            y: -selectionTarget.strideForward
-        }
+    if (Object.keys(pbrMaterialRest).length)
         addInputs(
             handle,
             pane,
             componentName,
-            selectionTarget,
-            defaults,
+            manager,
             pbrMaterialRest,
-            true
-        ).then((inputs) =>
-            inputs.stride.on("change", ({ value }: any) => {
-                Object.assign(pbrMaterialRest, {
-                    strideForward: -value.y,
-                    strideRight: value.x
-                })
-                pane.refresh()
-            })
+            true,
+            connection,
+            toggle
         )
-    } else if (Object.keys(pbrMaterialRest).length)
-        addInputs(
-            handle,
-            pane,
-            componentName,
-            selectionTarget,
-            defaults,
-            pbrMaterialRest,
-            true
-        )
+
+    return handle
 }

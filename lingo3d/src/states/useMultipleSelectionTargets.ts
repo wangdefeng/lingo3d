@@ -1,20 +1,14 @@
 import store, { add, createEffect, remove, clear } from "@lincode/reactivity"
-import PositionedManager, {
-    isPositionedManager
-} from "../display/core/PositionedManager"
-import { onDispose } from "../events/onDispose"
-import { Group as ThreeGroup, Object3D } from "three"
-import { eraseAppendable } from "../api/core/collections"
-import SimpleObjectManager from "../display/core/SimpleObjectManager"
+import { Object3D } from "three"
 import { box3, vector3 } from "../display/utils/reusables"
-import scene from "../engine/scene"
-import { onEditorGroupItems } from "../events/onEditorGroupItems"
-import { emitSelectionTarget } from "../events/onSelectionTarget"
 import { setSelectionTarget } from "./useSelectionTarget"
-import Group from "../display/Group"
+import MeshAppendable from "../display/core/MeshAppendable"
+import { multipleSelectionTargets } from "../collections/multipleSelectionTargets"
+import { disposeCollectionStateSystem } from "../systems/eventSystems/disposeCollectionStateSystem"
+import { multipleSelectionGroupPtr } from "../pointers/multipleSelectionGroupPtr"
 
 const [setMultipleSelectionTargets, getMultipleSelectionTargets] = store([
-    new Set<PositionedManager>()
+    multipleSelectionTargets
 ])
 export { getMultipleSelectionTargets }
 export const addMultipleSelectionTargets = add(
@@ -30,49 +24,54 @@ export const clearMultipleSelectionTargets = clear(
     getMultipleSelectionTargets
 )
 
-export const multipleSelectionTargetsFlushingPtr = [false]
+let parentEntries: Array<[Object3D, Object3D]> | undefined
+let group: Object3D | undefined
+let attached = false
+const detach = () => {
+    if (!parentEntries || !attached) return
+    attached = false
+    if (parentEntries[0][0].parent === group)
+        for (const [object, parent] of parentEntries) parent.attach(object)
+}
+const attach = () => {
+    if (!parentEntries || !group || attached) return
+    attached = true
+    for (const [object] of parentEntries) group.attach(object)
+}
 
-export const flushMultipleSelectionTargets = async (
-    onFlush: (
-        targets: Array<PositionedManager>
-    ) => Array<PositionedManager> | void,
+export const flushMultipleSelectionTargets = (
+    onFlush: () => Array<MeshAppendable> | void,
     deselect?: boolean
 ) => {
-    multipleSelectionTargetsFlushingPtr[0] = true
-
-    const [targets] = getMultipleSelectionTargets()
-    const targetsBackup = [...targets]
-    targets.clear()
-    setMultipleSelectionTargets([targets])
-
-    await Promise.resolve()
-
-    const newTargets = onFlush(targetsBackup)
-    if (deselect) {
-        multipleSelectionTargetsFlushingPtr[0] = false
+    detach()
+    const newTargets = onFlush()
+    if (newTargets) {
+        multipleSelectionTargets.clear()
+        for (const target of newTargets) multipleSelectionTargets.add(target)
+        setMultipleSelectionTargets([multipleSelectionTargets])
         return
     }
-    await Promise.resolve()
-    await Promise.resolve()
-
-    for (const target of newTargets ?? targetsBackup) targets.add(target)
-    setMultipleSelectionTargets([targets])
-    multipleSelectionTargetsFlushingPtr[0] = false
+    if (deselect) {
+        multipleSelectionTargets.clear()
+        setMultipleSelectionTargets([multipleSelectionTargets])
+        return
+    }
+    attach()
 }
 
 createEffect(() => {
-    const [targets] = getMultipleSelectionTargets()
-    if (!targets.size) return
+    if (!multipleSelectionTargets.size) return
 
-    const group = new ThreeGroup()
-    scene.add(group)
-
-    const groupManager = new SimpleObjectManager(group)
-    eraseAppendable(groupManager)
+    const groupManager = new MeshAppendable()
+    groupManager.$ghost()
+    multipleSelectionGroupPtr[0] = groupManager
     setSelectionTarget(groupManager)
 
-    const parentEntries: Array<[Object3D, Object3D]> = []
-    for (const { outerObject3d } of targets) {
+    parentEntries = []
+    group = groupManager.object3d
+    attached = true
+
+    for (const { outerObject3d } of multipleSelectionTargets) {
         if (!outerObject3d.parent) continue
         parentEntries.push([outerObject3d, outerObject3d.parent])
         group.attach(outerObject3d)
@@ -84,39 +83,21 @@ createEffect(() => {
     group.position.copy(box3.getCenter(vector3))
     for (const [object] of parentEntries) group.attach(object)
 
-    let consolidated = false
-    const handle = onEditorGroupItems(() => {
-        if (!targets.size || consolidated) return
-        consolidated = true
-
-        const consolidatedGroup = new Group()
-        consolidatedGroup.position.copy(group.position)
-        for (const target of targets) consolidatedGroup.attach(target)
-
-        emitSelectionTarget(consolidatedGroup)
-    })
-
     return () => {
-        if (!groupManager.done && !consolidated)
-            for (const [object, parent] of parentEntries) parent.attach(object)
-
+        detach()
         groupManager.dispose()
-        scene.remove(group)
-        handle.cancel()
+        multipleSelectionGroupPtr[0] = undefined
+        parentEntries = undefined
+        group = undefined
     }
 }, [getMultipleSelectionTargets])
 
 createEffect(() => {
-    const [targets] = getMultipleSelectionTargets()
-    if (!targets.size) return
-
-    const handle = onDispose(
-        (item) =>
-            isPositionedManager(item) &&
-            targets.has(item) &&
-            deleteMultipleSelectionTargets(item)
-    )
+    if (!multipleSelectionTargets.size) return
+    disposeCollectionStateSystem.add(multipleSelectionTargets, {
+        deleteState: deleteMultipleSelectionTargets
+    })
     return () => {
-        handle.cancel()
+        disposeCollectionStateSystem.delete(multipleSelectionTargets)
     }
 }, [getMultipleSelectionTargets])

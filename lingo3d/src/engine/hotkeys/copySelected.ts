@@ -1,33 +1,46 @@
-import Appendable from "../../api/core/Appendable"
-import MeshAppendable from "../../api/core/MeshAppendable"
-import deserialize from "../../api/serializer/deserialize"
-import serialize from "../../api/serializer/serialize"
-import PositionedManager from "../../display/core/PositionedManager"
+import Appendable from "../../display/core/Appendable"
+import MeshAppendable from "../../display/core/MeshAppendable"
+import { serializeAppendable } from "../../api/serializer/serialize"
+import spawn from "../../api/spawn"
+import { CommandRecord, pushUndoStack } from "../../api/undoStack"
+import { multipleSelectionTargets } from "../../collections/multipleSelectionTargets"
 import { emitSelectionTarget } from "../../events/onSelectionTarget"
-import {
-    getMultipleSelectionTargets,
-    flushMultipleSelectionTargets
-} from "../../states/useMultipleSelectionTargets"
-import { getSelectionTarget } from "../../states/useSelectionTarget"
+import { selectionTargetPtr } from "../../pointers/selectionTargetPtr"
+import { flushMultipleSelectionTargets } from "../../states/useMultipleSelectionTargets"
 
-const copy = <T extends Appendable | MeshAppendable>(target: T): T => {
-    const [item] = deserialize(serialize(false, target, true))
-    if (target.parent && item) {
-        "attach" in target.parent
-            ? target.parent.attach(item)
-            : target.parent.append(item)
-    }
-    return item as any
+const copy = <T extends Appendable | MeshAppendable>(target: T) => {
+    const item = spawn(target)
+    target.parent?.append(item)
+    return item as T
 }
 
 export default () => {
-    const target = getSelectionTarget()
-    const [targets] = getMultipleSelectionTargets()
-    if (targets.size) {
-        flushMultipleSelectionTargets((targets) => {
-            const newTargets: Array<PositionedManager> = []
-            for (const target of targets) newTargets.push(copy(target))
+    if (multipleSelectionTargets.size) {
+        flushMultipleSelectionTargets(() => {
+            const commandRecord: CommandRecord = {}
+            const newTargets: Array<MeshAppendable> = []
+            for (const target of multipleSelectionTargets) {
+                const manager = copy(target)
+                newTargets.push(manager)
+                commandRecord[manager.uuid] = {
+                    command: "create",
+                    ...serializeAppendable(manager, false)
+                }
+            }
+            pushUndoStack(commandRecord)
             return newTargets
         })
-    } else if (target) emitSelectionTarget(copy(target))
+        return
+    }
+    if (!selectionTargetPtr[0]) return
+    const manager = copy(selectionTargetPtr[0])
+    flushMultipleSelectionTargets(() => {
+        pushUndoStack({
+            [manager.uuid]: {
+                command: "create",
+                ...serializeAppendable(manager, false)
+            }
+        })
+        emitSelectionTarget(manager)
+    }, true)
 }

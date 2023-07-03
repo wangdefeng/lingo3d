@@ -1,70 +1,33 @@
-import { deg2Rad } from "@lincode/math"
 import IRevoluteJoint, {
     revoluteJointDefaults,
     revoluteJointSchema
 } from "../../interface/IRevoluteJoint"
-import throttleSystem from "../../utils/throttleSystem"
 import JointBase from "../core/JointBase"
 import PhysicsObjectManager from "../core/PhysicsObjectManager"
-import destroy from "../core/PhysicsObjectManager/physx/destroy"
-import { physxPtr } from "../core/PhysicsObjectManager/physx/physxPtr"
+import { physxPtr } from "../../pointers/physxPtr"
+import { configRevoluteJointSystem } from "../../systems/configSystems/configRevoluteJointSystem"
 
 const createRevolute = (actor0: any, pose0: any, actor1: any, pose1: any) => {
     const { physics, Px } = physxPtr[0]
     return Px.RevoluteJointCreate(physics, actor0, pose0, actor1, pose1)
 }
 
-const configJointSystem = throttleSystem((target: RevoluteJoint) => {
-    const {
-        pxJoint,
-        limited,
-        limitLow,
-        limitHigh,
-        stiffness,
-        damping,
-        driveVelocity
-    } = target
-    if (!pxJoint) return
-
-    const { PxJointAngularLimitPair, PxRevoluteJointFlagEnum } = physxPtr[0]
-
-    if (limited) {
-        const limitPair = new PxJointAngularLimitPair(
-            limitLow * deg2Rad,
-            limitHigh * deg2Rad
-        )
-        limitPair.stiffness = stiffness
-        limitPair.damping = damping
-        pxJoint.setLimit(limitPair)
-        destroy(limitPair)
-    }
-    pxJoint.setRevoluteJointFlag(
-        PxRevoluteJointFlagEnum.eLIMIT_ENABLED(),
-        limited
-    )
-    pxJoint.setDriveVelocity(driveVelocity)
-    pxJoint.setRevoluteJointFlag(
-        PxRevoluteJointFlagEnum.eDRIVE_ENABLED(),
-        driveVelocity > 0
-    )
-})
-
 export default class RevoluteJoint extends JointBase implements IRevoluteJoint {
     public static componentName = "revoluteJoint"
     public static defaults = revoluteJointDefaults
     public static schema = revoluteJointSchema
 
-    protected createJoint(
+    public $createJoint(
         fromPxTransform: any,
         toPxTransform: any,
         fromManager: PhysicsObjectManager,
         toManager: PhysicsObjectManager
     ) {
-        configJointSystem(this)
+        configRevoluteJointSystem.add(this)
         return createRevolute(
-            fromManager.actor,
+            fromManager.$actor,
             fromPxTransform,
-            toManager.actor,
+            toManager.$actor,
             toPxTransform
         )
     }
@@ -74,7 +37,7 @@ export default class RevoluteJoint extends JointBase implements IRevoluteJoint {
     }
     public set limited(val) {
         this._limited = val
-        configJointSystem(this)
+        configRevoluteJointSystem.add(this)
     }
 
     private _limitLow?: number
@@ -83,7 +46,7 @@ export default class RevoluteJoint extends JointBase implements IRevoluteJoint {
     }
     public set limitLow(val) {
         this._limitLow = val
-        configJointSystem(this)
+        configRevoluteJointSystem.add(this)
     }
 
     private _limitHigh?: number
@@ -92,7 +55,7 @@ export default class RevoluteJoint extends JointBase implements IRevoluteJoint {
     }
     public set limitHigh(val) {
         this._limitHigh = val
-        configJointSystem(this)
+        configRevoluteJointSystem.add(this)
     }
 
     private _stiffness?: number
@@ -101,7 +64,7 @@ export default class RevoluteJoint extends JointBase implements IRevoluteJoint {
     }
     public set stiffness(val) {
         this._stiffness = val
-        configJointSystem(this)
+        configRevoluteJointSystem.add(this)
     }
 
     private _damping?: number
@@ -110,7 +73,7 @@ export default class RevoluteJoint extends JointBase implements IRevoluteJoint {
     }
     public set damping(val) {
         this._damping = val
-        configJointSystem(this)
+        configRevoluteJointSystem.add(this)
     }
 
     private _driveVelocity?: number
@@ -119,6 +82,6 @@ export default class RevoluteJoint extends JointBase implements IRevoluteJoint {
     }
     public set driveVelocity(val) {
         this._driveVelocity = val
-        configJointSystem(this)
+        configRevoluteJointSystem.add(this)
     }
 }

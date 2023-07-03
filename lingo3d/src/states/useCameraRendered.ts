@@ -1,96 +1,26 @@
 import store, { createEffect } from "@lincode/reactivity"
-import {
-    Camera,
-    OrthographicCamera,
-    PerspectiveCamera,
-    Quaternion,
-    Vector3
-} from "three"
+import { OrthographicCamera, PerspectiveCamera } from "three"
 import interpolationCamera from "../engine/interpolationCamera"
 import mainCamera from "../engine/mainCamera"
-import { getResolution } from "./useResolution"
-import { ORTHOGRAPHIC_FRUSTUM } from "../globals"
-import getWorldPosition from "../display/utils/getWorldPosition"
-import getWorldQuaternion from "../display/utils/getWorldQuaternion"
-import fpsAlpha from "../display/utils/fpsAlpha"
-import { getWebXR } from "./useWebXR"
+import getWorldPosition from "../memo/getWorldPosition"
+import getWorldQuaternion from "../memo/getWorldQuaternion"
 import { getSplitView } from "./useSplitView"
 import { getCameraComputed } from "./useCameraComputed"
-import renderSystemWithData from "../utils/renderSystemWithData"
+import { getResolution } from "./useResolution"
+import { ORTHOGRAPHIC_FRUSTUM } from "../globals"
+import { getWebXR } from "./useWebXR"
+import { cameraRenderedPtr } from "../pointers/cameraRenderedPtr"
+import { cameraTransitionSet } from "../collections/cameraTransitionSet"
+import { resolutionPtr } from "../pointers/resolutionPtr"
+import { cameraInterpolationSystem } from "../systems/cameraInterpolationSystem"
 
 const [setCameraRendered, getCameraRendered] =
     store<PerspectiveCamera>(mainCamera)
 export { getCameraRendered }
 
-export const updateCameraAspect = (camera: Camera) => {
-    const [resX, resY] = getResolution()
-    const aspect = resX / resY
-
-    if (camera instanceof PerspectiveCamera && !getWebXR()) {
-        camera.aspect = aspect
-        camera.updateProjectionMatrix()
-    } else if (camera instanceof OrthographicCamera) {
-        ;[camera.left, camera.right, camera.top, camera.bottom] = [
-            aspect * ORTHOGRAPHIC_FRUSTUM * -0.5,
-            aspect * ORTHOGRAPHIC_FRUSTUM * 0.5,
-            ORTHOGRAPHIC_FRUSTUM * 0.5,
-            ORTHOGRAPHIC_FRUSTUM * -0.5
-        ]
-        camera.updateProjectionMatrix()
-    }
-
-    return [resX, resY, aspect]
-}
-
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+getCameraRendered((cam) => (cameraRenderedPtr[0] = cam))
 
 let cameraLast: PerspectiveCamera | undefined
-
-const [addInterpolationSystem, deleteInterpolationSystem] =
-    renderSystemWithData(
-        (
-            cameraTo: PerspectiveCamera,
-            data: {
-                positionFrom: Vector3
-                quaternionFrom: Quaternion
-                cameraFrom: PerspectiveCamera
-                ratio: number
-                diffMax: number
-            }
-        ) => {
-            const { positionFrom, quaternionFrom, cameraFrom, ratio, diffMax } =
-                data
-
-            const positionTo = getWorldPosition(cameraTo)
-            const quaternionTo = getWorldQuaternion(cameraTo)
-
-            interpolationCamera.position.lerpVectors(
-                positionFrom,
-                positionTo,
-                ratio
-            )
-            interpolationCamera.quaternion.slerpQuaternions(
-                quaternionFrom,
-                quaternionTo,
-                ratio
-            )
-
-            interpolationCamera.zoom = lerp(
-                cameraFrom.zoom,
-                cameraTo.zoom,
-                ratio
-            )
-            interpolationCamera.fov = lerp(cameraFrom.fov, cameraTo.fov, ratio)
-            interpolationCamera.updateProjectionMatrix()
-
-            data.ratio = Math.min((1 - ratio) * fpsAlpha(0.1), diffMax) + ratio
-            if (data.ratio < 0.9999) return
-
-            setCameraRendered(cameraTo)
-            updateCameraAspect(cameraTo)
-            deleteInterpolationSystem(cameraTo)
-        }
-    )
 
 createEffect(() => {
     if (getSplitView()) {
@@ -98,15 +28,14 @@ createEffect(() => {
         return
     }
     const cameraFrom =
-        getCameraRendered() === interpolationCamera
+        cameraRenderedPtr[0] === interpolationCamera
             ? interpolationCamera
             : cameraLast
 
     const cameraTo = (cameraLast = getCameraComputed())
-    const transition = cameraTo.userData.transition
     if (
         !cameraFrom ||
-        !transition ||
+        !cameraTransitionSet.has(cameraTo) ||
         cameraFrom === cameraTo ||
         cameraFrom === mainCamera ||
         cameraTo === mainCamera
@@ -121,18 +50,37 @@ createEffect(() => {
 
     interpolationCamera.zoom = cameraFrom.zoom
     interpolationCamera.fov = cameraFrom.fov
-    updateCameraAspect(interpolationCamera)
 
-    let ratio = 0
-    const diffMax = typeof transition === "number" ? transition : Infinity
-    addInterpolationSystem(cameraTo, {
+    cameraInterpolationSystem.add(cameraTo, {
         positionFrom,
         quaternionFrom,
         cameraFrom,
-        ratio,
-        diffMax
+        progress: 0,
+        diffMax: 0.02,
+        onFinish: () => setCameraRendered(cameraTo)
     })
     return () => {
-        deleteInterpolationSystem(cameraTo)
+        cameraInterpolationSystem.delete(cameraTo)
     }
 }, [getSplitView, getCameraComputed])
+
+createEffect(() => {
+    const camera = cameraRenderedPtr[0] as
+        | PerspectiveCamera
+        | OrthographicCamera
+    const [[resX, resY]] = resolutionPtr
+    const aspect = resX / resY
+
+    if (camera instanceof PerspectiveCamera && !getWebXR()) {
+        camera.aspect = aspect
+        camera.updateProjectionMatrix()
+        return
+    }
+    if (camera instanceof OrthographicCamera) {
+        camera.left = aspect * ORTHOGRAPHIC_FRUSTUM * -0.5
+        camera.right = aspect * ORTHOGRAPHIC_FRUSTUM * 0.5
+        camera.top = ORTHOGRAPHIC_FRUSTUM * 0.5
+        camera.bottom = ORTHOGRAPHIC_FRUSTUM * -0.5
+        camera.updateProjectionMatrix()
+    }
+}, [getCameraRendered, getResolution])

@@ -1,38 +1,60 @@
-import useTab from "./useTab"
+import { pull } from "@lincode/utils"
+import { Signal } from "@preact/signals"
+import { useLayoutEffect } from "preact/hooks"
 
 export type TabProps = {
     children?: string
     selected?: boolean
+    selectedSignal?: Signal<Array<string>>
     disabled?: boolean
-    half?: boolean
+    width?: string | number
     id?: string
+}
+
+export const selectTab = (
+    selectedSignal: Signal<Array<string>>,
+    id: string
+) => {
+    if (selectedSignal.value.at(-1) === id) return
+    pull(selectedSignal.value, id)
+    selectedSignal.value = [...selectedSignal.value, id]
 }
 
 const Tab = ({
     children,
     selected,
+    selectedSignal,
     disabled,
-    half,
+    width,
     id = children
 }: TabProps) => {
-    const { selectedSignal } = useTab(id, selected, disabled)
+    useLayoutEffect(() => {
+        selectedSignal &&
+            (selected || !selectedSignal.value.length) &&
+            id &&
+            selectTab(selectedSignal, id)
+    }, [selected, id])
 
     return (
         <div
             className="lingo3d-bg lingo3d-flexcenter"
             style={{
-                width: half ? "50%" : undefined,
+                width,
                 opacity: disabled ? 0.1 : 1,
                 height: 20,
-                padding: half ? undefined : 12,
+                padding: width ? undefined : 12,
                 background:
-                    selectedSignal.value === id
+                    !selectedSignal || selectedSignal.value.at(-1) === id
                         ? "rgba(255, 255, 255, 0.1)"
                         : undefined
             }}
-            onClick={disabled ? undefined : () => (selectedSignal.value = id)}
+            onClick={
+                disabled || !id
+                    ? undefined
+                    : selectedSignal && (() => selectTab(selectedSignal, id))
+            }
         >
-            <div style={{ marginTop: -2 }}>{children}</div>
+            {children}
         </div>
     )
 }

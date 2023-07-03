@@ -2,14 +2,17 @@ import { Cancellable } from "@lincode/promiselikes"
 import { memo } from "preact/compat"
 import { useLayoutEffect, useMemo, useRef, useState } from "preact/hooks"
 import TimelineAudio from "../../display/TimelineAudio"
-import { FRAME_HEIGHT, SEC2FRAME, FRAME_WIDTH, FRAME2SEC } from "../../globals"
-import { getTimelineFrame } from "../../states/useTimelineFrame"
+import { FRAME_HEIGHT, STANDARD_FRAME, FRAME_WIDTH } from "../../globals"
 import { getTimelinePaused } from "../../states/useTimelinePaused"
 import WaveSurfer from "wavesurfer.js"
 import diffProps from "../utils/diffProps"
 import useSyncState from "../hooks/useSyncState"
 import { getTimeline } from "../../states/useTimeline"
 import { getTimelineMute } from "../../states/useTimelineMute"
+import getReactive from "../../utils/getReactive"
+import { timelineFramePtr } from "../../pointers/timelineFramePtr"
+import { timelineWaveSurferFrameSystem } from "../../systems/timelineWaveSurferFrameSystem"
+import { timelineWaveSurferPlaybackSystem } from "../../systems/timelineWaveSurferPlaybackSystem"
 
 type AudioRowProps = {
     instance: TimelineAudio
@@ -18,14 +21,18 @@ type AudioRowProps = {
 
 const AudioRow = ({ instance, frames }: AudioRowProps) => {
     const src = useSyncState(instance.srcState.get)
-    const duration = useSyncState(instance.durationState.get)
+    const durationReactive = useMemo(
+        () => getReactive(instance, "duration"),
+        []
+    )
+    const duration = useSyncState(durationReactive.get)
     const frameKeys = useMemo(() => Object.keys(frames), [frames])
     const [startFrame, endFrame] = useMemo(() => {
         const startFrame = Number(frameKeys[0] ?? 0)
         return [
             startFrame,
             frameKeys.length < 2
-                ? startFrame + Math.ceil(duration * SEC2FRAME)
+                ? startFrame + Math.ceil(duration * STANDARD_FRAME)
                 : Number(frameKeys.at(-1))
         ]
     }, [frameKeys, duration])
@@ -49,34 +56,30 @@ const AudioRow = ({ instance, frames }: AudioRowProps) => {
     useLayoutEffect(() => {
         if (!waveSurfer || !timeline) return
         if (!paused) {
-            const handle = getTimelineFrame((frame, handle) => {
-                if (frame < startFrame) return
-                waveSurfer.play((frame - startFrame) * FRAME2SEC)
-                handle.cancel()
-            })
-            let awaitCount = 1
-            timeline.await += awaitCount
+            timelineWaveSurferPlaybackSystem.add(waveSurfer, { startFrame })
+
+            let pausedCount = 1
+            timeline.$animationStates.pausedCount += pausedCount
 
             const audioContext = waveSurfer.backend.getAudioContext()
             const timeout = setTimeout(() => {
-                timeline.await -= awaitCount
-                awaitCount = 0
+                timeline.$animationStates.pausedCount -= pausedCount
+                pausedCount = 0
             }, (audioContext.baseLatency + audioContext.outputLatency) * 1000)
 
             return () => {
+                timelineWaveSurferPlaybackSystem.delete(waveSurfer)
                 clearTimeout(timeout)
                 waveSurfer.pause()
-                timeline.await -= awaitCount
-                handle.cancel()
+                timeline.$animationStates.pausedCount -= pausedCount
             }
         }
-        const handle = getTimelineFrame((frame) => {
-            waveSurfer.setCurrentTime(
-                Math.max(frame - startFrame, 0) * FRAME2SEC
-            )
+        timelineWaveSurferFrameSystem.add(waveSurfer, {
+            frame: timelineFramePtr[0],
+            startFrame
         })
         return () => {
-            handle.cancel()
+            timelineWaveSurferFrameSystem.delete(waveSurfer)
         }
     }, [waveSurfer, paused, timeline])
 

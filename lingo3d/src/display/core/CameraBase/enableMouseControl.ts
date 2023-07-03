@@ -1,27 +1,39 @@
 import CameraBase from "."
-import { container } from "../../../engine/renderLoop/renderSetup"
 import {
     getCameraPointerLock,
     setCameraPointerLock
 } from "../../../states/useCameraPointerLock"
-import { mouseEvents } from "../../../api/mouse"
 import { getCameraRendered } from "../../../states/useCameraRendered"
-import isMobile from "../../../api/utils/isMobile"
-import { getWorldPlayComputed } from "../../../states/useWorldPlayComputed"
+import { container } from "../../../engine/renderLoop/containers"
+import { cameraRenderedPtr } from "../../../pointers/cameraRenderedPtr"
+import { onMouseDown } from "../../../events/onMouseDown"
+import { onMouseUp } from "../../../events/onMouseUp"
+import { cameraPointerLockPtr } from "../../../pointers/cameraPointerLockPtr"
+import { IS_MOBILE } from "../../../globals"
+import { gyrateInertiaSystem } from "../../../systems/gyrateInertiaSystem"
+import { getWorldMode } from "../../../states/useWorldMode"
+import { worldModePtr } from "../../../pointers/worldModePtr"
 
 export default function (this: CameraBase) {
     if (this.done) return
 
     this.createEffect(() => {
         if (
-            getCameraRendered() !== this.camera ||
+            cameraRenderedPtr[0] !== this.$camera ||
             !this.mouseControlState.get()
         )
             return
 
-        if (getCameraPointerLock() === this.camera) {
-            const handleMove = (e: MouseEvent) =>
-                this.gyrate(e.movementX, e.movementY)
+        if (cameraPointerLockPtr[0] === this.$camera) {
+            const handleMove = ({ movementX, movementY }: MouseEvent) => {
+                this.gyrate(movementX, movementY)
+                this.inertia &&
+                    gyrateInertiaSystem.add(this, {
+                        factor: 1,
+                        movementX,
+                        movementY
+                    })
+            }
             document.addEventListener("mousemove", handleMove)
 
             return () => {
@@ -45,14 +57,20 @@ export default function (this: CameraBase) {
             yOld === undefined && (yOld = e.clientY)
             const [movementX, movementY] = [e.clientX - xOld, e.clientY - yOld]
             ;[xOld, yOld] = [e.clientX, e.clientY]
-            started &&
-                this.gyrate(
-                    (movementX / window.innerWidth) * 3000,
-                    (movementY / window.innerHeight) * 3000
-                )
+            if (!started) return
+            this.gyrate(
+                (movementX / window.innerWidth) * 3000,
+                (movementY / window.innerHeight) * 3000
+            )
+            this.inertia &&
+                gyrateInertiaSystem.add(this, {
+                    factor: 1,
+                    movementX,
+                    movementY
+                })
         }
 
-        if (isMobile) {
+        if (IS_MOBILE) {
             const handleTouchStart = (e: TouchEvent) => {
                 if (identifier !== undefined) return
                 identifier =
@@ -96,8 +114,8 @@ export default function (this: CameraBase) {
             }
         }
 
-        const handle0 = mouseEvents.on("down", handleDown)
-        const handle1 = mouseEvents.on("up", handleUp)
+        const handle0 = onMouseDown(handleDown)
+        const handle1 = onMouseUp(handleUp)
         container.addEventListener("mousemove", handleMove)
 
         return () => {
@@ -110,11 +128,11 @@ export default function (this: CameraBase) {
     }, [this.mouseControlState.get, getCameraRendered, getCameraPointerLock])
 
     this.createEffect(() => {
-        const camera = getCameraRendered()
+        const [camera] = cameraRenderedPtr
         if (
             this.mouseControlState.get() !== true ||
-            camera !== this.camera ||
-            !getWorldPlayComputed()
+            camera !== this.$camera ||
+            worldModePtr[0] !== "default"
         )
             return
 
@@ -136,5 +154,5 @@ export default function (this: CameraBase) {
             document.exitPointerLock()
             setCameraPointerLock(undefined)
         }
-    }, [this.mouseControlState.get, getCameraRendered, getWorldPlayComputed])
+    }, [this.mouseControlState.get, getCameraRendered, getWorldMode])
 }

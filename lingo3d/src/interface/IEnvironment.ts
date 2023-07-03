@@ -1,7 +1,7 @@
-import IPositioned, {
-    positionedDefaults,
-    positionedSchema
-} from "./IPositioned"
+import IMeshAppendable, {
+    meshAppendableDefaults,
+    meshAppendableSchema
+} from "./IMeshAppendable"
 import Choices from "./utils/Choices"
 import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
@@ -15,23 +15,24 @@ export const environmentPreset = {
 
 export type EnvironmentPreset = keyof typeof environmentPreset
 
-export default interface IEnvironment extends IPositioned {
+export default interface IEnvironment extends IMeshAppendable {
     texture: Nullable<string | EnvironmentPreset>
-    helper: boolean
 }
 
 export const environmentSchema: Required<ExtractProps<IEnvironment>> = {
-    ...positionedSchema,
-    texture: String,
-    helper: Boolean
+    ...meshAppendableSchema,
+    texture: String
 }
 
-export const environmentChoices = new Choices(
-    { none: undefined, studio: "studio", day: "day", night: "night" },
-    true
-)
+export const environmentChoices = new Choices({
+    none: undefined,
+    studio: "studio",
+    day: "day",
+    night: "night",
+    custom: "custom"
+})
 export const environmentDefaults = extendDefaults<IEnvironment>(
-    [positionedDefaults],
-    { texture: "studio", helper: true },
+    [meshAppendableDefaults],
+    { texture: "studio" },
     { texture: environmentChoices }
 )

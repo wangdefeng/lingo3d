@@ -1,42 +1,39 @@
-import setupStruct from "../engine/setupStruct"
-import { shadowDistanceChoices } from "./IDirectionalLight"
+import setupStruct from "../api/settings/setupStruct"
+import { disableSchema } from "../collections/disableSchema"
 import { environmentChoices } from "./IEnvironment"
-import { shadowResolutionChoices } from "./ILightBase"
-import Choices from "./utils/Choices"
 import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
-import { hideSchema } from "./utils/nonEditorSchemaSet"
 import Range from "./utils/Range"
 
 type Type = typeof setupStruct
 
-export default interface ISetup extends Type {}
+export default interface ISetup extends Type {
+    uuid: string
+}
 
 export const setupSchema: Required<ExtractProps<ISetup>> = {
+    uuid: String,
     defaultLight: Boolean,
+    lightDistance: Number,
+    pointLightPool: Number,
+    spotLightPool: Number,
     environment: String,
     skybox: [String, Array],
-    uiLayer: Boolean,
-    gridHelper: Boolean,
-    gridHelperSize: Number,
+    grid: Boolean,
     stats: Boolean,
-    gravity: Number,
-    antiAlias: [Boolean, String],
-    logarithmicDepth: Boolean,
-    pixelRatio: Number,
     fps: Number,
+    gravity: Number,
     exposure: Number,
-    shadowResolution: String,
-    shadowDistance: String,
-    pbr: Boolean,
     bloom: Boolean,
     bloomIntensity: Number,
     bloomThreshold: Number,
     bloomRadius: Number,
     ssr: Boolean,
     ssrIntensity: Number,
+    ssrJitter: Number,
     ssao: Boolean,
     ssaoIntensity: Number,
+    ssaoRadius: Number,
     outlineColor: String,
     outlineHiddenColor: String,
     outlinePattern: String,
@@ -48,28 +45,29 @@ export const setupSchema: Required<ExtractProps<ISetup>> = {
     texture: String,
     color: String
 }
-hideSchema(["antiAlias", "pixelRatio", "gravity", "pbr", "ssaoIntensity"])
+disableSchema.add("grid")
+disableSchema.add("stats")
 
 export const setupDefaults = extendDefaults<ISetup>(
     [],
-    { ...setupStruct },
+    { ...setupStruct, uuid: "" },
     {
+        lightDistance: new Range(500, 5000),
+        pointLightPool: new Range(1, 10, 1),
+        spotLightPool: new Range(1, 10, 1),
         environment: environmentChoices,
-        pixelRatio: new Range(1, 2, 1),
         fps: new Range(30, 60, 30),
+        gravity: new Range(-20, 0),
         exposure: new Range(0, 2),
-        shadowResolution: shadowResolutionChoices,
-        shadowDistance: shadowDistanceChoices,
         bokehScale: new Range(0, 20),
         bloomIntensity: new Range(0, 10),
         bloomThreshold: new Range(0, 1),
         bloomRadius: new Range(0, 1),
         ssrIntensity: new Range(0, 2),
-        ssaoIntensity: new Range(0, 4),
+        ssrJitter: new Range(0, 1),
+        ssaoIntensity: new Range(0, 2),
+        ssaoRadius: new Range(0, 2),
         outlinePulse: new Range(0, 2),
-        outlineStrength: new Range(0, 4),
-        gravity: new Range(0, 20),
-        antiAlias: new Choices({ MSAA: "MSAA", SMAA: "SMAA", false: false }),
-        gridHelperSize: new Range(10, 1000, 10)
+        outlineStrength: new Range(0, 4)
     }
 )

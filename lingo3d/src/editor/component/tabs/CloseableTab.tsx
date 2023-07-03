@@ -1,41 +1,74 @@
 import CloseIcon from "../icons/CloseIcon"
-import { TabProps } from "./Tab"
-import useTab from "./useTab"
+import { selectTab, TabProps } from "./Tab"
 import IconButton from "../IconButton"
+import { useEffect, useLayoutEffect } from "preact/hooks"
+import UnsavedIcon from "../icons/UnsavedIcon"
 
 type CloseableTabProps = TabProps & {
-    onClose?: (selected: boolean) => void
+    height?: number | string
+    onClose?: () => void
+    unsaved?: boolean
 }
 
 const CloseableTab = ({
     onClose,
     children,
     selected,
+    selectedSignal,
     disabled,
-    id = children
+    width,
+    height = 20,
+    id = children,
+    unsaved
 }: CloseableTabProps) => {
-    const { selectedSignal } = useTab(id, selected, disabled)
+    useLayoutEffect(() => {
+        selectedSignal &&
+            (selected || !selectedSignal.value.length) &&
+            id &&
+            selectTab(selectedSignal, id)
+    }, [selected])
+
+    useEffect(() => {
+        if (!id) return
+
+        return () => {
+            if (!selectedSignal) return
+            const isSelected = selectedSignal.value.at(-1) === id
+            selectedSignal.value = selectedSignal.value.filter(
+                (val) => val !== id
+            )
+            if (!isSelected) return
+            const lastTab = selectedSignal.value.at(-1)
+            lastTab && selectTab(selectedSignal, lastTab)
+        }
+    }, [id])
 
     return (
         <div
-            className="lingo3d-bg lingo3d-flexcenter"
             style={{
+                display: "flex",
+                alignItems: "center",
+                width,
+                height,
                 opacity: disabled ? 0.1 : 1,
                 pointerEvents: disabled ? "none" : "auto",
-                marginLeft: 4,
-                marginRight: 4,
-                height: 20,
+                margin: width ? undefined : 4,
+                marginTop: 0,
+                marginBottom: 0,
                 paddingLeft: 12,
                 background:
-                    selectedSignal.value === id
+                    !selectedSignal || selectedSignal.value.at(-1) === id
                         ? "rgba(255, 255, 255, 0.1)"
                         : undefined
             }}
-            onClick={disabled ? undefined : () => (selectedSignal.value = id)}
+            onClick={
+                disabled || !id
+                    ? undefined
+                    : selectedSignal && (() => selectTab(selectedSignal, id))
+            }
         >
             <div
                 style={{
-                    marginTop: -2,
                     minWidth: 30,
                     maxWidth: 100,
                     whiteSpace: "nowrap",
@@ -45,12 +78,9 @@ const CloseableTab = ({
             >
                 {children}
             </div>
-            <div style={{ width: 4 }} />
-            <IconButton
-                disabled={!onClose}
-                onClick={() => onClose?.(selectedSignal.value === id)}
-            >
-                <CloseIcon />
+            <div style={{ flexGrow: 1 }} />
+            <IconButton disabled={!onClose} onClick={onClose} borderless>
+                {unsaved ? <UnsavedIcon /> : <CloseIcon />}
             </IconButton>
         </div>
     )

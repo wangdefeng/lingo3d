@@ -1,38 +1,24 @@
 import { deg2Rad } from "@lincode/math"
-import { TorusGeometry } from "three"
 import { PI2 } from "../../globals"
 import ITorus, { torusDefaults, torusSchema } from "../../interface/ITorus"
-import ConfigurablePrimitive, {
-    allocateDefaultInstance,
-    refreshParamsSystem
-} from "../core/ConfigurablePrimitive"
+import { TorusParams, torusGeometryPool } from "../../pools/torusGeometryPool"
+import PooledPrimitve from "../core/PooledPrimitive"
+import toFixed from "../../api/serializer/toFixed"
+import { refreshPooledPrimitiveSystem } from "../../systems/configSystems/refreshPooledPrimitiveSystem"
 
-const defaultParams = <const>[0.5, 0.1, 16, 32, PI2]
-const geometry = allocateDefaultInstance(
-    TorusGeometry,
-    defaultParams
-) as TorusGeometry
+const geometry = torusGeometryPool.request([0.5, 0.1, 16, 32, PI2])
 
-export default class Torus
-    extends ConfigurablePrimitive<typeof TorusGeometry>
-    implements ITorus
-{
+export default class Torus extends PooledPrimitve implements ITorus {
     public static componentName = "torus"
     public static override defaults = torusDefaults
     public static override schema = torusSchema
 
     public constructor() {
-        super(TorusGeometry, defaultParams, geometry)
+        super(geometry, torusGeometryPool)
     }
 
-    public override getParams() {
-        return <const>[
-            0.5,
-            this.thickness,
-            16,
-            this.segments,
-            this.theta * deg2Rad
-        ]
+    public $getParams(): TorusParams {
+        return [0.5, this.thickness, 16, this.segments, this.theta * deg2Rad]
     }
 
     private _segments?: number
@@ -40,8 +26,8 @@ export default class Torus
         return this._segments ?? 32
     }
     public set segments(val) {
-        this._segments = val
-        refreshParamsSystem(this)
+        this._segments = toFixed(val)
+        refreshPooledPrimitiveSystem.add(this)
     }
 
     private _thickness?: number
@@ -49,8 +35,8 @@ export default class Torus
         return this._thickness ?? 0.1
     }
     public set thickness(val) {
-        this._thickness = val
-        refreshParamsSystem(this)
+        this._thickness = toFixed(val)
+        refreshPooledPrimitiveSystem.add(this)
     }
 
     private _theta?: number
@@ -58,7 +44,7 @@ export default class Torus
         return this._theta ?? 360
     }
     public set theta(val) {
-        this._theta = val
-        refreshParamsSystem(this)
+        this._theta = toFixed(val)
+        refreshPooledPrimitiveSystem.add(this)
     }
 }

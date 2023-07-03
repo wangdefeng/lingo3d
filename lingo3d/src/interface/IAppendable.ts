@@ -1,24 +1,41 @@
-import Appendable from "../api/core/Appendable"
+import Appendable from "../display/core/Appendable"
+import { disableSchema } from "../collections/disableSchema"
 import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
-import { hideSchema } from "./utils/nonEditorSchemaSet"
 import Nullable from "./utils/Nullable"
+import {
+    nullableCallback,
+    nullableCallbackDtParam
+} from "./utils/NullableCallback"
 
 export default interface IAppendable {
     onLoop: Nullable<() => void>
     proxy: Nullable<Appendable>
     uuid: string
+    id: Nullable<string>
+    name: Nullable<string>
+    runtimeData: Nullable<Record<string, any>>
+    systems: Array<string>
 }
 
 export const appendableSchema: Required<ExtractProps<IAppendable>> = {
     onLoop: Function,
     proxy: Object,
-    uuid: String
+    uuid: String,
+    id: String,
+    name: String,
+    runtimeData: Object,
+    systems: Array
 }
-hideSchema(["proxy"])
+for (const key of ["proxy", "runtimeData", "uuid", "systems"])
+    disableSchema.add(key)
 
 export const appendableDefaults = extendDefaults<IAppendable>([], {
-    onLoop: undefined,
+    onLoop: nullableCallback(nullableCallbackDtParam),
     proxy: undefined,
-    uuid: ""
+    uuid: "",
+    id: undefined,
+    name: undefined,
+    runtimeData: undefined,
+    systems: []
 })

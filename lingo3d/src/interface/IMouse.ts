@@ -1,5 +1,6 @@
-import { Point3d } from "@lincode/math"
 import VisibleMixin from "../display/core/mixins/VisibleMixin"
+import { pt3d0 } from "../display/utils/reusables"
+import { Point3dType } from "../utils/isPoint"
 import IAppendable, {
     appendableDefaults,
     appendableSchema
@@ -7,28 +8,44 @@ import IAppendable, {
 import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 import Nullable from "./utils/Nullable"
+import { nullableCallback } from "./utils/NullableCallback"
 
 export class LingoMouseEvent {
     public constructor(
-        public canvasX: number,
-        public canvasY: number,
+        public x: number,
+        public y: number,
         public clientX: number,
         public clientY: number,
         public xNorm: number,
         public yNorm: number,
-        public point: Point3d,
-        public normal: Point3d,
+        public point: Point3dType,
+        public normal: Point3dType,
         public distance: number,
         public target: VisibleMixin | undefined
     ) {}
 }
+export const lingoMouseEvent = new LingoMouseEvent(
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    pt3d0,
+    pt3d0,
+    0,
+    undefined
+)
 
-export type SimpleMouseEvent = {
-    canvasX: number
-    canvasY: number
-    clientX: number
-    clientY: number
+export class SimpleMouseEvent {
+    public constructor(
+        public x: number,
+        public y: number,
+        public clientX: number,
+        public clientY: number
+    ) {}
 }
+const simpleMouseEvent = new SimpleMouseEvent(0, 0, 0, 0)
 
 export default interface IMouse extends IAppendable {
     onClick: Nullable<(e: SimpleMouseEvent) => void>
@@ -50,10 +67,10 @@ export const mouseSchema: Required<ExtractProps<IMouse>> = {
 }
 
 export const mouseDefaults = extendDefaults<IMouse>([appendableDefaults], {
-    onClick: undefined,
-    onRightClick: undefined,
-    onMouseMove: undefined,
-    onMouseDown: undefined,
-    onMouseUp: undefined,
-    onMousePress: undefined
+    onClick: nullableCallback(simpleMouseEvent),
+    onRightClick: nullableCallback(simpleMouseEvent),
+    onMouseMove: nullableCallback(simpleMouseEvent),
+    onMouseDown: nullableCallback(simpleMouseEvent),
+    onMouseUp: nullableCallback(simpleMouseEvent),
+    onMousePress: nullableCallback(simpleMouseEvent)
 })

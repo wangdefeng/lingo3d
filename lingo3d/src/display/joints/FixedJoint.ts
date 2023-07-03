@@ -4,7 +4,7 @@ import IFixedJoint, {
 } from "../../interface/IFixedJoint"
 import JointBase from "../core/JointBase"
 import PhysicsObjectManager from "../core/PhysicsObjectManager"
-import { physxPtr } from "../core/PhysicsObjectManager/physx/physxPtr"
+import { physxPtr } from "../../pointers/physxPtr"
 
 const createFixed = (actor0: any, pose0: any, actor1: any, pose1: any) => {
     const { physics, Px } = physxPtr[0]
@@ -20,16 +20,16 @@ export default class FixedJoint extends JointBase implements IFixedJoint {
     public static defaults = fixedJointDefaults
     public static schema = fixedJointSchema
 
-    protected createJoint(
+    public $createJoint(
         fromPxTransform: any,
         toPxTransform: any,
         fromManager: PhysicsObjectManager,
         toManager: PhysicsObjectManager
     ) {
         return createFixed(
-            fromManager.actor,
+            fromManager.$actor,
             fromPxTransform,
-            toManager.actor,
+            toManager.$actor,
             toPxTransform
         )
     }

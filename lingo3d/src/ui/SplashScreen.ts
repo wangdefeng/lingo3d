@@ -1,5 +1,5 @@
-import Appendable from "../api/core/Appendable"
-import { uiContainer } from "../engine/renderLoop/renderSetup"
+import Appendable from "../display/core/Appendable"
+import { uiContainer } from "../engine/renderLoop/containers"
 import ISplashScreen, {
     splashScreenDefaults,
     splashScreenSchema
@@ -48,7 +48,11 @@ export default class SplashScreen extends Appendable implements ISplashScreen {
         initCSS()
         uiContainer.appendChild(this.splashScreen)
         this.splashScreen.appendChild(this.textContainer)
-        this.then(() => this.splashScreen.remove())
+    }
+
+    protected override disposeNode() {
+        super.disposeNode()
+        this.splashScreen.remove()
     }
 
     public get opacity() {
@@ -65,8 +69,8 @@ export default class SplashScreen extends Appendable implements ISplashScreen {
         this.textContainer.style.textAlign = value ? "center" : ""
     }
 
-    public override append(child: Text) {
-        this.appendNode(child)
+    public override $appendNode(child: Text) {
+        super.$appendNode(child)
         this.textContainer.appendChild(child.el)
     }
 }

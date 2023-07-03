@@ -2,37 +2,21 @@ import IAnimatedObjectManager, {
     animatedObjectManagerDefaults,
     animatedObjectManagerSchema
 } from "./IAnimatedObjectManager"
-import IPositioned, {
-    positionedDefaults,
-    positionedSchema
-} from "./IPositioned"
 import { ExtractProps } from "./utils/extractProps"
-import { hideSchema } from "./utils/nonEditorSchemaSet"
 import { extendDefaults } from "./utils/Defaults"
 import Range from "./utils/Range"
-import IDirectioned, {
-    directionedDefaults,
-    directionedSchema
-} from "./IDirectioned"
 
-export default interface ISimpleObjectManager
-    extends IAnimatedObjectManager,
-        IPositioned,
-        IDirectioned {
+export default interface ISimpleObjectManager extends IAnimatedObjectManager {
     scaleX: number
     scaleY: number
     scaleZ: number
     scale: number
 }
-hideSchema(["rotation"])
 
 export const simpleObjectManagerSchema: Required<
     ExtractProps<ISimpleObjectManager>
 > = {
     ...animatedObjectManagerSchema,
-    ...positionedSchema,
-    ...directionedSchema,
-
     scaleX: Number,
     scaleY: Number,
     scaleZ: Number,
@@ -40,7 +24,7 @@ export const simpleObjectManagerSchema: Required<
 }
 
 export const simpleObjectManagerDefaults = extendDefaults<ISimpleObjectManager>(
-    [animatedObjectManagerDefaults, positionedDefaults, directionedDefaults],
+    [animatedObjectManagerDefaults],
     {
         scaleX: 1,
         scaleY: 1,

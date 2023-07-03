@@ -4,15 +4,8 @@ import {
     removeLoadedBytesChangedEventListeners
 } from "../display/utils/loaders/utils/bytesLoaded"
 import loadTexturePromise from "../display/utils/loaders/loadTexturePromise"
-import { getLoadingCount } from "../states/useLoadingCount"
-
-const preloadModelPromise = (src: string) =>
-    new Promise<void>(async (resolve) => {
-        const { default: Model } = await import("../display/Model")
-        const model = new Model(true)
-        model.src = src
-        model.onLoad = resolve
-    })
+import loadModel from "../display/utils/loaders/loadModel"
+import isBusy from "./isBusy"
 
 export default async (
     urls: Array<string>,
@@ -43,7 +36,7 @@ export default async (
     for (const src of urls) {
         const filetype = getExtensionType(src)
         if (filetype === "image") promises.push(loadTexturePromise(src))
-        else if (filetype === "model") promises.push(preloadModelPromise(src))
+        else if (filetype === "model") promises.push(loadModel(src, false))
     }
 
     await Promise.all(promises)
@@ -51,11 +44,11 @@ export default async (
     removeLoadedBytesChangedEventListeners(handleLoadedBytesChanged)
 
     await new Promise<void>((resolve) => {
-        getLoadingCount((count, handle) => {
-            if (count > 0) return
-            handle.cancel()
+        const interval = setInterval(() => {
+            if (isBusy()) return
+            clearInterval(interval)
             resolve()
-        })
+        }, 500)
     })
     onProgress?.(100)
 }

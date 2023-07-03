@@ -1,31 +1,27 @@
-import store, { createEffect, Reactive } from "@lincode/reactivity"
+import store, { Reactive, createEffect } from "@lincode/reactivity"
 import { AudioListener, PositionalAudio } from "three"
-import PositionedManager from "./core/PositionedManager"
 import IAudio, { audioDefaults, audioSchema } from "../interface/IAudio"
-import { getCameraRendered } from "../states/useCameraRendered"
-import { addSelectionHelper } from "./core/utils/raycast/selectionCandidates"
 import HelperSprite from "./core/utils/HelperSprite"
 import loadAudio from "./utils/loaders/loadAudio"
-import { getEditorHelper } from "../states/useEditorHelper"
+import MeshAppendable from "./core/MeshAppendable"
+import { cameraRenderedPtr } from "../pointers/cameraRenderedPtr"
+import { getCameraRendered } from "../states/useCameraRendered"
+import { getWorldMode } from "../states/useWorldMode"
+import { worldModePtr } from "../pointers/worldModePtr"
 
-const [setAudioListener, getAudioListener] = store<AudioListener | undefined>(
-    undefined
-)
+const audioListener = new AudioListener()
 
 createEffect(() => {
-    const audioListener = getAudioListener()
-    if (!audioListener) return
-
-    const cam = getCameraRendered()
+    const [cam] = cameraRenderedPtr
     cam.add(audioListener)
 
     return () => {
         cam.remove(audioListener)
     }
-}, [getCameraRendered, getAudioListener])
+}, [getCameraRendered])
 
 export default class Audio
-    extends PositionedManager<PositionalAudio>
+    extends MeshAppendable<PositionalAudio>
     implements IAudio
 {
     public static componentName = "audio"
@@ -33,18 +29,16 @@ export default class Audio
     public static schema = audioSchema
 
     public constructor() {
-        !getAudioListener() && setAudioListener(new AudioListener())
-        const sound = new PositionalAudio(getAudioListener()!)
+        const sound = new PositionalAudio(audioListener)
         super(sound)
 
         this.createEffect(() => {
-            if (!getEditorHelper) return
-
-            const handle = addSelectionHelper(new HelperSprite("audio"), this)
+            if (worldModePtr[0] !== "editor" || this.$disableSceneGraph) return
+            const helper = new HelperSprite("audio", this)
             return () => {
-                handle.cancel()
+                helper.dispose()
             }
-        }, [getEditorHelper])
+        }, [getWorldMode])
 
         const [setReady, getReady] = store(false)
 
@@ -86,8 +80,8 @@ export default class Audio
         ])
     }
 
-    protected override _dispose() {
-        super._dispose()
+    protected override disposeNode() {
+        super.disposeNode()
         this.outerObject3d.buffer && this.outerObject3d.disconnect()
     }
 

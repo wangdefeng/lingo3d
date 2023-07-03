@@ -4,7 +4,7 @@ import {
     refreshSkyboxStack
 } from "../states/useSkyboxStack"
 import ISkybox, { skyboxDefaults, skyboxSchema } from "../interface/ISkybox"
-import Appendable from "../api/core/Appendable"
+import Appendable from "./core/Appendable"
 
 export default class Skybox extends Appendable implements ISkybox {
     public static componentName = "skybox"
@@ -16,8 +16,8 @@ export default class Skybox extends Appendable implements ISkybox {
         pushSkyboxStack(this)
     }
 
-    protected override _dispose() {
-        super._dispose()
+    protected override disposeNode() {
+        super.disposeNode()
         pullSkyboxStack(this)
     }
 

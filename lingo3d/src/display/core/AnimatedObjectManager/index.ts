@@ -1,17 +1,15 @@
-import { Object3D } from "three"
+import { AnimationMixer, Object3D } from "three"
 import IAnimatedObjectManager, {
     Animation,
     AnimationValue
 } from "../../../interface/IAnimatedObjectManager"
+import MeshAppendable from "../MeshAppendable"
 import AnimationManager from "./AnimationManager"
-import { Reactive } from "@lincode/reactivity"
-import { Cancellable } from "@lincode/promiselikes"
-import { event, EventFunctions } from "@lincode/events"
-import { SEC2FRAME } from "../../../globals"
+import { STANDARD_FRAME } from "../../../globals"
 import { AnimationData } from "../../../interface/IAnimationManager"
-import MeshAppendable from "../../../api/core/MeshAppendable"
+import AnimationStates from "./AnimationStates"
 
-const animationValueToData = (val: AnimationValue) => {
+const animationValueToData = (val: AnimationValue, uuid: string) => {
     const entries = Object.entries(val)
     let maxLength = 0
     for (const [, { length }] of entries)
@@ -21,173 +19,102 @@ const animationValueToData = (val: AnimationValue) => {
     const timeStep = (duration * 0.001) / maxLength
 
     const data: AnimationData = {}
-    const result = (data[""] ??= {})
+    const result = (data[uuid] ??= {})
     for (const [name, values] of entries)
         result[name] = Object.fromEntries(
-            values.map((v, i) => [Math.ceil(i * timeStep * SEC2FRAME), v])
+            values.map((v, i) => [Math.ceil(i * timeStep * STANDARD_FRAME), v])
         )
     return data
 }
 
-type States = {
-    managerRecordState: Reactive<Record<string, AnimationManager>>
-    managerState: Reactive<AnimationManager | undefined>
-    pausedState: Reactive<boolean>
-    repeatState: Reactive<number>
-    onFinishState: Reactive<(() => void) | undefined>
-    finishEventState: Reactive<EventFunctions | undefined>
+const getAnimation = (
+    self: AnimatedObjectManager,
+    name: string
+): AnimationManager => {
+    let animation = self.animations[name]
+    if (animation && typeof animation !== "string") return animation
+    self.append(
+        (animation = self.animations[name] =
+            new AnimationManager(name, undefined, self, self.$animationStates))
+    )
+    return animation
+}
+
+const setAnimation = (
+    self: AnimatedObjectManager,
+    val?: string | number | boolean | AnimationValue
+) => {
+    if (typeof val === "string" || typeof val === "number" || val === true) {
+        const animationManager = (self.$animationStates.manager =
+            typeof val === "string"
+                ? (self.animations[val] as AnimationManager | undefined)
+                : Object.values(self.animations)[val === true ? 0 : val])
+        self.$mixer = animationManager?.$mixer
+        return
+    }
+    if (!val) {
+        self.$animationStates.manager = undefined
+        self.$mixer = undefined
+        self.animationPaused = true
+        return
+    }
+    const animationManager = getAnimation(self, "animation")
+    animationManager.data = animationValueToData(val, self.uuid)
+    self.$animationStates.manager = animationManager
+    self.$mixer = animationManager.$mixer
 }
 
 export default class AnimatedObjectManager<T extends Object3D = Object3D>
     extends MeshAppendable<T>
     implements IAnimatedObjectManager
 {
-    private states?: States
-    public lazyStates() {
-        if (this.states) return this.states
-
-        const { managerState, pausedState } = (this.states = {
-            managerRecordState: new Reactive<Record<string, AnimationManager>>(
-                {}
-            ),
-            managerState: new Reactive<AnimationManager | undefined>(undefined),
-            pausedState: new Reactive(false),
-            repeatState: new Reactive(Infinity),
-            onFinishState: new Reactive<(() => void) | undefined>(undefined),
-            finishEventState: new Reactive<EventFunctions | undefined>(
-                undefined
-            )
-        })
-        this.createEffect(() => {
-            const manager = managerState.get()
-            if (manager) manager.paused = pausedState.get()
-        }, [managerState.get, pausedState.get])
-
-        return this.states
+    private _animationStates?: AnimationStates
+    public get $animationStates() {
+        return (this._animationStates ??= new AnimationStates())
     }
 
-    public get animations() {
-        return this.lazyStates().managerRecordState.get()
+    public get animations(): Record<string, AnimationManager> {
+        return this.$animationStates.managerRecord
     }
     public set animations(val) {
-        this.lazyStates().managerRecordState.set(val)
+        this.$animationStates.managerRecord = val
     }
 
     public get animationPaused() {
-        return this.lazyStates().pausedState.get()
+        return this.$animationStates.paused
     }
     public set animationPaused(value) {
-        this.lazyStates().pausedState.set(value)
+        this.$animationStates.paused = value
     }
 
-    public get animationRepeat() {
-        return this.lazyStates().repeatState.get()
+    public get animationLoop() {
+        return this.$animationStates.loop
     }
-    public set animationRepeat(value) {
-        this.lazyStates().repeatState.set(value)
-    }
-
-    public get onAnimationFinish() {
-        return this.lazyStates().onFinishState.get()
-    }
-    public set onAnimationFinish(value) {
-        this.lazyStates().onFinishState.set(value)
+    public set animationLoop(value) {
+        this.$animationStates.loop = value
     }
 
-    protected playAnimation(name?: string | number) {
-        const { managerState, pausedState } = this.lazyStates()
-        pausedState.set(false)
-        managerState.set(
-            typeof name === "string"
-                ? this.animations[name]
-                : Object.values(this.animations)[name ?? 0]
-        )
+    public get serializeAnimation() {
+        return typeof this.animation !== "object" ? this.animation : undefined
     }
 
-    public stopAnimation() {
-        this.lazyStates().pausedState.set(true)
-    }
-
-    private createAnimation(name: string): AnimationManager {
-        let animation = this.animations[name]
-        if (animation && typeof animation !== "string") return animation
-
-        const { onFinishState, repeatState, finishEventState } =
-            this.lazyStates()
-        animation = this.watch(
-            new AnimationManager(
-                name,
-                undefined,
-                this,
-                repeatState,
-                onFinishState,
-                finishEventState
-            )
-        )
-        this.append(animation)
-        this.animations[name] = animation
-        return animation
-    }
-
-    protected get serializeAnimation() {
-        return typeof this._animation !== "object" ? this._animation : undefined
-    }
-
-    private setAnimation(val?: string | number | boolean | AnimationValue) {
-        this._animation = val
-
-        if (typeof val === "string" || typeof val === "number") {
-            this.playAnimation(val)
-            return
-        }
-        if (typeof val === "boolean") {
-            val ? this.playAnimation(undefined) : this.stopAnimation()
-            return
-        }
-        if (!val) {
-            this.stopAnimation()
-            return
-        }
-        const name = "animation"
-        const anim = this.createAnimation(name)
-        anim.data = animationValueToData(val)
-        this.playAnimation(name)
-    }
+    public $mixer?: AnimationMixer
 
     private _animation?: Animation
     public get animation() {
         return this._animation
     }
     public set animation(val) {
-        this.cancelHandle(
-            "playAnimation",
-            Array.isArray(val)
-                ? () => {
-                      const { finishEventState } = this.lazyStates()
-                      const finishEvent = event()
-                      finishEventState.set(finishEvent)
+        this._animation = val
+        setAnimation(this, val)
+        this.animationPaused = this.animationPaused
+    }
 
-                      let currentIndex = 0
-                      const next = () => {
-                          if (currentIndex === val.length) {
-                              if (this.animationRepeat < 2) {
-                                  this.onAnimationFinish?.()
-                                  return
-                              }
-                              currentIndex = 0
-                          }
-                          this.setAnimation(val[currentIndex++])
-                      }
-                      next()
-                      const [, onFinish] = finishEvent
-                      const handle = onFinish(next)
-
-                      return new Cancellable(() => {
-                          finishEventState.set(undefined)
-                          handle.cancel()
-                      })
-                  }
-                : void this.setAnimation(val)
-        )
+    public get animationFrame(): number {
+        const time = this.$mixer?.time ?? 0
+        return Math.ceil(time * STANDARD_FRAME)
+    }
+    public set animationFrame(val) {
+        this.$animationStates.gotoFrame = val
     }
 }

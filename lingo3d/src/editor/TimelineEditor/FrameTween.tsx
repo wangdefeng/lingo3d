@@ -1,7 +1,7 @@
 import { memo, useMemo } from "preact/compat"
 import { FRAME_WIDTH, FRAME_HEIGHT } from "../../globals"
-import { setTimelineContextMenu } from "../../states/useTimelineContextMenu"
 import diffProps from "../utils/diffProps"
+import { timelineContextMenuSignal } from "./TimelineContextMenu"
 
 const colors = [
     "#D50000",
@@ -65,13 +65,13 @@ const FrameTween = ({ frameNum, frameNums, index }: FrameTweenProps) => {
                     top: 0
                 }}
                 onContextMenu={(e) => {
-                    e.preventDefault()
                     e.stopPropagation()
-                    setTimelineContextMenu({
+                    e.preventDefault()
+                    timelineContextMenuSignal.value = {
                         x: e.clientX,
                         y: e.clientY,
                         keyframe: true
-                    })
+                    }
                 }}
             >
                 <div

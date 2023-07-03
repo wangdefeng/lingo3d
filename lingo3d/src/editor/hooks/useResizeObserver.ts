@@ -11,9 +11,9 @@ export default () => {
         const div = ref.current
         if (!div) return
 
-        const resizeObserver = new ResizeObserver(() =>
-            setSize({ width: div.clientWidth, height: div.clientHeight })
-        )
+        const resizeObserver = new ResizeObserver(() => {
+            setSize({ width: div.offsetWidth, height: div.offsetHeight })
+        })
         resizeObserver.observe(div)
 
         return () => {

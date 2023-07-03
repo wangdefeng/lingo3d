@@ -1,67 +1,19 @@
-import {
-    AnimationMixer,
-    AnimationClip,
-    NumberKeyframeTrack,
-    AnimationAction,
-    BooleanKeyframeTrack
-} from "three"
-import {
-    throttleTrailing,
-    filterBoolean,
-    forceGetInstance,
-    merge
-} from "@lincode/utils"
-import { onBeforeRender } from "../../../events/onBeforeRender"
-import { dtPtr } from "../../../engine/eventLoop"
-import { GetGlobalState, Reactive } from "@lincode/reactivity"
-import { EventFunctions } from "@lincode/events"
-import {
-    nonSerializedAppendables,
-    uuidMap
-} from "../../../api/core/collections"
+import { AnimationMixer, AnimationClip, AnimationAction } from "three"
+import { forceGetInstance, merge } from "@lincode/utils"
 import IAnimationManager, {
     AnimationData,
     animationManagerDefaults,
-    animationManagerSchema,
-    FrameData,
-    FrameValue
+    animationManagerSchema
 } from "../../../interface/IAnimationManager"
-import Appendable from "../../../api/core/Appendable"
+import Appendable from "../Appendable"
 import FoundManager from "../FoundManager"
-import { FRAME2SEC, SEC2FRAME } from "../../../globals"
-import TimelineAudio from "../../TimelineAudio"
-import { Cancellable } from "@lincode/promiselikes"
+import { STANDARD_FRAME } from "../../../globals"
+import AnimationStates from "./AnimationStates"
+import getClipAction from "../../../memo/getClipAction"
+import { configAnimationDataSystem } from "../../../systems/configSystems/configAnimationDataSystem"
+import { configAnimationPlaybackSystem } from "../../../systems/configSystems/configAnimationPlaybackSystem"
 
 const targetMixerMap = new WeakMap<object, AnimationMixer>()
-const mixerActionMap = new WeakMap<AnimationMixer, AnimationAction>()
-const mixerManagerMap = new WeakMap<AnimationMixer, AnimationManager>()
-
-const isBooleanFrameData = (
-    values: Array<FrameValue>
-): values is Array<boolean> => typeof values[0] === "boolean"
-
-const isNumberFrameData = (
-    values: Array<FrameValue>
-): values is Array<number> => typeof values[0] === "number"
-
-const framesToKeyframeTrack = (
-    targetName: string,
-    property: string,
-    frames: FrameData
-) => {
-    const keys = Object.keys(frames)
-    if (!keys.length) return
-
-    const values = Object.values(frames)
-    const name = targetName + "." + property
-    const frameNums = keys.map((frameNum) => Number(frameNum) * FRAME2SEC)
-
-    if (isBooleanFrameData(values))
-        return new BooleanKeyframeTrack(name, frameNums, values)
-
-    if (isNumberFrameData(values))
-        return new NumberKeyframeTrack(name, frameNums, values)
-}
 
 export default class AnimationManager
     extends Appendable
@@ -71,208 +23,66 @@ export default class AnimationManager
     public static defaults = animationManagerDefaults
     public static schema = animationManagerSchema
 
-    private actionState = new Reactive<AnimationAction | undefined>(undefined)
-    private clipState = new Reactive<AnimationClip | undefined>(undefined)
-    public animDataState = new Reactive<[AnimationData | undefined]>([
-        undefined
-    ])
-    private gotoFrameState = new Reactive<number | undefined>(undefined)
+    public $action?: AnimationAction
+    public $mixer: AnimationMixer
 
-    private awaitState = new Reactive(0)
-    public get await() {
-        return this.awaitState.get()
+    private _clip?: AnimationClip
+    public get $clip() {
+        return this._clip
     }
-    public set await(val) {
-        this.awaitState.set(val)
+    public set $clip(val) {
+        if (this._clip) {
+            this.$action?.stop()
+            this.$mixer.uncacheClip(this._clip)
+        }
+        this._clip = val
+        if (val) this.$action = getClipAction(this.$mixer, val)
+        configAnimationPlaybackSystem.add(this.$animationStates)
+        this.lastFrame = val ? Math.ceil(val.duration * STANDARD_FRAME) : 0
     }
 
-    public pausedState = new Reactive(true)
     public get paused() {
-        return this.pausedState.get()
+        return (
+            this.$animationStates.paused ||
+            this.$animationStates.manager !== this
+        )
     }
     public set paused(val) {
-        this.pausedState.set(val)
+        if (!val) this.$animationStates.manager = this
+        this.$animationStates.paused = val
     }
 
-    private mixer: AnimationMixer
-
-    public clipTotalFrames = 0
-    public audioTotalFrames = 0
-    public get totalFrames() {
-        return Math.max(this.clipTotalFrames, this.audioTotalFrames)
+    public get loop() {
+        return this.$animationStates.loop
     }
+    public set loop(val) {
+        this.$animationStates.loop = val
+    }
+
+    public lastFrame = 0
 
     public constructor(
-        public name: string,
-        clip: AnimationClip | undefined,
+        name: string | undefined,
+        public $loadedClip: AnimationClip | undefined,
         target: object | undefined,
-        repeatState: Reactive<number>,
-        onFinishState: Reactive<(() => void) | undefined>,
-        finishEventState?: Reactive<EventFunctions | undefined>,
-        serialized?: boolean
+        public $animationStates: AnimationStates
     ) {
         super()
-        !serialized && nonSerializedAppendables.add(this)
-
-        const mixer = (this.mixer = forceGetInstance(
+        this.$disableSerialize = true
+        this.name = name
+        configAnimationDataSystem.add(this)
+        this.$mixer = forceGetInstance(
             targetMixerMap,
             target ?? this,
             AnimationMixer,
             [target]
-        ))
-        this.createEffect(() => {
-            if (this.pausedState.get()) return
-
-            const finishEvent = finishEventState?.get()
-            if (finishEvent) {
-                const [emitFinish] = finishEvent
-                const onFinish = () => emitFinish()
-                mixer.addEventListener("finished", onFinish)
-                return () => {
-                    mixer.removeEventListener("finished", onFinish)
-                }
-            }
-            const onFinish = onFinishState.get()
-            if (!onFinish) return
-
-            mixer.addEventListener("finished", onFinish)
-            return () => {
-                mixer.removeEventListener("finished", onFinish)
-            }
-        }, [onFinishState.get, this.pausedState.get, finishEventState?.get])
-
-        this.createEffect(() => {
-            const [data] = this.animDataState.get()
-            if (!data) {
-                this.clipState.set(clip)
-                this.audioTotalFrames = 0
-                return
-            }
-            const audioDurationGetters: Array<GetGlobalState<number>> = []
-            const newClip = new AnimationClip(
-                undefined,
-                undefined,
-                Object.entries(data)
-                    .map(([targetName, targetTracks]) => {
-                        const instance = uuidMap.get(targetName)
-                        if (!instance) return []
-                        if (instance instanceof TimelineAudio) {
-                            audioDurationGetters.push(
-                                instance.durationState.get
-                            )
-                            return []
-                        }
-                        return Object.entries(targetTracks)
-                            .map(
-                                ([property, frames]) =>
-                                    framesToKeyframeTrack(
-                                        targetName,
-                                        property,
-                                        frames
-                                    )!
-                            )
-                            .filter(filterBoolean)
-                    })
-                    .flat()
-            )
-            this.clipState.set(newClip)
-            const handle = new Cancellable()
-            const computeAudioDuration = throttleTrailing(() => {
-                if (handle.done) return
-                const maxDuration = Math.max(
-                    ...audioDurationGetters.map((getter) => getter())
-                )
-                this.audioTotalFrames = Math.ceil(maxDuration * SEC2FRAME)
-            })
-            for (const getAudioDuration of audioDurationGetters)
-                handle.watch(getAudioDuration(computeAudioDuration))
-
-            return () => {
-                handle.cancel()
-            }
-        }, [this.animDataState.get])
-
-        let frame: number | undefined
-        this.createEffect(() => {
-            const clip = this.clipState.get()
-            if (!clip) {
-                this.clipTotalFrames = 0
-                return
-            }
-            this.clipTotalFrames = Math.ceil(clip.duration * SEC2FRAME)
-
-            const action = mixer.clipAction(clip)
-            this.actionState.set(action)
-
-            if (frame !== undefined) {
-                this.frame = frame
-                frame = undefined
-            }
-
-            return () => {
-                frame = this.frame
-                action.stop()
-                action.enabled = false
-                mixer.uncacheClip(clip)
-            }
-        }, [this.clipState.get])
-
-        this.createEffect(() => {
-            const action = this.actionState.get()
-            if (action)
-                action.repetitions = finishEventState?.get()
-                    ? 0
-                    : repeatState.get()
-        }, [this.actionState.get, repeatState.get, finishEventState?.get])
-
-        this.createEffect(() => {
-            const action = this.actionState.get()
-            if (!action) return
-
-            const gotoFrame = this.gotoFrameState.get()
-            action.paused =
-                (this.pausedState.get() || !!this.awaitState.get()) &&
-                gotoFrame === undefined
-            if (action.paused) return
-
-            const prevManager = mixerManagerMap.get(mixer)
-            mixerManagerMap.set(mixer, this)
-            if (prevManager && prevManager !== this)
-                prevManager.pausedState.set(true)
-
-            const prevAction = mixerActionMap.get(mixer)
-            mixerActionMap.set(mixer, action)
-            if (prevAction?.enabled && action !== prevAction)
-                action.crossFadeFrom(prevAction, 0.25, true)
-
-            action.clampWhenFinished = true
-            action.enabled = true
-            action.play()
-
-            if (gotoFrame !== undefined) {
-                mixer.setTime(gotoFrame * FRAME2SEC)
-                this.gotoFrameState.set(undefined)
-                return
-            }
-            const handle = onBeforeRender(() => mixer.update(dtPtr[0]))
-            return () => {
-                handle.cancel()
-            }
-        }, [
-            this.actionState.get,
-            this.pausedState.get,
-            this.awaitState.get,
-            this.gotoFrameState.get
-        ])
+        )
     }
 
-    public retarget(
-        target: FoundManager,
-        repeatState: Reactive<number>,
-        onFinishState: Reactive<(() => void) | undefined>,
-        finishEventState: Reactive<EventFunctions | undefined>
-    ) {
-        const newClip = this.clipState.get()!.clone()
+    public retarget(target: FoundManager, animationStates: AnimationStates) {
+        const newClip = this.$clip?.clone()
+        if (!newClip) return this
+
         const targetName = target.name + "."
         newClip.tracks = newClip.tracks.filter((track) =>
             track.name.startsWith(targetName)
@@ -281,35 +91,34 @@ export default class AnimationManager
             this.name,
             newClip,
             target,
-            repeatState,
-            onFinishState,
-            finishEventState
+            animationStates
         )
         target.append(animation)
         return animation
     }
 
+    private _data?: AnimationData
     public get data() {
-        return this.animDataState.get()[0]
+        return this._data
     }
     public set data(val: AnimationData | undefined) {
-        this.animDataState.set([val])
+        this._data = val
+        configAnimationDataSystem.add(this)
     }
 
     public mergeData(data: AnimationData) {
-        const [prevData] = this.animDataState.get()
-        if (!prevData) {
-            this.animDataState.set([data])
+        if (!this.data) {
+            this.data = data
             return
         }
-        merge(prevData, data)
-        this.animDataState.set([prevData])
+        merge(this.data, data)
+        this.data = { ...this.data }
     }
 
     public get frame() {
-        return Math.ceil(this.mixer.time * SEC2FRAME)
+        return Math.ceil(this.$mixer.time * STANDARD_FRAME)
     }
     public set frame(val) {
-        this.gotoFrameState.set(val)
+        this.$animationStates.gotoFrame = val
     }
 }

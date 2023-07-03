@@ -1,13 +1,13 @@
 import { PointLight as ThreePointLight } from "three"
-import { SHADOW_BIAS } from "../../globals"
 import IPointLight, {
     pointLightDefaults,
     pointLightSchema
 } from "../../interface/IPointLight"
-import LightBase from "../core/LightBase"
+import PointLightBase from "../core/PointLightBase"
+import { pointLightShadowResolutionSystem } from "../../systems/pointLightShadowResolutionSystem"
 
 export default class PointLight
-    extends LightBase<typeof ThreePointLight>
+    extends PointLightBase<ThreePointLight>
     implements IPointLight
 {
     public static componentName = "pointLight"
@@ -15,37 +15,16 @@ export default class PointLight
     public static schema = pointLightSchema
 
     public constructor() {
-        super(ThreePointLight)
-
-        this.createEffect(() => {
-            const light = this.lightState.get()
-            if (!light) return
-
-            light.shadow.bias = SHADOW_BIAS * 0.15
-        }, [this.lightState.get])
+        super(new ThreePointLight())
     }
 
-    public get decay() {
-        const light = this.lightState.get()
-        if (!light) return 1
-
-        return light.decay
+    public override get shadows() {
+        return super.shadows
     }
-    public set decay(val) {
-        this.cancelHandle("decay", () =>
-            this.lightState.get((light) => light && (light.decay = val))
-        )
-    }
-
-    public get distance() {
-        const light = this.lightState.get()
-        if (!light) return 0
-
-        return light.distance
-    }
-    public set distance(val) {
-        this.cancelHandle("distance", () =>
-            this.lightState.get((light) => light && (light.distance = val))
-        )
+    public override set shadows(val) {
+        super.shadows = val
+        val
+            ? pointLightShadowResolutionSystem.add(this)
+            : pointLightShadowResolutionSystem.delete(this)
     }
 }

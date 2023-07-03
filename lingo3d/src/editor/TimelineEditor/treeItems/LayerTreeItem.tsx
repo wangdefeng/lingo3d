@@ -1,7 +1,5 @@
 import { ComponentChildren } from "preact"
 import { useLayoutEffect, useMemo, useState } from "preact/hooks"
-import { uuidMap } from "../../../api/core/collections"
-import { onName } from "../../../events/onName"
 import { FRAME_HEIGHT } from "../../../globals"
 import BaseTreeItem from "../../component/treeItems/BaseTreeItem"
 import useSyncState from "../../hooks/useSyncState"
@@ -15,6 +13,7 @@ import {
 } from "../../../states/useTimelineLayer"
 import getDisplayName from "../../utils/getDisplayName"
 import handleTreeItemClick from "../../utils/handleTreeItemClick"
+import { uuidMap } from "../../../collections/idCollections"
 
 type LayerTreeItemProps = {
     children: ComponentChildren
@@ -36,8 +35,8 @@ const LayerTreeItem = ({ children, uuid }: LayerTreeItemProps) => {
     useLayoutEffect(() => {
         if (!instance) return
         setName(getDisplayName(instance))
-        const handle = onName(
-            (item) => item === instance && setName(getDisplayName(instance))
+        const handle = instance.$events.on("name", () =>
+            setName(getDisplayName(instance))
         )
         return () => {
             handle.cancel()
@@ -51,9 +50,9 @@ const LayerTreeItem = ({ children, uuid }: LayerTreeItemProps) => {
             onExpand={() => addTimelineExpandedUUID(uuid)}
             onCollapse={() => deleteTimelineExpandedUUID(uuid)}
             selected={selected}
-            onClick={() => {
+            onClick={(e) => {
                 setTimelineLayer(uuid)
-                handleTreeItemClick(instance)
+                handleTreeItemClick(e, instance)
             }}
         >
             {children}

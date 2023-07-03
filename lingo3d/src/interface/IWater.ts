@@ -1,21 +1,21 @@
-import IVisibleObjectManager, {
-    visibleObjectManagerDefaults,
-    visibleObjectManagerSchema
-} from "./IVisibleObjectManager"
 import { ExtractProps } from "./utils/extractProps"
 import { extendDefaults } from "./utils/Defaults"
 import Range from "./utils/Range"
-import { WATERNORMALS_URL } from "../api/assetsPath"
+import Nullable from "./utils/Nullable"
+import IPhysicsObjectManager, {
+    physicsObjectManagerDefaults,
+    physicsObjectManagerSchema
+} from "./IPhysicsObjectManager"
 
-export default interface IWater extends IVisibleObjectManager {
+export default interface IWater extends IPhysicsObjectManager {
     shape: "plane" | "sphere"
-    normalMap: string
+    normalMap: Nullable<string>
     resolution: number
     speed: number
 }
 
 export const waterSchema: Required<ExtractProps<IWater>> = {
-    ...visibleObjectManagerSchema,
+    ...physicsObjectManagerSchema,
     shape: String,
     normalMap: String,
     resolution: Number,
@@ -23,10 +23,10 @@ export const waterSchema: Required<ExtractProps<IWater>> = {
 }
 
 export const waterDefaults = extendDefaults<IWater>(
-    [visibleObjectManagerDefaults],
+    [physicsObjectManagerDefaults],
     {
         shape: "plane",
-        normalMap: WATERNORMALS_URL,
+        normalMap: undefined,
         resolution: 512,
         speed: 1,
         rotationX: 270,
@@ -34,7 +34,8 @@ export const waterDefaults = extendDefaults<IWater>(
         depth: 0
     },
     {
-        resolution: new Range(256, 2048, 256)
+        resolution: new Range(256, 2048, 256),
+        speed: new Range(0.1, 10)
     },
     { normalMap: true }
 )

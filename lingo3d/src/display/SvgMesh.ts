@@ -1,134 +1,70 @@
-import { applyMixins, forceGet } from "@lincode/utils"
-import { ExtrudeGeometry, Group, Mesh, Shape } from "three"
+import { applyMixins } from "@lincode/utils"
+import { Group, Mesh } from "three"
 import type { SVGResult } from "three/examples/jsm/loaders/SVGLoader"
 import Loaded from "./core/Loaded"
 import TexturedStandardMixin, {
     StandardMesh
 } from "./core/mixins/TexturedStandardMixin"
 import fit from "./utils/fit"
-import measure from "./utils/measure"
 import ISvgMesh, { svgMeshDefaults, svgMeshSchema } from "../interface/ISvgMesh"
-import {
-    decreaseLoadingCount,
-    increaseLoadingCount
-} from "../states/useLoadingCount"
-import toResolvable from "./utils/toResolvable"
 import { standardMaterial } from "./utils/reusables"
 import MixinType from "./core/mixins/utils/MixinType"
-
-const svgGeometryCache = new WeakMap<SVGResult, Array<ExtrudeGeometry>>()
+import { M2CM } from "../globals"
+import getSVGExtrudeGeometries from "../memo/getSVGExtrudeGeometries"
+import { busyCountPtr } from "../pointers/busyCountPtr"
+import isOpaque from "../memo/isOpaque"
 
 class SvgMesh extends Loaded<SVGResult> implements ISvgMesh {
     public static componentName = "svgMesh"
     public static defaults = svgMeshDefaults
     public static schema = svgMeshSchema
 
-    private _innerHTML?: string
-    public get innerHTML() {
-        return this._innerHTML
-    }
-    public set innerHTML(val: string | undefined) {
-        this._innerHTML = val
-        if (this.loaded.done) {
-            this.loadedGroup.clear()
-            this.loadedObject3d = undefined
-        }
-        this.cancelHandle(
-            "src",
-            val &&
-                (() =>
-                    toResolvable(
-                        new Promise<SVGResult>((resolve) => {
-                            increaseLoadingCount()
-                            import("./utils/loaders/loadSVG").then(
-                                ({ loader }) => {
-                                    decreaseLoadingCount()
-                                    resolve(loader.parse(val))
-                                }
-                            )
-                        })
-                    ).then((loaded) => {
-                        const loadedObject3d = this.resolveLoaded(loaded, val)
-                        this.loadedGroup.add(
-                            (this.loadedObject3d = loadedObject3d)
-                        )
-                        this.loaded.resolve(loadedObject3d)
-
-                        this.object3d.visible = !!this._boxVisible
-                    }))
-        )
-    }
-
-    protected async load(url: string) {
-        increaseLoadingCount()
+    public async $load(url: string) {
+        busyCountPtr[0]++
         const module = await import("./utils/loaders/loadSVG")
         let result: SVGResult
         try {
             result = await module.default(url)
         } catch {
-            decreaseLoadingCount()
+            busyCountPtr[0]--
             throw new Error("Failed to load svg, check if src is correct")
         }
-        decreaseLoadingCount()
+        busyCountPtr[0]--
         return result
     }
 
-    protected resolveLoaded(svgData: SVGResult, src: string) {
+    public $resolveLoaded(svgData: SVGResult, src: string) {
         const loadedObject3d = new Group()
         loadedObject3d.scale.y *= -1
 
-        const geometries = forceGet(svgGeometryCache, svgData, () => {
-            const shapes: Array<Shape> = []
-            for (const path of svgData.paths)
-                for (const shape of path.toShapes(true)) shapes.push(shape)
-
-            if (!shapes.length) return []
-
-            const testGroup = new Group()
-            for (const shape of shapes) {
-                const geom = new ExtrudeGeometry(shape, {
-                    depth: 0,
-                    bevelEnabled: false
-                })
-                geom.dispose()
-                testGroup.add(new Mesh(geom))
-            }
-
-            const measuredSize = measure(testGroup, src)
-
-            const result: Array<ExtrudeGeometry> = []
-            for (const shape of shapes)
-                result.push(
-                    new ExtrudeGeometry(shape, {
-                        depth: measuredSize.y,
-                        bevelEnabled: false
-                    })
-                )
-            return result
-        })
-
+        const geometries = getSVGExtrudeGeometries(svgData, { src })
         for (const geometry of geometries) {
             const mesh = new Mesh(geometry, this._material)
-            mesh.castShadow = true
-            mesh.receiveShadow = true
             loadedObject3d.add(mesh)
+            mesh.castShadow = isOpaque(mesh)
+            mesh.receiveShadow = true
         }
 
-        const measuredSize = fit(loadedObject3d, src)
-        !this.widthSet && (this.object3d.scale.x = measuredSize.x)
-        !this.heightSet && (this.object3d.scale.y = measuredSize.y)
-        !this.depthSet && (this.object3d.scale.z = measuredSize.z)
+        const [{ x, y, z }] = fit(loadedObject3d, src)
+        this.runtimeDefaults = {
+            width: x * M2CM,
+            height: y * M2CM,
+            depth: z * M2CM
+        }
+        !this.widthSet && (this.object3d.scale.x = x)
+        !this.heightSet && (this.object3d.scale.y = y)
+        !this.depthSet && (this.object3d.scale.z = z)
 
         return loadedObject3d
     }
 
     private _material = standardMaterial
-    public get material() {
+    public get $material() {
         return this._material
     }
-    public set material(val) {
+    public set $material(val) {
         this._material = val
-        const children = (this.loadedObject3d?.children ??
+        const children = (this.$loadedObject3d?.children ??
             []) as Array<StandardMesh>
         for (const mesh of children) mesh.material = val
     }

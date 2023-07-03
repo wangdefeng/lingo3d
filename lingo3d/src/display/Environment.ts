@@ -8,14 +8,13 @@ import IEnvironment, {
     EnvironmentPreset,
     environmentSchema
 } from "../interface/IEnvironment"
-import PositionedManager from "./core/PositionedManager"
-import { Reactive } from "@lincode/reactivity"
-import { addSelectionHelper } from "./core/utils/raycast/selectionCandidates"
 import HelperSprite from "./core/utils/HelperSprite"
-import { getEditorHelper } from "../states/useEditorHelper"
+import MeshAppendable from "./core/MeshAppendable"
+import { getWorldMode } from "../states/useWorldMode"
+import { worldModePtr } from "../pointers/worldModePtr"
 
 export default class Environment
-    extends PositionedManager
+    extends MeshAppendable
     implements IEnvironment
 {
     public static componentName = "environment"
@@ -27,17 +26,16 @@ export default class Environment
         pushEnvironmentStack(this)
 
         this.createEffect(() => {
-            if (!getEditorHelper() || !this.helperState.get()) return
-
-            const handle = addSelectionHelper(new HelperSprite("light"), this)
+            if (worldModePtr[0] !== "editor" || this.$disableSceneGraph) return
+            const helper = new HelperSprite("light", this)
             return () => {
-                handle.cancel()
+                helper.dispose()
             }
-        }, [getEditorHelper, this.helperState.get])
+        }, [getWorldMode])
     }
 
-    protected override _dispose() {
-        super._dispose()
+    protected override disposeNode() {
+        super.disposeNode()
         pullEnvironmentStack(this)
     }
 
@@ -48,13 +46,5 @@ export default class Environment
     public set texture(value) {
         this._texture = value
         refreshEnvironmentStack()
-    }
-
-    private helperState = new Reactive(true)
-    public get helper() {
-        return this.helperState.get()
-    }
-    public set helper(val) {
-        this.helperState.set(val)
     }
 }

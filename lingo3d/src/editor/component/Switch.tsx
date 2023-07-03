@@ -4,9 +4,10 @@ type SwitchProps = {
     label?: string
     onChange?: (on: boolean) => void
     on?: boolean
+    compact?: boolean
 }
 
-const Switch = ({ label, onChange, on: onProp }: SwitchProps) => {
+const Switch = ({ label, onChange, on: onProp, compact }: SwitchProps) => {
     const [on, setOn] = useState(false)
 
     useEffect(() => {
@@ -19,7 +20,10 @@ const Switch = ({ label, onChange, on: onProp }: SwitchProps) => {
                 display: "flex",
                 alignItems: "center",
                 gap: 4,
-                marginLeft: 4
+                marginLeft: 4,
+                transition: "all 100ms",
+                opacity: on ? 1 : 0.5,
+                cursor: "pointer"
             }}
             onClick={() => {
                 setOn(!on)
@@ -28,7 +32,7 @@ const Switch = ({ label, onChange, on: onProp }: SwitchProps) => {
         >
             <div
                 style={{
-                    width: 40,
+                    width: compact ? 30 : 40,
                     height: 20,
                     background: "rgba(255, 255, 255, 0.1)",
                     borderRadius: 999,

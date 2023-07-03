@@ -1,21 +1,43 @@
 import { createEffect } from "@lincode/reactivity"
 import openFolder from "../../api/files/openFolder"
 import saveJSON from "../../api/files/saveJSON"
-import settings from "../../api/settings"
-import { redo, undo } from "../../api/undoStack"
-import { isPositionedManager } from "../../display/core/PositionedManager"
 import deleteSelected from "./deleteSelected"
 import { emitEditorCenterView } from "../../events/onEditorCenterView"
 import { onKeyClear } from "../../events/onKeyClear"
 import { emitSelectionTarget } from "../../events/onSelectionTarget"
-import { setEditorCamera, getEditorCamera } from "../../states/useEditorCamera"
+import { setEditorCamera } from "../../states/useEditorCamera"
 import { setMultipleSelection } from "../../states/useMultipleSelection"
-import { getSelectionTarget } from "../../states/useSelectionTarget"
-import { getSplitView, setSplitView } from "../../states/useSplitView"
-import { getWorldPlayComputed } from "../../states/useWorldPlayComputed"
 import mainCamera from "../mainCamera"
 import copySelected from "./copySelected"
 import { setTransformControlsSnap } from "../../states/useTransformControlsSnap"
+import { getUILayer, setUILayer } from "../../states/useUILayer"
+import {
+    getHotKeysEnabled,
+    setHotKeysEnabled
+} from "../../states/useHotKeysEnabled"
+import settings from "../../api/settings"
+import { container } from "../renderLoop/containers"
+import MeshAppendable from "../../display/core/MeshAppendable"
+import { selectionTargetPtr } from "../../pointers/selectionTargetPtr"
+import { redo, undo } from "../../api/undoStack"
+import { getWorldMode } from "../../states/useWorldMode"
+import { worldModePtr } from "../../pointers/worldModePtr"
+
+const enabledSet = new Set<HTMLElement>()
+export const enableHotKeysOnElement = (el: HTMLElement) => {
+    el.addEventListener("mouseover", () => enabledSet.add(el))
+    el.addEventListener("mouseout", () => enabledSet.delete(el))
+    el.addEventListener("drop", () => setHotKeysEnabled(true))
+}
+enableHotKeysOnElement(container)
+
+export const handleStopPropagation = (e: Event) => {
+    e.stopPropagation()
+    setHotKeysEnabled(!!enabledSet.size)
+}
+document.addEventListener("mousedown", () =>
+    setHotKeysEnabled(!!enabledSet.size)
+)
 
 const metaHotKey = (e: KeyboardEvent) => {
     e.preventDefault()
@@ -23,9 +45,9 @@ const metaHotKey = (e: KeyboardEvent) => {
 }
 
 createEffect(() => {
-    if (getWorldPlayComputed()) return
+    if (worldModePtr[0] !== "editor" || !getHotKeysEnabled()) return
 
-    const handleKeyDown = async (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === "Shift" || e.key === "Meta" || e.key === "Control")
             setMultipleSelection(true)
         if (e.key === "Shift") setTransformControlsSnap(true)
@@ -38,29 +60,15 @@ createEffect(() => {
 
         const keyLowerCase = e.key.toLocaleLowerCase()
         if (keyLowerCase === "g") {
-            settings.gridHelper = !settings.gridHelper
+            settings.grid = !settings.grid
+            return
+        }
+        if (keyLowerCase === "u") {
+            setUILayer(!getUILayer())
             return
         }
 
-        if (keyLowerCase === "1") {
-            if (!getSplitView())
-                setEditorCamera(
-                    getEditorCamera() === mainCamera ? undefined : mainCamera
-                )
-            setSplitView(false)
-            return
-        }
-        if (keyLowerCase === "2") {
-            setSplitView(true)
-            setEditorCamera(undefined)
-            return
-        }
-        if (keyLowerCase === "3") {
-            settings.uiLayer = !settings.uiLayer
-            return
-        }
-
-        const target = getSelectionTarget()
+        const [target] = selectionTargetPtr
 
         if (e.metaKey || e.ctrlKey) {
             if (keyLowerCase === "z") {
@@ -84,8 +92,8 @@ createEffect(() => {
             } else if (keyLowerCase === "p") metaHotKey(e)
         } else if (keyLowerCase === "c") {
             setEditorCamera(mainCamera)
-            settings.uiLayer = false
-            isPositionedManager(target) && emitEditorCenterView(target)
+            setUILayer(false)
+            target instanceof MeshAppendable && emitEditorCenterView(target)
         } else if (keyLowerCase === "escape")
             target && emitSelectionTarget(undefined)
     }
@@ -103,4 +111,4 @@ createEffect(() => {
         document.removeEventListener("keyup", handleKeyUp)
         handle.cancel()
     }
-}, [getWorldPlayComputed])
+}, [getWorldMode, getHotKeysEnabled])

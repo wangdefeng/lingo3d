@@ -1,5 +1,5 @@
 import { Reactive } from "@lincode/reactivity"
-import Appendable from "../api/core/Appendable"
+import Appendable from "./core/Appendable"
 import ITimelineAudio, {
     timelineAudioDefaults,
     timelineAudioSchema
@@ -18,10 +18,8 @@ export default class TimelineAudio
     public constructor() {
         super()
         this.audio.ondurationchange = () =>
-            this.durationState.set(this.audio.duration)
+            (this.duration = this.audio.duration)
     }
-
-    public name = ""
 
     public srcState = new Reactive<string | undefined>(undefined)
     public get src() {
@@ -30,11 +28,8 @@ export default class TimelineAudio
     public set src(value) {
         this.srcState.set(value)
         this.audio.src = value ?? ""
-        this.durationState.set(0)
+        this.duration = 0
     }
 
-    public durationState = new Reactive(0)
-    public get duration() {
-        return this.durationState.get()
-    }
+    public duration = 0
 }

@@ -1,5 +1,5 @@
 import { createEffect } from "@lincode/reactivity"
-import { filterBoolean } from "@lincode/utils"
+import { lazy } from "@lincode/utils"
 import { EffectComposer, EffectPass, RenderPass } from "postprocessing"
 import { getCameraRendered } from "../../../states/useCameraRendered"
 import { getRenderer } from "../../../states/useRenderer"
@@ -7,22 +7,26 @@ import { getResolution } from "../../../states/useResolution"
 import scene from "../../scene"
 import { getBloomEffect } from "./bloomEffect"
 import { getBokehEffect } from "./bokehEffect"
-import { getNormalPass } from "./normalPass"
 import { getOutlineEffect } from "./outlineEffect"
 import { getSelectiveBloomEffect } from "./selectiveBloomEffect"
-import { getSSAOEffect } from "./ssaoEffect"
 import { getSSREffect } from "./ssrEffect"
 import { getVignetteEffect } from "./vignetteEffect"
+import { cameraRenderedPtr } from "../../../pointers/cameraRenderedPtr"
+import { resolutionPtr } from "../../../pointers/resolutionPtr"
+import { getSSAO } from "../../../states/useSSAO"
+//@ts-ignore
+import { N8AOPostPass } from "n8ao"
+import { Cancellable } from "@lincode/promiselikes"
+import { getPixelRatio } from "../../../states/usePixelRatio"
+import { getSSAOIntensity } from "../../../states/useSSAOIntensity"
+import { getSSAORadius } from "../../../states/useSSAORadius"
 
-const effectComposer = new EffectComposer(undefined)
+const effectComposer = new EffectComposer(undefined, { multisampling: 4 })
+getRenderer((renderer) => renderer && effectComposer.setRenderer(renderer))
 export default effectComposer
 
-effectComposer.multisampling = 4
-
-getRenderer((renderer) => renderer && effectComposer.setRenderer(renderer))
-
 createEffect(() => {
-    const renderPass = new RenderPass(scene, getCameraRendered())
+    const renderPass = new RenderPass(scene, cameraRenderedPtr[0])
     effectComposer.addPass(renderPass, 0)
     return () => {
         effectComposer.removePass(renderPass)
@@ -30,47 +34,53 @@ createEffect(() => {
     }
 }, [getCameraRendered])
 
-createEffect(() => {
-    if (!getRenderer()) return
+const lazyAOPass = lazy(() => {
+    const pass = new N8AOPostPass(scene, cameraRenderedPtr[0], 128, 128)
+    getSSAOIntensity((val) => (pass.configuration.intensity = val))
+    getSSAORadius((val) => (pass.configuration.aoRadius = val))
+    // pass.configuration.halfRes = true
+    // pass.configuration.depthAwareUpsampling = false
+    return pass
+})
 
-    const [w, h] = getResolution()
+createEffect(() => {
+    const [[w, h]] = resolutionPtr
     effectComposer.setSize(w, h)
-}, [getRenderer, getResolution])
 
-createEffect(() => {
-    if (!getRenderer()) return
-
-    const normalPass = getNormalPass()
-    normalPass && effectComposer.addPass(normalPass)
-
+    const handle = new Cancellable()
+    if (getSSAO()) {
+        const n8aopass = lazyAOPass()
+        effectComposer.addPass(n8aopass)
+        handle.then(() => effectComposer.removePass(n8aopass))
+    }
     const effectPass = new EffectPass(
-        getCameraRendered(),
+        cameraRenderedPtr[0],
         ...[
             getBloomEffect(),
             getSelectiveBloomEffect(),
             getSSREffect(),
-            getSSAOEffect(),
             getOutlineEffect(),
             getBokehEffect(),
             getVignetteEffect()
-        ].filter(filterBoolean)
+        ].filter(Boolean)
     )
     effectComposer.addPass(effectPass)
 
     return () => {
+        handle.cancel()
         effectComposer.removePass(effectPass)
-        normalPass && effectComposer.removePass(normalPass)
         effectPass.dispose()
     }
 }, [
     getCameraRendered,
     getRenderer,
+    getResolution,
+    getPixelRatio,
+    getSSAO,
     getBloomEffect,
     getSelectiveBloomEffect,
     getSSREffect,
-    getSSAOEffect,
     getOutlineEffect,
     getBokehEffect,
-    getVignetteEffect,
-    getNormalPass
+    getVignetteEffect
 ])

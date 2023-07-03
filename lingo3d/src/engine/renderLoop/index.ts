@@ -4,25 +4,25 @@ import { emitBeforeRender } from "../../events/onBeforeRender"
 import { getRenderer } from "../../states/useRenderer"
 import { getResolution } from "../../states/useResolution"
 import { getWebXR } from "../../states/useWebXR"
-import { dtPtr, loop } from "../eventLoop"
+import { loop } from "../eventLoop"
 import scene from "../scene"
-import "./resize"
 import { getCameraRendered } from "../../states/useCameraRendered"
 import { emitRender } from "../../events/onRender"
 import effectComposer from "./effectComposer"
 import { getSplitView } from "../../states/useSplitView"
 import { getCameraComputed } from "../../states/useCameraComputed"
-import { emitPhysXLoop } from "../../events/onPhysXLoop"
-import { emitLoop } from "../../events/onLoop"
+import { emitPhysics } from "../../events/onPhysics"
+import { cameraRenderedPtr } from "../../pointers/cameraRenderedPtr"
+import { dtPtr } from "../../pointers/dtPtr"
+import { rendererPtr } from "../../pointers/rendererPtr"
+import { resolutionPtr } from "../../pointers/resolutionPtr"
 
 createEffect(() => {
-    const renderer = getRenderer()
-    if (!renderer) return
-
-    const camera = getCameraRendered()
+    const [renderer] = rendererPtr
+    const [camera] = cameraRenderedPtr
 
     if (getSplitView()) {
-        const [resX, resY] = getResolution()
+        const [[resX, resY]] = resolutionPtr
         const width = resX * 1
         const height = resY * 0.5
 
@@ -32,10 +32,9 @@ createEffect(() => {
         secondaryCamera.updateProjectionMatrix()
 
         const handle = loop(() => {
-            emitPhysXLoop()
+            emitPhysics()
             emitBeforeRender()
             emitRender()
-            emitLoop()
 
             renderer.setViewport(0, 0, width, height)
             renderer.setScissor(0, 0, width, height)
@@ -62,10 +61,9 @@ createEffect(() => {
 
     if (getWebXR()) {
         const handle = loop(() => {
-            emitPhysXLoop()
+            emitPhysics()
             emitBeforeRender()
             emitRender()
-            emitLoop()
             renderer.render(scene, camera)
             emitAfterRender()
         })
@@ -75,10 +73,9 @@ createEffect(() => {
     }
 
     const handle = loop(() => {
-        emitPhysXLoop()
+        emitPhysics()
         emitBeforeRender()
         emitRender()
-        emitLoop()
         effectComposer.render(dtPtr[0])
         emitAfterRender()
     })

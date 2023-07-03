@@ -6,9 +6,9 @@ import IHTMLMesh, {
 import createElement from "../../utils/createElement"
 import { Cancellable } from "@lincode/promiselikes"
 import VisibleObjectManager from "../core/VisibleObjectManager"
-import { addSelectionHelper } from "../core/utils/raycast/selectionCandidates"
 import HelperCube from "../core/utils/HelperCube"
-import { setManager } from "../../api/utils/getManager"
+import { setManager } from "../core/utils/getManager"
+import { ColorString } from "../../interface/ITexturedStandard"
 
 const elementContainerTemplate = createElement(`
     <div style="position: absolute; visibility: hidden; pointer-events: none;"></div>
@@ -35,9 +35,9 @@ export default class HTMLMesh
                         : `<div>${innerHTML}</div>`
                 )
             if (!element) {
-                const handle = addSelectionHelper(new HelperCube(), this)
+                const helper = new HelperCube(this)
                 return () => {
-                    handle.cancel()
+                    helper.dispose()
                 }
             }
 
@@ -102,7 +102,7 @@ export default class HTMLMesh
         this.spriteState.set(val)
     }
 
-    private cssColorState = new Reactive("#ffffff")
+    private cssColorState = new Reactive<ColorString>("#ffffff")
     public get cssColor() {
         return this.cssColorState.get()
     }

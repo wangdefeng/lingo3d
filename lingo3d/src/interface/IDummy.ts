@@ -1,5 +1,5 @@
-import { YBOT_URL } from "../api/assetsPath"
 import IModel, { modelDefaults, modelSchema } from "./IModel"
+import { defaultMethod, defaultMethodNumberArg } from "./utils/DefaultMethod"
 import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 import Nullable from "./utils/Nullable"
@@ -10,20 +10,22 @@ export type StrideMode = "aim" | "free"
 export default interface IDummy extends IModel {
     spineName: Nullable<string>
     preset: "default" | "rifle"
-    strideForward: number
     strideRight: number
+    strideForward: number
     strideMove: boolean
     strideMode: StrideMode
+    jump: (height?: number) => void
 }
 
 export const dummySchema: Required<ExtractProps<IDummy>> = {
     ...modelSchema,
     spineName: String,
     preset: String,
-    strideForward: Number,
     strideRight: Number,
+    strideForward: Number,
     strideMove: Boolean,
-    strideMode: String
+    strideMode: String,
+    jump: Function
 }
 
 export const dummyDefaults = extendDefaults<IDummy>(
@@ -31,18 +33,18 @@ export const dummyDefaults = extendDefaults<IDummy>(
     {
         spineName: undefined,
         preset: "default",
-        strideForward: 0,
         strideRight: 0,
+        strideForward: 0,
         strideMove: false,
         strideMode: "aim",
+        jump: defaultMethod(defaultMethodNumberArg),
         scale: 1.7,
         scaleX: 1.7,
         scaleY: 1.7,
         scaleZ: 1.7,
         width: 20,
         depth: 20,
-        animation: "idle",
-        src: YBOT_URL
+        animation: "idle"
     },
     {
         strideForward: new Range(-10, 10),

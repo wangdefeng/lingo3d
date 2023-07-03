@@ -1,7 +1,6 @@
 import { getExtensionType } from "@lincode/filetypes"
 import { get, set } from "@lincode/utils"
 import { useState } from "preact/hooks"
-import { uuidMap } from "../../api/core/collections"
 import Timeline from "../../display/Timeline"
 import TimelineAudio from "../../display/TimelineAudio"
 import { emitSelectionTarget } from "../../events/onSelectionTarget"
@@ -9,54 +8,73 @@ import { emitTimelineClearKeyframe } from "../../events/onTimelineClearKeyframe"
 import { AnimationData } from "../../interface/IAnimationManager"
 import unsafeGetValue from "../../utils/unsafeGetValue"
 import ContextMenu from "../component/ContextMenu"
-import ContextMenuItem from "../component/ContextMenu/ContextMenuItem"
+import MenuButton from "../component/MenuButton"
 import useSyncState from "../hooks/useSyncState"
-import { setSceneGraphExpanded } from "../../states/useSceneGraphExpanded"
-import { getTimeline, setTimeline } from "../../states/useTimeline"
-import {
-    getTimelineContextMenu,
-    setTimelineContextMenu
-} from "../../states/useTimelineContextMenu"
-import { processKeyframe } from "../../states/useTimelineData"
-import { getTimelineFrame } from "../../states/useTimelineFrame"
+import { setTimeline } from "../../states/useTimeline"
+import { getTimelineData, processKeyframe } from "../../states/useTimelineData"
+import { getTimelineLayer } from "../../states/useTimelineLayer"
+import { Point } from "@lincode/math"
+import { Signal, signal } from "@preact/signals"
+import { uuidMap } from "../../collections/idCollections"
+import { timelinePtr } from "../../pointers/timelinePtr"
+import { timelineFramePtr } from "../../pointers/timelineFramePtr"
+
+export const timelineContextMenuSignal: Signal<
+    | (Point & {
+          keyframe?: boolean
+          create?: "audio" | "timeline"
+      })
+    | undefined
+> = signal(undefined)
 
 const TimelineContextMenu = () => {
-    const menu = useSyncState(getTimelineContextMenu)
     const [dataCopied, setDataCopied] = useState<AnimationData>()
-    const timeline = useSyncState(getTimeline)
+    const [timelineData] = useSyncState(getTimelineData)
+    const timelineLayer = useSyncState(getTimelineLayer)
 
     return (
         <ContextMenu
-            position={menu}
-            setPosition={setTimelineContextMenu}
+            positionSignal={timelineContextMenuSignal}
             input={
-                menu?.create &&
-                (menu.create === "audio" ? "Audio src" : "Timeline name")
-            }
-            onInput={(value) => {
-                if (menu?.create === "audio") {
-                    const timeline = getTimeline()
-                    if (!timeline) return
+                timelineContextMenuSignal.value?.create === "audio"
+                    ? {
+                          label: "Audio src",
+                          onInput: (value) => {
+                              const [timeline] = timelinePtr
+                              if (!timeline) return
 
-                    const audio = new TimelineAudio()
-                    audio.name = value
-                    if (getExtensionType(value) === "audio") audio.src = value
-                    timeline.mergeData({ [audio.uuid]: {} })
-                    timeline.append(audio)
-                    //todo: refactor sceneGraphExpanded to make below work
-                    // setSceneGraphExpanded(new Set([timeline.outerObject3d]))
-                    emitSelectionTarget(audio)
-                    return
-                }
-                const timeline = new Timeline()
-                timeline.name = value
-                timeline.data = {}
-                setTimeline(timeline)
-                emitSelectionTarget(timeline)
-            }}
+                              const audio = new TimelineAudio()
+                              audio.name = value
+                              if (getExtensionType(value) === "audio")
+                                  audio.src = value
+                              timeline.mergeData({ [audio.uuid]: {} })
+                              timeline.append(audio)
+                              //todo: refactor sceneGraphExpanded to make below work
+                              // setSceneGraphExpanded(new Set([timeline.outerObject3d]))
+                              emitSelectionTarget(audio)
+                          }
+                      }
+                    : timelineContextMenuSignal.value?.create === "timeline"
+                    ? {
+                          label: "Timeline name",
+                          onInput: (value) => {
+                              const timeline = new Timeline()
+                              timeline.name = value
+                              timeline.data = {}
+                              setTimeline(timeline)
+                              emitSelectionTarget(timeline)
+                          }
+                      }
+                    : undefined
+            }
         >
-            <ContextMenuItem
-                disabled={menu?.keyframe || !timeline}
+            <MenuButton
+                disabled={
+                    timelineContextMenuSignal.value?.keyframe ||
+                    !timelineData ||
+                    !timelineLayer ||
+                    !(timelineLayer.split(" ")[0] in timelineData)
+                }
                 onClick={() => {
                     processKeyframe((timelineData, uuid, property, frame) =>
                         set(
@@ -65,13 +83,13 @@ const TimelineContextMenu = () => {
                             unsafeGetValue(uuidMap.get(uuid)!, property)
                         )
                     )
-                    setTimelineContextMenu(undefined)
+                    timelineContextMenuSignal.value = undefined
                 }}
             >
                 Add keyframe
-            </ContextMenuItem>
-            <ContextMenuItem
-                disabled={!menu?.keyframe}
+            </MenuButton>
+            <MenuButton
+                disabled={!timelineContextMenuSignal.value?.keyframe}
                 onClick={() => {
                     const data: AnimationData = {}
                     processKeyframe(
@@ -84,18 +102,18 @@ const TimelineContextMenu = () => {
                         true
                     )
                     setDataCopied(data)
-                    setTimelineContextMenu(undefined)
+                    timelineContextMenuSignal.value = undefined
                 }}
             >
                 Copy keyframe
-            </ContextMenuItem>
-            <ContextMenuItem
+            </MenuButton>
+            <MenuButton
                 disabled={!dataCopied}
                 onClick={
                     dataCopied
                         ? () => {
                               const data: AnimationData = {}
-                              const frame = getTimelineFrame() + ""
+                              const frame = timelineFramePtr[0] + ""
                               for (const [uuid, properties] of Object.entries(
                                   dataCopied
                               ))
@@ -109,23 +127,23 @@ const TimelineContextMenu = () => {
                                               [uuid, property, frame],
                                               value
                                           )
-                              getTimeline()?.mergeData(data)
-                              setTimelineContextMenu(undefined)
+                              timelinePtr[0]?.mergeData(data)
+                              timelineContextMenuSignal.value = undefined
                           }
                         : undefined
                 }
             >
                 Paste keyframe
-            </ContextMenuItem>
-            <ContextMenuItem
-                disabled={!menu?.keyframe}
+            </MenuButton>
+            <MenuButton
+                disabled={!timelineContextMenuSignal.value?.keyframe}
                 onClick={() => {
                     emitTimelineClearKeyframe()
-                    setTimelineContextMenu(undefined)
+                    timelineContextMenuSignal.value = undefined
                 }}
             >
                 Clear keyframe
-            </ContextMenuItem>
+            </MenuButton>
         </ContextMenu>
     )
 }

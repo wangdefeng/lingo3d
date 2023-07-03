@@ -1,136 +1,96 @@
 import { Cancellable } from "@lincode/promiselikes"
-import { forceGetInstance } from "@lincode/utils"
-import { Frustum, Matrix3, Object3D } from "three"
-import { OBB } from "three/examples/jsm/math/OBB"
-import MeshAppendable from "../../../api/core/MeshAppendable"
-import {
-    addOutline,
-    deleteOutline
-} from "../../../engine/renderLoop/effectComposer/outlineEffect"
-import {
-    addSelectiveBloom,
-    deleteSelectiveBloom
-} from "../../../engine/renderLoop/effectComposer/selectiveBloomEffect"
+import { Object3D } from "three"
+import MeshAppendable from "../MeshAppendable"
 import { LingoMouseEvent } from "../../../interface/IMouse"
-import IVisible from "../../../interface/IVisible"
+import IVisible, { HitEvent } from "../../../interface/IVisible"
 import Nullable from "../../../interface/utils/Nullable"
-import { getCameraRendered } from "../../../states/useCameraRendered"
-import renderSystem from "../../../utils/renderSystem"
-import throttleFrameLeading from "../../../utils/throttleFrameLeading"
-import getCenter from "../../utils/getCenter"
-import getWorldPosition from "../../utils/getWorldPosition"
-import { matrix4, vector3_1 } from "../../utils/reusables"
+import { obb, obb_, vector3_1 } from "../../utils/reusables"
+import { reflectionVisibleSet } from "../../../collections/reflectionCollections"
 import {
     clickSet,
     mouseDownSet,
-    mouseUpSet,
-    mouseOverSet,
+    mouseMoveSet,
     mouseOutSet,
-    mouseMoveSet
-} from "../utils/raycast/sets"
-import "../utils/raycast"
-import { getAppendables } from "../../../api/core/Appendable"
-
-const frustum = new Frustum()
-const updateFrustum = throttleFrameLeading(() => {
-    const camera = getCameraRendered()
-    frustum.setFromProjectionMatrix(
-        matrix4.multiplyMatrices(
-            camera.projectionMatrix,
-            camera.matrixWorldInverse
-        )
-    )
-})
-
-const thisOBB = new OBB()
-const targetOBB = new OBB()
-
-const hitCache = new WeakMap<VisibleMixin, WeakSet<VisibleMixin>>()
-const [addHitTestSystem, deleteHitTestSystem] = renderSystem(
-    (manager: VisibleMixin) => {
-        for (const target of getAppendables(manager.hitTarget!)) {
-            if (!("object3d" in target)) return
-            const cache = forceGetInstance(hitCache, manager, WeakSet)
-            if (manager.hitTest(target)) {
-                if (!cache.has(target)) {
-                    cache.add(target)
-                    manager.onHitStart?.(target)
-                }
-                manager.onHit?.(target)
-                continue
-            }
-            if (!cache.has(target)) continue
-            cache.delete(target)
-            manager.onHitEnd?.(target)
-        }
-    }
-)
+    mouseOverSet,
+    mouseUpSet
+} from "../../../collections/mouseSets"
+import { idRenderCheckMap } from "../../../collections/idCollections"
+import getRendered from "../../../throttle/getRendered"
+import { hitTestSystem } from "../../../systems/hitTestSystem"
+import { configCastShadowSystem } from "../../../systems/configLoadedSystems/configCastShadowSystem"
+import { configOutlineSystem } from "../../../systems/configLoadedSystems/configOutlineSystem"
+import { configSelectiveBloomSystem } from "../../../systems/configLoadedSystems/configSelectiveBloomSystem"
+import setOBB from "../../utils/setOBB"
 
 export default abstract class VisibleMixin<T extends Object3D = Object3D>
     extends MeshAppendable<T>
     implements IVisible
 {
-    protected _bloom?: boolean
+    private _bloom?: boolean
     public get bloom() {
-        return !!this._bloom
+        return this._bloom
     }
     public set bloom(val) {
         this._bloom = val
-        val
-            ? addSelectiveBloom(this.object3d)
-            : deleteSelectiveBloom(this.object3d)
+        configSelectiveBloomSystem.add(this)
     }
 
-    protected _outline?: boolean
+    private _outline?: boolean
     public get outline() {
-        return !!this._outline
+        return this._outline
     }
     public set outline(val) {
         this._outline = val
-        val ? addOutline(this.object3d) : deleteOutline(this.object3d)
+        configOutlineSystem.add(this)
     }
 
     private _visible?: boolean
     public get visible() {
-        return this._visible !== false
+        return this._visible
     }
     public set visible(val) {
         this._visible = val
-        this.outerObject3d.visible = val
+        this.outerObject3d.visible = !!val
     }
 
-    public get frustumCulled() {
-        return this.outerObject3d.frustumCulled
+    private _reflectionVisible?: boolean
+    public get reflectionVisible() {
+        return this._reflectionVisible
     }
-    public set frustumCulled(val) {
-        this.outerObject3d.frustumCulled = val
-        this.outerObject3d.traverse((child) => (child.frustumCulled = val))
+    public set reflectionVisible(val) {
+        this._reflectionVisible = val
+        this.cancelHandle(
+            "reflectionVisible",
+            val &&
+                (() => {
+                    reflectionVisibleSet.add(this)
+                    return new Cancellable(() => {
+                        reflectionVisibleSet.delete(this)
+                        this.outerObject3d.visible = !!this._visible
+                    })
+                })
+        )
     }
 
-    public get frustumVisible() {
-        updateFrustum()
-        return frustum.containsPoint(getCenter(this.object3d))
+    private initRenderCheck?: boolean
+    public get isRendered() {
+        if (!this.initRenderCheck) {
+            this.initRenderCheck = true
+            idRenderCheckMap.set(this.object3d.id, this)
+        }
+        return getRendered().has(this)
     }
 
-    protected _castShadow?: boolean
+    private _castShadow?: boolean
     public get castShadow() {
-        return this._castShadow ?? true
+        return (this._castShadow ??= true)
     }
     public set castShadow(val) {
         this._castShadow = val
-        this.outerObject3d.traverse((child) => (child.castShadow = val))
+        configCastShadowSystem.add(this)
     }
 
-    protected _receiveShadow?: boolean
-    public get receiveShadow() {
-        return this._receiveShadow ?? true
-    }
-    public set receiveShadow(val) {
-        this._receiveShadow = val
-        this.outerObject3d.traverse((child) => (child.receiveShadow = val))
-    }
-
-    public addToRaycastSet(set: Set<Object3D>) {
+    public $addToRaycastSet(set: Set<Object3D>) {
         set.add(this.object3d)
         return new Cancellable(() => set.delete(this.object3d))
     }
@@ -143,7 +103,7 @@ export default abstract class VisibleMixin<T extends Object3D = Object3D>
         this._onClick = cb
         this.cancelHandle(
             "onClick",
-            cb && (() => this.addToRaycastSet(clickSet))
+            cb && (() => this.$addToRaycastSet(clickSet))
         )
     }
 
@@ -155,7 +115,7 @@ export default abstract class VisibleMixin<T extends Object3D = Object3D>
         this._onMouseDown = cb
         this.cancelHandle(
             "onMouseDown",
-            cb && (() => this.addToRaycastSet(mouseDownSet))
+            cb && (() => this.$addToRaycastSet(mouseDownSet))
         )
     }
 
@@ -167,7 +127,7 @@ export default abstract class VisibleMixin<T extends Object3D = Object3D>
         this._onMouseUp = cb
         this.cancelHandle(
             "onMouseUp",
-            cb && (() => this.addToRaycastSet(mouseUpSet))
+            cb && (() => this.$addToRaycastSet(mouseUpSet))
         )
     }
 
@@ -179,7 +139,7 @@ export default abstract class VisibleMixin<T extends Object3D = Object3D>
         this._onMouseOver = cb
         this.cancelHandle(
             "onMouseOver",
-            cb && (() => this.addToRaycastSet(mouseOverSet))
+            cb && (() => this.$addToRaycastSet(mouseOverSet))
         )
     }
 
@@ -191,7 +151,7 @@ export default abstract class VisibleMixin<T extends Object3D = Object3D>
         this._onMouseOut = cb
         this.cancelHandle(
             "onMouseOut",
-            cb && (() => this.addToRaycastSet(mouseOutSet))
+            cb && (() => this.$addToRaycastSet(mouseOutSet))
         )
     }
 
@@ -203,7 +163,7 @@ export default abstract class VisibleMixin<T extends Object3D = Object3D>
         this._onMouseMove = cb
         this.cancelHandle(
             "onMouseMove",
-            cb && (() => this.addToRaycastSet(mouseMoveSet))
+            cb && (() => this.$addToRaycastSet(mouseMoveSet))
         )
     }
 
@@ -212,44 +172,21 @@ export default abstract class VisibleMixin<T extends Object3D = Object3D>
         if (target.done) return false
         if (this === target) return false
 
-        thisOBB.set(
-            getWorldPosition(this.object3d),
-            vector3_1.clone(),
-            new Matrix3()
-        )
-        thisOBB.applyMatrix4(this.object3d.matrixWorld)
-        targetOBB.set(
-            getWorldPosition(target.object3d),
-            vector3_1.clone(),
-            new Matrix3()
-        )
-        targetOBB.applyMatrix4(target.object3d.matrixWorld)
-        return thisOBB.intersectsOBB(targetOBB)
+        setOBB(this.object3d, obb)
+        setOBB(target.object3d, obb_)
+        return obb.intersectsOBB(obb_)
     }
 
-    private _hitTarget?:
-        | string
-        | Array<string>
-        | MeshAppendable
-        | Array<MeshAppendable>
+    private _hitTarget?: string | Array<string>
     public get hitTarget() {
         return this._hitTarget
     }
     public set hitTarget(val) {
         this._hitTarget = val
-        this.cancelHandle(
-            "hitTarget",
-            val &&
-                (() => {
-                    addHitTestSystem(this)
-                    return new Cancellable(() => {
-                        deleteHitTestSystem(this)
-                    })
-                })
-        )
+        val ? hitTestSystem.add(this) : hitTestSystem.delete(this)
     }
 
-    public onHit: Nullable<(instance: MeshAppendable) => void>
-    public onHitStart: Nullable<(instance: MeshAppendable) => void>
-    public onHitEnd: Nullable<(instance: MeshAppendable) => void>
+    public onHit: Nullable<(instance: HitEvent) => void>
+    public onHitStart: Nullable<(instance: HitEvent) => void>
+    public onHitEnd: Nullable<(instance: HitEvent) => void>
 }

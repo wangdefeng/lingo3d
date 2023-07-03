@@ -1,12 +1,7 @@
-import "./Editor"
-import "./SceneGraph"
-import "./Toolbar"
-import "./Library"
-import "./HUD"
 import LingoEditor from "./LingoEditor"
 import { Disposable } from "@lincode/promiselikes"
 import { render } from "preact"
-import { Reactive } from "@lincode/reactivity"
+import { unmountComponentAtNode } from "preact/compat"
 
 export default class extends Disposable {
     public constructor() {
@@ -19,7 +14,7 @@ export default class extends Disposable {
 
         this.then(() => {
             el.remove()
-            render(undefined, el)
+            unmountComponentAtNode(el)
         })
     }
 }

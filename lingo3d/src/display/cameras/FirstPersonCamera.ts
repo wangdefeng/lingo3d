@@ -1,9 +1,7 @@
-import CharacterCamera, {
-    addCharacterCameraSystem,
-    deleteCharacterCameraSystem
-} from "../core/CharacterCamera"
+import CharacterCamera from "../core/CharacterCamera"
 import { Reactive } from "@lincode/reactivity"
-import ObjectManager from "../core/ObjectManager"
+import GimbalObjectManager from "../core/GimbalObjectManager"
+import { characterCameraSystem } from "../../systems/characterCameraSystem"
 
 export default class FirstPersonCamera extends CharacterCamera {
     public static componentName = "firstPersonCamera"
@@ -11,19 +9,18 @@ export default class FirstPersonCamera extends CharacterCamera {
     public constructor() {
         super()
 
-        addCharacterCameraSystem(this)
-        this.then(() => deleteCharacterCameraSystem(this))
+        characterCameraSystem.add(this)
 
         this.createEffect(() => {
             const found = this.firstChildState.get()
             const innerYSet = this.innerYSetState.get()
-            if (!(found instanceof ObjectManager) || innerYSet) return
+            if (!(found instanceof GimbalObjectManager) || innerYSet) return
             super.innerY = found.height * 0.4
 
             return () => {
                 super.innerY = 0
             }
-        }, [this.firstChildState, this.innerYSetState.get])
+        }, [this.firstChildState.get, this.innerYSetState.get])
     }
 
     private innerYSetState = new Reactive(false)

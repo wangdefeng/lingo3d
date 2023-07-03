@@ -1,50 +1,25 @@
 import { useMemo } from "preact/hooks"
-import { get, set, traverse } from "@lincode/utils"
+import { get } from "@lincode/utils"
 import FileButton from "./FileButton"
 import FileTreeItem from "./FileTreeItem"
-import pathMap from "./pathMap"
 import useInitCSS from "../hooks/useInitCSS"
 import { APPBAR_HEIGHT, PANELS_HEIGHT } from "../../globals"
-import { setFileSelected } from "../../states/useFileSelected"
+import { getFileSelected, setFileSelected } from "../../states/useFileSelected"
 import useSyncState from "../hooks/useSyncState"
-import { getFiles } from "../../states/useFiles"
-import {
-    getFileBrowserDir,
-    setFileBrowserDir
-} from "../../states/useFileBrowserDir"
+import { getFileBrowserDir } from "../../states/useFileBrowserDir"
 import useInitEditor from "../hooks/useInitEditor"
-
-interface FileStructure {
-    [key: string]: FileStructure | File
-}
+import { getFileStructure } from "../../states/useFileStructure"
+import FileBrowserAddContextMenu from "./FileBrowserAddContextMenu"
+import FileBrowserMaterialContextMenu from "./FileBrowserMaterialContextMenu"
+import { sceneGraphWidthSignal } from "../signals/sizeSignals"
 
 const FileBrowser = () => {
     useInitCSS()
     useInitEditor()
 
-    const files = useSyncState(getFiles)
     const fileBrowserDir = useSyncState(getFileBrowserDir)
-
-    const [fileStructure, firstFolderName] = useMemo(() => {
-        const fileStructure: FileStructure = {}
-        let firstFolderName = ""
-
-        if (files) {
-            for (const file of files)
-                set(fileStructure, file.webkitRelativePath.split("/"), file)
-
-            firstFolderName = Object.keys(fileStructure)[0]
-
-            traverse(fileStructure, (key, child, parent) => {
-                let path = ""
-                if (pathMap.has(parent)) path = pathMap.get(parent) + "/" + key
-                typeof child === "object" && pathMap.set(child, path)
-            })
-        }
-        setFileBrowserDir(firstFolderName)
-
-        return [fileStructure, firstFolderName]
-    }, [files])
+    const fileStructure = useSyncState(getFileStructure)
+    const fileSelected = useSyncState(getFileSelected)
 
     const filteredFiles = useMemo(() => {
         const currentFolder = get(fileStructure, fileBrowserDir.split("/"))
@@ -56,37 +31,70 @@ const FileBrowser = () => {
         return filteredFiles
     }, [fileStructure, fileBrowserDir])
 
+    const rootFolderName = useMemo(
+        () => Object.keys(fileStructure)[0] ?? "",
+        [fileStructure]
+    )
+
     return (
-        <div
-            className="lingo3d-ui lingo3d-bg lingo3d-panels"
-            style={{
-                height: PANELS_HEIGHT - APPBAR_HEIGHT,
-                width: "100%",
-                display: "flex"
-            }}
-        >
-            <div style={{ overflow: "scroll", width: 200 }}>
-                <FileTreeItem
-                    fileStructure={fileStructure}
-                    firstFolderName={firstFolderName}
-                />
-            </div>
-            <div style={{ flexGrow: 1 }}>
+        <>
+            <div
+                className="lingo3d-ui lingo3d-bg lingo3d-panels"
+                style={{
+                    height: PANELS_HEIGHT - APPBAR_HEIGHT,
+                    width: "100%",
+                    display: "flex"
+                }}
+            >
                 <div
-                    className="lingo3d-absfull"
                     style={{
                         overflow: "scroll",
-                        display: "flex",
-                        flexWrap: "wrap"
+                        width: sceneGraphWidthSignal.value
                     }}
-                    onMouseDown={() => setFileSelected(undefined)}
                 >
-                    {filteredFiles?.map((file) => (
-                        <FileButton key={file.name} file={file} />
-                    ))}
+                    <FileTreeItem
+                        fileStructure={fileStructure}
+                        rootFolderName={rootFolderName}
+                    />
+                </div>
+                <div style={{ flexGrow: 1 }}>
+                    <div
+                        className="lingo3d-absfull"
+                        style={{
+                            overflow: "scroll",
+                            display: "flex",
+                            flexWrap: "wrap",
+                            paddingBottom: 28
+                        }}
+                        onMouseDown={() => setFileSelected(undefined)}
+                    >
+                        {filteredFiles?.map((file) => (
+                            <FileButton key={file.name} file={file} />
+                        ))}
+                    </div>
+                    {fileSelected && (
+                        <div
+                            className="lingo3d-bg-dark"
+                            style={{
+                                position: "absolute",
+                                bottom: 8,
+                                width: "100%",
+                                alignItems: "center",
+                                display: "flex",
+                                paddingLeft: 8,
+                                paddingBottom: 8
+                            }}
+                        >
+                            <div style={{ opacity: 0.5 }}>
+                                {fileSelected.name}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
-        </div>
+            <FileBrowserAddContextMenu />
+            <FileBrowserMaterialContextMenu />
+        </>
     )
 }
 export default FileBrowser

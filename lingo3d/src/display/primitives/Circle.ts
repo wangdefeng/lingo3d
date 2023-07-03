@@ -1,33 +1,28 @@
-import { CircleGeometry } from "three"
 import ICircle, { circleDefaults, circleSchema } from "../../interface/ICircle"
-import { deg2Rad } from "@lincode/math"
-import ConfigurablePrimitive, {
-    allocateDefaultInstance,
-    refreshParamsSystem
-} from "../core/ConfigurablePrimitive"
 import { PI2 } from "../../globals"
+import {
+    CircleParams,
+    circleGeometryPool
+} from "../../pools/circleGeometryPool"
+import { deg2Rad } from "@lincode/math"
+import PooledPrimitve from "../core/PooledPrimitive"
+import toFixed from "../../api/serializer/toFixed"
+import { refreshPooledPrimitiveSystem } from "../../systems/configSystems/refreshPooledPrimitiveSystem"
 
-const defaultParams = <const>[0.5, 32, 0, PI2]
-const geometry = allocateDefaultInstance(
-    CircleGeometry,
-    defaultParams
-) as CircleGeometry
+const geometry = circleGeometryPool.request([0.5, 32, 0, PI2])
 
-export default class Circle
-    extends ConfigurablePrimitive<typeof CircleGeometry>
-    implements ICircle
-{
+export default class Circle extends PooledPrimitve implements ICircle {
     public static componentName = "circle"
     public static override defaults = circleDefaults
     public static override schema = circleSchema
 
     public constructor() {
-        super(CircleGeometry, defaultParams, geometry)
+        super(geometry, circleGeometryPool)
         this.object3d.scale.z = Number.EPSILON
     }
 
-    public override getParams() {
-        return <const>[0.5, this.segments, 0, this.theta * deg2Rad]
+    public $getParams(): CircleParams {
+        return [0.5, this.segments, 0, this.theta * deg2Rad]
     }
 
     private _theta?: number
@@ -35,8 +30,8 @@ export default class Circle
         return this._theta ?? 360
     }
     public set theta(val) {
-        this._theta = val
-        refreshParamsSystem(this)
+        this._theta = toFixed(val)
+        refreshPooledPrimitiveSystem.add(this)
     }
 
     private _segments?: number
@@ -44,8 +39,8 @@ export default class Circle
         return this._segments ?? 32
     }
     public set segments(val) {
-        this._segments = val
-        refreshParamsSystem(this)
+        this._segments = toFixed(val)
+        refreshPooledPrimitiveSystem.add(this)
     }
 
     public override get depth() {

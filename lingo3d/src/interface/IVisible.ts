@@ -1,17 +1,28 @@
-import MeshAppendable from "../api/core/MeshAppendable"
-import { LingoMouseEvent } from "./IMouse"
+import MeshAppendable from "../display/core/MeshAppendable"
+import { Point3dType } from "../utils/isPoint"
+import { lingoMouseEvent, LingoMouseEvent } from "./IMouse"
 import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 import Nullable from "./utils/Nullable"
+import { nullableCallback } from "./utils/NullableCallback"
+import { nullableDefault } from "./utils/NullableDefault"
+
+export class HitEvent {
+    public constructor(
+        public target: MeshAppendable,
+        public point?: Point3dType,
+        public normal?: Point3dType
+    ) {}
+}
+export const hitEvent = new HitEvent(undefined as any)
 
 export default interface IVisible {
-    bloom: boolean
-    outline: boolean
+    bloom: Nullable<boolean>
+    outline: Nullable<boolean>
 
-    visible: boolean
-    frustumCulled: boolean
-    castShadow: boolean
-    receiveShadow: boolean
+    visible: Nullable<boolean>
+    reflectionVisible: Nullable<boolean>
+    castShadow: Nullable<boolean>
 
     onClick: Nullable<(e: LingoMouseEvent) => void>
     onMouseDown: Nullable<(e: LingoMouseEvent) => void>
@@ -19,13 +30,11 @@ export default interface IVisible {
     onMouseOver: Nullable<(e: LingoMouseEvent) => void>
     onMouseOut: Nullable<(e: LingoMouseEvent) => void>
     onMouseMove: Nullable<(e: LingoMouseEvent) => void>
-    onHit: Nullable<(instance: MeshAppendable) => void>
-    onHitStart: Nullable<(instance: MeshAppendable) => void>
-    onHitEnd: Nullable<(instance: MeshAppendable) => void>
+    onHit: Nullable<(e: HitEvent) => void>
+    onHitStart: Nullable<(e: HitEvent) => void>
+    onHitEnd: Nullable<(e: HitEvent) => void>
 
-    hitTarget: Nullable<
-        string | Array<string> | MeshAppendable | Array<MeshAppendable>
-    >
+    hitTarget: Nullable<string | Array<string>>
 }
 
 export const visibleSchema: Required<ExtractProps<IVisible>> = {
@@ -33,11 +42,10 @@ export const visibleSchema: Required<ExtractProps<IVisible>> = {
     outline: Boolean,
 
     visible: Boolean,
-    frustumCulled: Boolean,
+    reflectionVisible: Boolean,
     castShadow: Boolean,
-    receiveShadow: Boolean,
 
-    hitTarget: [String, Array, Object],
+    hitTarget: [String, Array],
 
     onClick: Function,
     onMouseDown: Function,
@@ -51,23 +59,22 @@ export const visibleSchema: Required<ExtractProps<IVisible>> = {
 }
 
 export const visibleDefaults = extendDefaults<IVisible>([], {
-    bloom: false,
-    outline: false,
+    bloom: nullableDefault(false),
+    outline: nullableDefault(false),
 
-    visible: true,
-    frustumCulled: true,
-    castShadow: true,
-    receiveShadow: true,
+    visible: nullableDefault(true),
+    reflectionVisible: nullableDefault(false),
+    castShadow: nullableDefault(true),
 
     hitTarget: undefined,
 
-    onClick: undefined,
-    onMouseDown: undefined,
-    onMouseUp: undefined,
-    onMouseOver: undefined,
-    onMouseOut: undefined,
-    onMouseMove: undefined,
-    onHit: undefined,
-    onHitStart: undefined,
-    onHitEnd: undefined
+    onClick: nullableCallback(lingoMouseEvent),
+    onMouseDown: nullableCallback(lingoMouseEvent),
+    onMouseUp: nullableCallback(lingoMouseEvent),
+    onMouseOver: nullableCallback(lingoMouseEvent),
+    onMouseOut: nullableCallback(lingoMouseEvent),
+    onMouseMove: nullableCallback(lingoMouseEvent),
+    onHit: nullableCallback(hitEvent),
+    onHitStart: nullableCallback(hitEvent),
+    onHitEnd: nullableCallback(hitEvent)
 })

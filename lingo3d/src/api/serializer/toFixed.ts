@@ -1,10 +1,13 @@
-import { Point, Point3d } from "@lincode/math"
+import { PointType } from "../../utils/isPoint"
 
-const toFixed = (v: number) => Number(v.toFixed(2))
+const toFixed = (v: number, places = 2) => Number(v.toFixed(places))
 export default toFixed
 
-export const toFixedPoint = (value: Point | Point3d) => {
-    if ("z" in value)
+export const toNullableFixed = (v: number | undefined) =>
+    v === undefined ? undefined : toFixed(v)
+
+export const toFixedPoint = (value: PointType) => {
+    if (value.z !== undefined)
         return {
             x: toFixed(value.x),
             y: toFixed(value.y),

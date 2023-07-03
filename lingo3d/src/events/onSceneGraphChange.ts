@@ -1,7 +1,7 @@
 import { event } from "@lincode/events"
-import { throttleTrailing } from "@lincode/utils"
+import throttleFrameTrailing from "../throttle/utils/throttleFrameTrailing"
 
 const [_emitSceneGraphChange, onSceneGraphChange] = event()
 export { onSceneGraphChange }
 
-export const emitSceneGraphChange = throttleTrailing(_emitSceneGraphChange)
+export const emitSceneGraphChange = throttleFrameTrailing(_emitSceneGraphChange)

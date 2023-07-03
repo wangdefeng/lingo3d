@@ -1,15 +1,14 @@
-import { throttleTrailing } from "@lincode/utils"
-import { FAR } from "../../globals"
 import IDefaultSkyLight, {
     defaultSkyLightDefaults,
     defaultSkyLightSchema
 } from "../../interface/IDefaultSkyLight"
 import { getDefaultLight, setDefaultLight } from "../../states/useDefaultLight"
 import SkyLight from "./SkyLight"
+import throttleFrameTrailing from "../../throttle/utils/throttleFrameTrailing"
 
 let defaultSkyLight: DefaultSkyLight | undefined
 
-const checkDefaultLight = throttleTrailing(
+const checkDefaultLight = throttleFrameTrailing(
     () => !defaultSkyLight && setDefaultLight(false)
 )
 
@@ -23,16 +22,15 @@ export default class DefaultSkyLight
 
     public constructor() {
         super()
-        this.y = FAR
-        this.z = FAR
-        this.intensity = 0.5
-        this.castShadow = true
+        this.x = 500
+        this.y = 1000
+        this.z = 1000
         defaultSkyLight?.dispose()
         defaultSkyLight = this
     }
 
-    protected override _dispose() {
-        super._dispose()
+    protected override disposeNode() {
+        super.disposeNode()
         defaultSkyLight = undefined
         checkDefaultLight()
     }

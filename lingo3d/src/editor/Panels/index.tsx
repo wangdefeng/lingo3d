@@ -2,66 +2,69 @@ import CloseableTab from "../component/tabs/CloseableTab"
 import AppBar from "../component/bars/AppBar"
 import useInitCSS from "../hooks/useInitCSS"
 import FileBrowser from "../FileBrowser"
-import { useEffect } from "preact/hooks"
+import { useEffect, useState } from "preact/hooks"
 import TimelineEditor from "../TimelineEditor"
 import { PANELS_HEIGHT } from "../../globals"
-import { getTimeline, setTimeline } from "../../states/useTimeline"
+import { getTimeline } from "../../states/useTimeline"
 import { useSignal } from "@preact/signals"
-import Controls from "../TimelineEditor/Controls"
+import TimelineControls from "../TimelineEditor/TimelineControls"
 import useSyncState from "../hooks/useSyncState"
-import { getFileBrowser, setFileBrowser } from "../../states/useFileBrowser"
 import useInitEditor from "../hooks/useInitEditor"
+import FileBrowserControls from "../FileBrowser/FileBrowserControls"
+import { selectTab } from "../component/tabs/Tab"
+import { onOpenFolder } from "../../events/onOpenFolder"
+import { sceneGraphWidthSignal } from "../signals/sizeSignals"
 
 const Panels = () => {
     useInitCSS()
     useInitEditor()
 
-    const fileBrowser = useSyncState(getFileBrowser)
+    const [files, setFiles] = useState(false)
     const timeline = useSyncState(getTimeline)
-    const selectedSignal = useSignal<string | undefined>(undefined)
+    const selectedSignal = useSignal<Array<string>>([])
 
     useEffect(() => {
-        if (fileBrowser) selectedSignal.value = "files"
-    }, [fileBrowser])
+        const handle = onOpenFolder(() => setFiles(true))
+        return () => {
+            handle.cancel()
+        }
+    }, [])
 
     useEffect(() => {
-        if (timeline) selectedSignal.value = "timeline"
+        files && selectTab(selectedSignal, "files")
+    }, [files])
+
+    useEffect(() => {
+        timeline && selectTab(selectedSignal, "timeline")
     }, [timeline])
-
-    // if (!fileBrowser && !timeline) return null
 
     return (
         <div
-            className="lingo3d-ui lingo3d-bg lingo3d-panels"
-            style={{
-                height: PANELS_HEIGHT,
-                width: "100%",
-                display: "flex",
-                flexDirection: "column"
-            }}
+            className="lingo3d-ui lingo3d-bg lingo3d-panels lingo3d-flexcol"
+            style={{ height: PANELS_HEIGHT, width: "100%" }}
         >
             <div style={{ display: "flex" }}>
-                <AppBar selectedSignal={selectedSignal} style={{ width: 200 }}>
-                    <CloseableTab
-                        onClose={
-                            timeline ? () => setTimeline(undefined) : undefined
-                        }
-                    >
+                <AppBar style={{ width: sceneGraphWidthSignal.value }}>
+                    <CloseableTab selectedSignal={selectedSignal}>
                         timeline
                     </CloseableTab>
                     <CloseableTab
-                        disabled={!fileBrowser}
-                        onClose={() => setFileBrowser(false)}
+                        selectedSignal={selectedSignal}
+                        disabled={!files}
                     >
                         files
                     </CloseableTab>
                 </AppBar>
                 <div style={{ flexGrow: 1 }}>
-                    {selectedSignal.value !== "files" && <Controls />}
+                    {selectedSignal.value.at(-1) === "files" ? (
+                        <FileBrowserControls />
+                    ) : (
+                        <TimelineControls />
+                    )}
                 </div>
             </div>
             <div style={{ flexGrow: 1 }}>
-                {selectedSignal.value === "files" ? (
+                {selectedSignal.value.at(-1) === "files" ? (
                     <FileBrowser />
                 ) : (
                     <TimelineEditor />

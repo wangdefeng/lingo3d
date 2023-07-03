@@ -4,71 +4,50 @@ import { getResolution, setResolution } from "../../states/useResolution"
 import { createEffect, createNestedEffect } from "@lincode/reactivity"
 import { getWebXR } from "../../states/useWebXR"
 import { getRenderer } from "../../states/useRenderer"
-import { getPBR } from "../../states/usePBR"
 import { VRButton } from "./VRButton"
 import { getAutoMount } from "../../states/useAutoMount"
-import { throttleTrailing } from "@lincode/utils"
-import { getPixelRatio } from "../../states/usePixelRatio"
-import createElement from "../../utils/createElement"
+import { debounce } from "@lincode/utils"
 import { getUILayer } from "../../states/useUILayer"
 import { getSplitView } from "../../states/useSplitView"
 import { getTimelinePaused } from "../../states/useTimelinePaused"
+import { emitResize } from "../../events/onResize"
+import { container, uiContainer, overlayContainer } from "./containers"
+import { rendererPtr } from "../../pointers/rendererPtr"
+import { resolutionPtr } from "../../pointers/resolutionPtr"
+import { timelinePausedPtr } from "../../pointers/timelinePausedPtr"
+import { getDocumentHidden } from "../../states/useDocumentHidden"
 
-const style = createElement(`
-    <style>
-        .lingo3d-container {
-            position: absolute !important;
-            top: 0px;
-            left: 0px;
-            width: 100%;
-            height: 100%;
-        }
-        .lingo3d-uicontainer {
-            pointer-events: none;
-        }
-        .lingo3d-uicontainer > * {
-            pointer-events: auto;
-        }
-    </style>
-`)
-document.head.appendChild(style)
-
-export const container = createElement<HTMLDivElement>(
-    `<div class="lingo3d-container"></div>`
-)
-export const uiContainer = createElement<HTMLDivElement>(
-    `<div class="lingo3d-container lingo3d-uicontainer"></div>`
-)
-export const overlayContainer = createElement<HTMLDivElement>(
-    `<div class="lingo3d-container lingo3d-uicontainer"></div>`
-)
 container.appendChild(uiContainer)
-container.appendChild(overlayContainer)
+uiContainer.appendChild(overlayContainer)
+container.addEventListener("touchstart", (e) => e.preventDefault())
 getSplitView((val) => {
     container.style.height = val ? "50%" : "100%"
     uiContainer.style.top = val ? "100%" : "0px"
 })
 createEffect(() => {
     uiContainer.style.display =
-        getUILayer() || !getTimelinePaused() ? "block" : "none"
-}, [getUILayer, getTimelinePaused])
+        getUILayer() || !timelinePausedPtr[0] || getDocumentHidden()
+            ? "block"
+            : "none"
+}, [getUILayer, getTimelinePaused, getDocumentHidden])
 
 export const containerBounds = [container.getBoundingClientRect()]
 
-const useResize = (el: Element) => {
+const useResize = (el: HTMLElement) => {
     createNestedEffect(() => {
         const handleResize = () => {
             containerBounds[0] = container.getBoundingClientRect()
             setResolution(
                 el === document.body
                     ? [window.innerWidth, window.innerHeight]
-                    : [el.clientWidth, el.clientHeight]
+                    : [el.offsetWidth, el.offsetHeight]
             )
+            emitResize()
         }
         handleResize()
 
         const resizeObserver = new ResizeObserver(
-            throttleTrailing(handleResize, 100)
+            debounce(handleResize, 100, "trailing")
         )
         resizeObserver.observe(container)
 
@@ -83,7 +62,7 @@ createEffect(() => {
     if (!autoMount) return
 
     if (typeof autoMount === "string") {
-        const el = document.querySelector(autoMount)
+        const el = document.querySelector<HTMLElement>(autoMount)
         if (!el) return
 
         el.prepend(container)
@@ -112,10 +91,7 @@ createEffect(() => {
 }, [getAutoMount])
 
 createEffect(() => {
-    const renderer = getRenderer()
-    if (!renderer) return
-
-    const canvas = renderer.domElement
+    const canvas = rendererPtr[0].domElement
     container.prepend(canvas)
     canvas.classList.add("lingo3d-container")
     return () => {
@@ -124,25 +100,13 @@ createEffect(() => {
 }, [getRenderer])
 
 createEffect(() => {
-    const renderer = getRenderer()
-    if (!renderer) return
-
-    const [w, h] = getResolution()
+    const [renderer] = rendererPtr
+    const [[w, h]] = resolutionPtr
     renderer.setSize(w, h)
-    renderer.setPixelRatio(Math.min(getPixelRatio(), devicePixelRatio))
-}, [getRenderer, getResolution, getPixelRatio])
+}, [getRenderer, getResolution])
 
 createEffect(() => {
-    const renderer = getRenderer()
-    if (!renderer) return
-
-    renderer.physicallyCorrectLights = getPBR()
-}, [getRenderer, getPBR])
-
-createEffect(() => {
-    const renderer = getRenderer()
-    if (!renderer) return
-
+    const [renderer] = rendererPtr
     const exposure = getExposure()
     renderer.toneMapping = exposure !== 1 ? LinearToneMapping : NoToneMapping
     renderer.toneMappingExposure = exposure
@@ -151,9 +115,7 @@ createEffect(() => {
 createEffect(() => {
     if (!getWebXR()) return
 
-    const renderer = getRenderer()
-    if (!renderer) return
-
+    const [renderer] = rendererPtr
     renderer.xr.enabled = true
 
     const button = VRButton.createButton(renderer)

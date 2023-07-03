@@ -1,28 +1,28 @@
-import { Pane } from "./tweakpane"
-import { useLayoutEffect } from "preact/hooks"
-import { Cancellable } from "@lincode/promiselikes"
+import { useEffect, useLayoutEffect, useState } from "preact/hooks"
 import getDisplayName from "../utils/getDisplayName"
-import { dummyDefaults } from "../../interface/IDummy"
 import Setup from "../../display/Setup"
 import addSetupInputs from "./addSetupInputs"
 import CloseableTab from "../component/tabs/CloseableTab"
 import AppBar from "../component/bars/AppBar"
 import { emitSelectionTarget } from "../../events/onSelectionTarget"
 import useInitCSS from "../hooks/useInitCSS"
-import useClickable from "../hooks/useClickable"
 import { useSignal } from "@preact/signals"
 import useSyncState from "../hooks/useSyncState"
 import { getSelectionTarget } from "../../states/useSelectionTarget"
-import { getMultipleSelectionTargets } from "../../states/useMultipleSelectionTargets"
-import { DEBUG, EDITOR_WIDTH } from "../../globals"
+import { DEBUG } from "../../globals"
 import useInitEditor from "../hooks/useInitEditor"
-import setupStruct from "../../engine/setupStruct"
-import { getEditorPresets } from "../../states/useEditorPresets"
 import addTargetInputs from "./addTargetInputs"
-
-Object.assign(dummyDefaults, {
-    stride: { x: 0, y: 0 }
-})
+import TextBox from "../component/TextBox"
+import usePane from "./usePane"
+import mergeRefs from "../hooks/mergeRefs"
+import getStaticProperties from "../../display/utils/getStaticProperties"
+import { stopPropagation } from "../utils/stopPropagation"
+import { onEditorRefresh } from "../../events/onEditorRefresh"
+import { multipleSelectionTargets } from "../../collections/multipleSelectionTargets"
+import { FolderApi } from "./tweakpane"
+import SystemsComboList from "./SystemComboList"
+import { defaultSetupPtr } from "../../pointers/defaultSetupPtr"
+import { editorWidthSignal } from "../signals/sizeSignals"
 
 const Editor = () => {
     useInitCSS()
@@ -37,54 +37,65 @@ const Editor = () => {
         }
     }, [])
 
-    const elRef = useClickable()
+    const [pane, setContainer, container] = usePane()
+    const [systemsFolderElement, setSystemsFolderElement] =
+        useState<HTMLDivElement>()
 
     const selectionTarget = useSyncState(getSelectionTarget)
-    const selectedSignal = useSignal<string | undefined>(undefined)
+    const selectedSignal = useSignal<Array<string>>([])
 
-    const presets = useSyncState(getEditorPresets)
+    const [includeKeys, setIncludeKeys] = useState<Array<string>>()
+    const [refresh, setRefresh] = useState({})
+
+    useEffect(() => {
+        const handle = onEditorRefresh(() => setRefresh({}))
+        return () => {
+            handle.cancel()
+        }
+    }, [])
 
     useLayoutEffect(() => {
-        const el = elRef.current
-        if (!el) return
-
-        const pane = new Pane({ container: el })
-
-        const handle = new Cancellable()
+        if (!pane || multipleSelectionTargets.size || !container) return
         if (
-            selectedSignal.value === "Settings" ||
+            selectedSignal.value.at(-1) === "Settings" ||
             !selectionTarget ||
             selectionTarget instanceof Setup
         ) {
-            addSetupInputs(handle, pane, setupStruct)
+            const handle = addSetupInputs(pane, includeKeys)
             return () => {
-                handle.cancel()
-                pane.dispose()
+                handle?.cancel()
             }
         }
-        if (!getMultipleSelectionTargets()[0].size)
-            addTargetInputs(handle, pane, selectionTarget)
-
-        return () => {
-            handle.cancel()
-            pane.dispose()
+        let systemsFolder: FolderApi | undefined
+        if (!includeKeys) {
+            systemsFolder = pane.addFolder({ title: "systems" })
+            setSystemsFolderElement(
+                container.querySelector(".tp-fldv .tp-brkv") as HTMLDivElement
+            )
         }
-    }, [selectionTarget, selectedSignal.value, presets])
+        const handle0 = addTargetInputs(pane, selectionTarget, includeKeys)
+        const handle1 = selectionTarget.$events.on("runtimeSchema", () =>
+            setRefresh({})
+        )
+        return () => {
+            systemsFolder?.dispose()
+            handle0.cancel()
+            handle1.cancel()
+        }
+    }, [selectionTarget, selectedSignal.value, includeKeys, pane, refresh])
 
     return (
         <div
-            className="lingo3d-ui lingo3d-bg lingo3d-editor"
-            style={{
-                width: EDITOR_WIDTH,
-                height: "100%",
-                display: "flex",
-                flexDirection: "column"
-            }}
+            className="lingo3d-ui lingo3d-bg lingo3d-editor lingo3d-flexcol"
+            style={{ width: editorWidthSignal.value, height: "100%" }}
         >
-            <AppBar selectedSignal={selectedSignal}>
-                <CloseableTab>Settings</CloseableTab>
+            <AppBar>
+                <CloseableTab selectedSignal={selectedSignal}>
+                    Settings
+                </CloseableTab>
                 {selectionTarget && (
                     <CloseableTab
+                        selectedSignal={selectedSignal}
                         key={selectionTarget.uuid}
                         selected
                         onClose={() => emitSelectionTarget(undefined)}
@@ -93,15 +104,40 @@ const Editor = () => {
                     </CloseableTab>
                 )}
             </AppBar>
+            <TextBox
+                onChange={(val) => {
+                    if (!val) {
+                        setIncludeKeys(undefined)
+                        return
+                    }
+                    const target = selectionTarget ?? defaultSetupPtr[0]
+                    if (!target) return
+                    val = val.toLowerCase()
+                    setIncludeKeys(
+                        Object.keys(getStaticProperties(target).schema).filter(
+                            (key) => key.toLowerCase().includes(val)
+                        )
+                    )
+                }}
+                clearOnChange={selectedSignal.value.at(-1)}
+            />
+            {systemsFolderElement && (
+                <SystemsComboList systemsFolderElement={systemsFolderElement} />
+            )}
             <div
                 style={{
                     flexGrow: 1,
                     overflowY: "scroll",
                     overflowX: "hidden",
                     paddingLeft: 8,
-                    paddingRight: 8
+                    paddingRight: 8,
+                    border:
+                        selectionTarget &&
+                        selectedSignal.value.at(-1) !== "Settings"
+                            ? "1px solid rgba(255, 255, 255, 0.2)"
+                            : undefined
                 }}
-                ref={elRef}
+                ref={mergeRefs(stopPropagation, setContainer)}
             />
         </div>
     )

@@ -1,85 +1,41 @@
 import AppBar from "../component/bars/AppBar"
 import useInitCSS from "../hooks/useInitCSS"
-import Controls from "./Controls"
+import WorldControls from "./WorldControls"
 import useInitEditor from "../hooks/useInitEditor"
-import { useLayoutEffect } from "preact/hooks"
-import { Pane } from "../Editor/tweakpane"
-import useClickable from "../hooks/useClickable"
-import { getManager } from "../../api/utils/getManager"
-import { getCameraComputed } from "../../states/useCameraComputed"
-import { getCameraList } from "../../states/useCameraList"
-import { setEditorCamera } from "../../states/useEditorCamera"
-import getDisplayName from "../utils/getDisplayName"
-import { createEffect } from "@lincode/reactivity"
-import Switch from "../component/Switch"
 import useSyncState from "../hooks/useSyncState"
-import { getSplitView, setSplitView } from "../../states/useSplitView"
+import SelectBox from "../component/SelectBox"
+import { getCameraList } from "../../states/useCameraList"
+import getDisplayName from "../utils/getDisplayName"
+import { getManager } from "../../display/core/utils/getManager"
+import { setEditorCamera } from "../../states/useEditorCamera"
+import WorldToggles from "./WorldToggles"
 
-const Tabs = () => {
+const WorldBar = () => {
     useInitCSS()
     useInitEditor()
 
-    const splitView = useSyncState(getSplitView)
-    const elRef = useClickable()
-
-    useLayoutEffect(() => {
-        const el = elRef.current
-        if (!el) return
-
-        const pane = new Pane({ container: el })
-
-        const handle = createEffect(() => {
-            const cameraList = getCameraList()
-            const camera = getCameraComputed()
-
-            const label = ""
-
-            const cameraSettings = {
-                get [label]() {
-                    return cameraList.indexOf(camera)
-                },
-                set [label](val) {
-                    setEditorCamera(cameraList[val])
-                }
-            }
-            const options: Record<string, number> = {}
-            let i = 0
-            for (const cam of cameraList)
-                options[getDisplayName(getManager(cam)!)] = i++
-
-            const cameraInput = pane.add(
-                pane.addInput(cameraSettings, label, { options })
-            )
-            el.querySelector<HTMLDivElement>(".tp-lblv_v")!.style.width =
-                "100px"
-
-            return () => {
-                cameraInput.dispose()
-            }
-        }, [getCameraList, getCameraComputed])
-
-        return () => {
-            handle.cancel()
-            pane.dispose()
-        }
-    }, [])
+    const cameraList = useSyncState(getCameraList)
 
     return (
         <div
-            className="lingo3d-ui lingo3d-bg lingo3d-tabs"
-            style={{ width: "100%" }}
+            className="lingo3d-ui lingo3d-bg-dark lingo3d-worldbar"
+            style={{
+                width: "100%",
+                borderBottom: "1px solid rgba(255, 255, 255, 0.1)"
+            }}
         >
-            <AppBar>
-                <div ref={elRef} style={{ marginLeft: -20 }} />
-                <Switch
-                    label="split view"
-                    on={splitView}
-                    onChange={(val) => setSplitView(val)}
+            <AppBar style={{ gap: 4 }}>
+                <SelectBox
+                    width={100}
+                    options={cameraList.map((cam) =>
+                        getDisplayName(getManager(cam)!)
+                    )}
+                    onChange={(index) => setEditorCamera(cameraList[index])}
                 />
                 <div style={{ flexGrow: 1, minWidth: 4 }} />
-                <Controls />
+                <WorldControls />
             </AppBar>
         </div>
     )
 }
-export default Tabs
+export default WorldBar

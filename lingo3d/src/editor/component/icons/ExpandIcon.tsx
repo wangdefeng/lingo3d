@@ -1,4 +1,5 @@
 import { CSSProperties } from "preact/compat"
+import { stopPropagation } from "../../utils/stopPropagation"
 
 type ExpandIconProps = {
     style?: CSSProperties
@@ -8,13 +9,13 @@ type ExpandIconProps = {
 const ExpandIcon = ({ style, onClick }: ExpandIconProps) => {
     return (
         <svg
+            ref={stopPropagation}
             xmlns="http://www.w3.org/2000/svg"
             width="14"
             height="14"
             viewBox="0 0 1024 1024"
             style={{ margin: 2, flexShrink: 0, ...style }}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => (e.stopPropagation(), onClick?.())}
+            onClick={onClick}
         >
             <path
                 fill="#fff"

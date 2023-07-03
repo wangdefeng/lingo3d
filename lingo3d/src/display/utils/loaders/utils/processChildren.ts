@@ -1,22 +1,66 @@
-import { Light, Bone, Object3D, Mesh, MeshStandardMaterial } from "three"
-import createTextureManager from "./createTextureManager"
+import {
+    Light,
+    Bone,
+    Object3D,
+    Mesh,
+    DoubleSide,
+    MeshStandardMaterial
+} from "three"
+import { uuidMaterialMap } from "../../../../collections/idCollections"
+import { materialDefaultsMap } from "../../../../collections/materialDefaultsMap"
+import { rad2Deg } from "@lincode/math"
+import { blackColor } from "../../reusables"
+import { castBackBlending } from "../../castBlending"
+import isOpaque from "../../../../memo/isOpaque"
 
 export default (group: Object3D, noBonePtr: [boolean]) => {
     const lights: Array<Light> = []
-    group.traverse((child: Object3D | Mesh) => {
-        if (child instanceof Light) lights.push(child)
-        else if (noBonePtr[0] && child instanceof Bone) noBonePtr[0] = false
+    group.traverse((child: Object3D | Mesh | Light | Bone) => {
+        if ("isLight" in child) lights.push(child)
+        else if (noBonePtr[0] && "isBone" in child) noBonePtr[0] = false
 
-        if ("material" in child) {
-            if (Array.isArray(child.material))
-                child.material = child.material[0]
+        if (!("material" in child)) return
+        if (Array.isArray(child.material)) child.material = child.material[0]
 
-            child.material.userData.TextureManager = createTextureManager(
-                child.material as MeshStandardMaterial
-            )
-        }
-        child.castShadow = true
+        const material = child.material as MeshStandardMaterial
+        material.side = DoubleSide
+        uuidMaterialMap.set(material.uuid, material)
+        materialDefaultsMap.set(material, {
+            color: "#" + (material.color?.getHexString() ?? "ffffff"),
+            opacity: material.opacity,
+            texture: "",
+            alphaMap: "",
+            textureRepeat: material.map?.repeat.x ?? 1,
+            textureFlipY: material.map?.flipY ?? false,
+            textureRotation: (material.map?.rotation ?? 0) * rad2Deg,
+            wireframe: material.wireframe,
+            envMap: "",
+            envMapIntensity: material.envMapIntensity,
+            aoMap: "",
+            aoMapIntensity: material.aoMapIntensity,
+            bumpMap: "",
+            bumpScale: material.bumpScale,
+            displacementMap: "",
+            displacementScale: material.displacementScale,
+            displacementBias: material.displacementBias,
+            emissive: material.emissive
+                ? !material.emissive.equals(blackColor)
+                : false,
+            emissiveIntensity: material.emissiveIntensity,
+            lightMap: "",
+            lightMapIntensity: material.lightMapIntensity,
+            metalnessMap: "",
+            metalness: material.metalness,
+            roughnessMap: "",
+            roughness: material.roughness,
+            normalMap: "",
+            normalScale: material.normalScale?.x ?? 1,
+            depthTest: material.depthTest,
+            blending: castBackBlending(material.blending),
+            referenceUUID: material.uuid
+        })
+        child.castShadow = isOpaque(child)
         child.receiveShadow = true
     })
-    for (const light of lights) light.parent?.remove(light)
+    for (const light of lights) light.parent!.remove(light)
 }

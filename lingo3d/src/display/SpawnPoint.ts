@@ -1,27 +1,21 @@
-import { Reactive } from "@lincode/reactivity"
 import ISpawnPoint, {
     spawnPointDefaults,
     spawnPointSchema
 } from "../interface/ISpawnPoint"
-import ObjectManager from "./core/ObjectManager"
+import GimbalObjectManager from "./core/GimbalObjectManager"
 import SimpleObjectManager from "./core/SimpleObjectManager"
 import scene from "../engine/scene"
-import { addSelectionHelper } from "./core/utils/raycast/selectionCandidates"
 import HelperCylinder from "./core/utils/HelperCylinder"
-import { getEditorHelper } from "../states/useEditorHelper"
+import { getWorldMode } from "../states/useWorldMode"
+import { worldModePtr } from "../pointers/worldModePtr"
 
-export default class SpawnPoint extends ObjectManager implements ISpawnPoint {
+export default class SpawnPoint
+    extends GimbalObjectManager
+    implements ISpawnPoint
+{
     public static componentName = "spawnPoint"
     public static defaults = spawnPointDefaults
     public static schema = spawnPointSchema
-
-    private helperState = new Reactive(true)
-    public get helper() {
-        return this.helperState.get()
-    }
-    public set helper(val) {
-        this.helperState.set(val)
-    }
 
     protected isSpawnPoint = true
 
@@ -29,20 +23,17 @@ export default class SpawnPoint extends ObjectManager implements ISpawnPoint {
         super()
 
         this.createEffect(() => {
-            if (!this.helperState.get() || !getEditorHelper()) return
-
-            const helper = new HelperCylinder()
-            const handle = addSelectionHelper(helper, this)
+            if (worldModePtr[0] !== "editor" || this.$disableSceneGraph) return
+            const helper = new HelperCylinder(this)
             helper.height = 10
-
             return () => {
-                handle.cancel()
+                helper.dispose()
             }
-        }, [this.helperState.get, getEditorHelper])
+        }, [getWorldMode])
     }
 
     public override append(child: SimpleObjectManager) {
-        this.appendNode(child)
+        this.$appendNode(child)
         scene.add(child.outerObject3d)
         child.placeAt(this)
     }

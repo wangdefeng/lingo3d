@@ -1,6 +1,6 @@
 import store from "@lincode/reactivity"
+import { gravityPtr } from "../pointers/gravityPtr"
 
 export const [setGravity, getGravity] = store(-9.81)
 
-export const gravityPtr = [0]
 getGravity((val) => (gravityPtr[0] = val))

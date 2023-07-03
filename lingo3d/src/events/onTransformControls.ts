@@ -1,34 +1,57 @@
 import { event } from "@lincode/events"
-import { filterBoolean } from "@lincode/utils"
-import Appendable from "../api/core/Appendable"
-import PhysicsObjectManager from "../display/core/PhysicsObjectManager"
-import { getEditorMode } from "../states/useEditorMode"
-import { getMultipleSelectionTargets } from "../states/useMultipleSelectionTargets"
-import { getSelectionTarget } from "../states/useSelectionTarget"
+import { transformControlsModePtr } from "../pointers/transformControlsModePtr"
+import getAllSelectionTargets from "../throttle/getAllSelectionTargets"
+import updateSelectionManagersPhysics from "../display/utils/updateSelectionManagersPhysics"
+import { flushMultipleSelectionTargets } from "../states/useMultipleSelectionTargets"
+import { CommandRecord, UpdateCommand, pushUndoStack } from "../api/undoStack"
+import getTransformControlsData from "../display/utils/getTransformControlsData"
+import { emitTransformEdit } from "./onTransformEdit"
+import MeshAppendable from "../display/core/MeshAppendable"
 
-export type TransformControlsPhase = "start" | "end" | "move"
+type TransformControlsPhase = "start" | "end"
 export type TransformControlsMode = "translate" | "rotate" | "scale"
-
+export type TransformControlsPayload = {
+    phase: TransformControlsPhase
+    mode: TransformControlsMode
+}
 export const [emitTransformControls, onTransformControls] =
     event<TransformControlsPhase>()
 
 onTransformControls((phase) => {
-    if (phase !== "end") return
+    const payload: TransformControlsPayload = {
+        phase,
+        mode: transformControlsModePtr[0]
+    }
 
-    const [_targets] = getMultipleSelectionTargets()
-    const targets: Array<Appendable | PhysicsObjectManager> = [
-        ..._targets,
-        getSelectionTarget()
-    ].filter(filterBoolean)
+    for (const target of getAllSelectionTargets())
+        target instanceof MeshAppendable &&
+            emitTransformEdit({ target, phase, mode: payload.mode })
 
-    if (getEditorMode() === "scale") {
-        for (const target of targets) {
-            if (!("updatePhysics" in target)) continue
-            target.updatePhysics()
-            target.updatePhysicsShape()
-        }
+    updateSelectionManagersPhysics(payload)
+})
+
+let commandRecord: CommandRecord = {}
+onTransformControls((phase) => {
+    if (phase === "start") {
+        flushMultipleSelectionTargets(() => {
+            for (const target of getAllSelectionTargets()) {
+                const data = getTransformControlsData(target)
+                if (!data) continue
+                commandRecord[target.uuid] = {
+                    command: "update",
+                    commandPrev: data
+                }
+            }
+        })
         return
     }
-    for (const target of targets)
-        "updatePhysics" in target && target.updatePhysics()
+    flushMultipleSelectionTargets(() => {
+        for (const target of getAllSelectionTargets()) {
+            const data = getTransformControlsData(target)
+            if (!data) continue
+            ;(commandRecord[target.uuid] as UpdateCommand).commandNext = data
+        }
+        pushUndoStack(commandRecord)
+        commandRecord = {}
+    })
 })

@@ -1,11 +1,10 @@
-import Appendable from "../api/core/Appendable"
-import { hiddenAppendables } from "../api/core/collections"
-import setupStruct from "../engine/setupStruct"
+import Appendable from "./core/Appendable"
+import setupStruct from "../api/settings/setupStruct"
 import ISetup, { setupDefaults, setupSchema } from "../interface/ISetup"
 import unsafeGetValue from "../utils/unsafeGetValue"
 import unsafeSetValue from "../utils/unsafeSetValue"
+import { defaultSetupPtr } from "../pointers/defaultSetupPtr"
 
-let setup: Setup | undefined
 const setupStructDefaults = { ...setupStruct }
 
 class Setup extends Appendable {
@@ -15,26 +14,27 @@ class Setup extends Appendable {
 
     public constructor() {
         super()
-        hiddenAppendables.add(this)
-        setup?.dispose()
-        setup = this
+        this.$disableSceneGraph = true
+        defaultSetupPtr[0]?.dispose()
+        defaultSetupPtr[0] = this
     }
 
-    protected override _dispose() {
-        super._dispose()
-        setup = undefined
+    protected override disposeNode() {
+        super.disposeNode()
+        defaultSetupPtr[0] = undefined
         Object.assign(setupStruct, setupStructDefaults)
     }
 }
 for (const key of Object.keys(setupSchema))
-    Object.defineProperty(Setup.prototype, key, {
-        get() {
-            return unsafeGetValue(setupStruct, key)
-        },
-        set(value) {
-            unsafeSetValue(setupStruct, key, value)
-        }
-    })
+    key !== "uuid" &&
+        Object.defineProperty(Setup.prototype, key, {
+            get() {
+                return unsafeGetValue(setupStruct, key)
+            },
+            set(value) {
+                unsafeSetValue(setupStruct, key, value)
+            }
+        })
 interface Setup extends Appendable, ISetup {}
 export default Setup
 

@@ -1,29 +1,33 @@
 import { omit } from "@lincode/utils"
 import createObject from "./createObject"
 import { SceneGraphNode } from "./types"
-import Loaded from "../../display/core/Loaded"
-import { Object3D } from "three"
-import Reresolvable from "../../display/core/utils/Reresolvable"
 import nonSerializedProperties from "./nonSerializedProperties"
+import Appendable from "../../display/core/Appendable"
+import type Model from "../../display/Model"
 
 const nodeToObjectManager = (
     node: SceneGraphNode,
-    loadedResolvables: Array<Reresolvable<Object3D>> | undefined
+    parent: Appendable | undefined
 ) => {
     if (node.type === "lingo3d") return
-
+    if (node.type === "find") {
+        ;(parent as Model).$events.once("loaded", () => {
+            const object = (parent as Model).find(node.name)!
+            object.$unghost()
+            Object.assign(object, omit(node, nonSerializedProperties))
+            node.children
+                ?.map((n) => nodeToObjectManager(n, object))
+                .forEach((c) => c && object.append(c as any))
+        })
+        return
+    }
     const object = createObject(node.type)
-    loadedResolvables &&
-        object instanceof Loaded &&
-        loadedResolvables.push(object.loaded)
     Object.assign(object, omit(node, nonSerializedProperties))
     node.children
-        ?.map((n) => nodeToObjectManager(n, loadedResolvables))
+        ?.map((n) => nodeToObjectManager(n, object))
         .forEach((c) => c && object.append(c as any))
     return object
 }
 
-export default (
-    graph: Array<SceneGraphNode>,
-    loadedResolvables?: Array<Reresolvable<Object3D>>
-) => graph.map((n) => nodeToObjectManager(n, loadedResolvables))
+export default (graph: Array<SceneGraphNode>) =>
+    graph.map((n) => nodeToObjectManager(n, undefined))

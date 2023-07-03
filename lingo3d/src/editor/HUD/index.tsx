@@ -1,37 +1,43 @@
 import HotKey from "./HotKey"
 import mainCamera from "../../engine/mainCamera"
-import { createPortal } from "preact/compat"
+import { createPortal, useEffect, useState } from "preact/compat"
 import useInitCSS from "../hooks/useInitCSS"
 import Spinner from "../component/Spinner"
 import InfoScreen from "./InfoScreen"
 import useSyncState from "../hooks/useSyncState"
 import { getCameraRendered } from "../../states/useCameraRendered"
-import { getLoadingUnpkgCount } from "../../states/useLoadingUnpkgCount"
-import { getPaused } from "../../states/usePaused"
 import useInitEditor from "../hooks/useInitEditor"
-import { overlayContainer } from "../../engine/renderLoop/renderSetup"
+import { overlayContainer } from "../../engine/renderLoop/containers"
+import { getDocumentHidden } from "../../states/useDocumentHidden"
+import isBusy from "../../api/isBusy"
 
 const HUD = () => {
     useInitCSS()
     useInitEditor()
 
     const cameraRendered = useSyncState(getCameraRendered)
-    const loadingUnpkgCount = useSyncState(getLoadingUnpkgCount)
-    const paused = useSyncState(getPaused)
+    const documentHidden = useSyncState(getDocumentHidden)
+    const [busy, setBusy] = useState(false)
+
+    useEffect(() => {
+        const interval = setInterval(() => setBusy(isBusy()), 100)
+        return () => {
+            clearInterval(interval)
+        }
+    }, [])
 
     return createPortal(
         <div
             className="lingo3d-ui lingo3d-absfull"
             style={{ pointerEvents: "none", padding: 10 }}
         >
-            <InfoScreen mounted={!!loadingUnpkgCount}>
+            <InfoScreen mounted={busy}>
                 <Spinner size={14} />
                 loading remote data
             </InfoScreen>
             <InfoScreen
-                mounted={paused}
-                style={{ background: "rgba(18, 19, 22, 0.75)" }}
-                fadeIn
+                style={{ background: "rgba(0, 0, 0, 0.5)" }}
+                mounted={documentHidden}
             >
                 paused
             </InfoScreen>
@@ -52,7 +58,7 @@ const HUD = () => {
                     </div>
                     <div style={{ display: "flex", gap: 4 }}>
                         <HotKey hotkey="⌘" />
-                        <HotKey hotkey="O" description="open folder" />
+                        <HotKey hotkey="O" description="open project" />
                     </div>
                     <div style={{ display: "flex", gap: 4 }}>
                         <HotKey hotkey="⌘" />

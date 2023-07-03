@@ -1,18 +1,21 @@
-import { Point } from "@lincode/math"
 import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 import Nullable from "./utils/Nullable"
 import { nullableDefault } from "./utils/NullableDefault"
 import Range from "./utils/Range"
+import { Blending, ColorString } from "./ITexturedStandard"
+import Choices from "./utils/Choices"
 
 export default interface ITexturedBasic {
-    color: Nullable<string>
+    color: Nullable<ColorString>
     opacity: Nullable<number>
     texture: Nullable<string>
     alphaMap: Nullable<string>
-    textureRepeat: Nullable<Point | number>
+    textureRepeat: Nullable<number>
     textureFlipY: Nullable<boolean>
     textureRotation: Nullable<number>
+    depthTest: Nullable<boolean>
+    blending: Nullable<Blending>
 }
 
 export const texturedBasicSchema: Required<ExtractProps<ITexturedBasic>> = {
@@ -20,9 +23,11 @@ export const texturedBasicSchema: Required<ExtractProps<ITexturedBasic>> = {
     opacity: Number,
     texture: String,
     alphaMap: String,
-    textureRepeat: [Object, Number],
+    textureRepeat: Number,
     textureFlipY: Boolean,
-    textureRotation: Number
+    textureRotation: Number,
+    depthTest: Boolean,
+    blending: String
 }
 
 export const texturedBasicDefaults = extendDefaults<ITexturedBasic>(
@@ -32,12 +37,21 @@ export const texturedBasicDefaults = extendDefaults<ITexturedBasic>(
         opacity: nullableDefault(1),
         texture: undefined,
         alphaMap: undefined,
-        textureRepeat: nullableDefault({ x: 1, y: 1 }),
+        textureRepeat: nullableDefault(1),
         textureFlipY: nullableDefault(false),
-        textureRotation: nullableDefault(0)
+        textureRotation: nullableDefault(0),
+        depthTest: nullableDefault(true),
+        blending: nullableDefault("normal")
     },
     {
         opacity: new Range(0, 1),
-        textureRotation: new Range(0, 360)
+        textureRepeat: new Range(1, 10),
+        textureRotation: new Range(0, 360),
+        blending: new Choices({
+            additive: "additive",
+            subtractive: "subtractive",
+            multiply: "multiply",
+            normal: "normal"
+        })
     }
 )

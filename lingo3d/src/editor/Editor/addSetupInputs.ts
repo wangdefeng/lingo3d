@@ -1,57 +1,35 @@
 import { Pane } from "./tweakpane"
-import ISetup, { setupSchema, setupDefaults } from "../../interface/ISetup"
 import addInputs from "./addInputs"
 import createParams from "./createParams"
 import splitObject from "./splitObject"
 import { Cancellable } from "@lincode/promiselikes"
+import { defaultSetupPtr } from "../../pointers/defaultSetupPtr"
 
-export default (
-    handle: Cancellable,
-    pane: Pane,
-    targetSetup: Partial<ISetup>
-) => {
-    const [editorParams, editorRest] = splitObject(
-        createParams(setupSchema, setupDefaults, targetSetup),
-        ["gridHelper", "gridHelperSize", "stats"]
-    )
-    addInputs(handle, pane, "editor", targetSetup, setupDefaults, editorParams)
+export default (pane: Pane, includeKeys: Array<string> | undefined) => {
+    const [targetSetup] = defaultSetupPtr
+    if (!targetSetup) return
 
-    const [rendererParams, rendererRest] = splitObject(editorRest, [
-        "antiAlias",
-        "pixelRatio",
-        "fps",
-        "logarithmicDepth",
-        "uiLayer",
-        "pbr"
-    ])
-    addInputs(
-        handle,
-        pane,
-        "renderer",
-        targetSetup,
-        setupDefaults,
-        rendererParams
-    )
+    const handle = new Cancellable()
+    const [params, manager] = createParams(targetSetup, includeKeys, true)
 
-    const [sceneParams, sceneRest] = splitObject(rendererRest, [
+    const [rendererParams, rendererRest] = splitObject(params, ["fps"])
+    addInputs(handle, pane, "renderer", manager, rendererParams)
+
+    const [physicsParams, physicsRest] = splitObject(rendererRest, ["gravity"])
+    addInputs(handle, pane, "physics", manager, physicsParams)
+
+    const [sceneParams, sceneRest] = splitObject(physicsRest, [
         "exposure",
         "defaultLight",
-        "preset environment",
+        "lightDistance",
+        "pointLightPool",
+        "spotLightPool",
         "environment",
         "skybox",
         "texture",
-        "color",
-        "shadowResolution",
-        "shadowDistance"
+        "color"
     ])
-    addInputs(
-        handle,
-        pane,
-        "lighting & environment",
-        targetSetup,
-        setupDefaults,
-        sceneParams
-    )
+    addInputs(handle, pane, "lighting & environment", manager, sceneParams)
 
     const [effectsParams, effectsRest] = splitObject(sceneRest, [
         "bloom",
@@ -60,20 +38,15 @@ export default (
         "bloomRadius",
         "ssr",
         "ssrIntensity",
+        "ssrJitter",
         "ssao",
         "ssaoIntensity",
+        "ssaoRadius",
         "bokeh",
         "bokehScale",
         "vignette"
     ])
-    addInputs(
-        handle,
-        pane,
-        "effects",
-        targetSetup,
-        setupDefaults,
-        effectsParams
-    )
+    addInputs(handle, pane, "effects", manager, effectsParams)
 
     const [outlineParams, outlineRest] = splitObject(effectsRest, [
         "outlineColor",
@@ -82,22 +55,10 @@ export default (
         "outlinePulse",
         "outlineStrength"
     ])
-    addInputs(
-        handle,
-        pane,
-        "outline effect",
-        targetSetup,
-        setupDefaults,
-        outlineParams
-    )
+    addInputs(handle, pane, "outline effect", manager, outlineParams)
 
     Object.keys(outlineRest).length &&
-        addInputs(
-            handle,
-            pane,
-            "settings",
-            targetSetup,
-            setupDefaults,
-            outlineRest
-        )
+        addInputs(handle, pane, "settings", manager, outlineRest)
+
+    return handle
 }

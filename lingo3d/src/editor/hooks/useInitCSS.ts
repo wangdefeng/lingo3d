@@ -1,11 +1,10 @@
+import { lazy } from "@lincode/utils"
+import { APPBAR_HEIGHT, BACKGROUND_COLOR } from "../../globals"
 import createElement from "../../utils/createElement"
 
-let initialized = false
+const fontFamily = `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"`
 
-export default () => {
-    if (initialized) return
-    initialized = true
-
+export default lazy(() => {
     const style = createElement(`
         <style>
             .lingo3d-ui * {
@@ -14,9 +13,16 @@ export default () => {
                 -webkit-user-select: none;
                 position: relative;
                 box-sizing: border-box;
-                font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !important;
                 scrollbar-width: none;
                 scrollbar-color: rgba(100,100,100,0.1);
+            }
+            .lingo3d-nofix * {
+                position: unset;
+                box-sizing: unset;
+            }
+            .lingo3d-font * {
+                font-family: ${fontFamily} !important;
+                font-weight: normal !important;
             }
             .lingo3d-ui {
                 overscroll-behavior: none;
@@ -27,6 +33,8 @@ export default () => {
                 color: white;
                 font-size: 11px;
                 max-height: 100%;
+                font-family: ${fontFamily};
+                font-weight: normal;
             }
             .lingo3d-ui *::-webkit-scrollbar {
                 width: 4px;
@@ -43,7 +51,10 @@ export default () => {
             }
 
             .lingo3d-bg {
-                background: rgb(18, 19, 22);
+                background: ${BACKGROUND_COLOR};
+            }
+            .lingo3d-bg-dark {
+                background: ${BACKGROUND_COLOR};
             }
             .lingo3d-absfull {
                 position: absolute;
@@ -56,6 +67,13 @@ export default () => {
                 display: flex;
                 justify-content: center;
                 align-items: center;
+            }
+            .lingo3d-flexcol {
+                display: flex;
+                flex-direction: column;
+            }
+            .lingo3d-unset {
+                all: unset;
             }
 
             .tp-lblv_l {
@@ -74,21 +92,50 @@ export default () => {
                 border-radius: 0px !important;
             }
 
+            .suggest-widget > .tree {
+                position: absolute;
+                top: 0px;
+            }
+
             .lingo3d-lingoeditor {
                 display: grid;
-                grid-template:  "toolbar scenegraph editor library tabs"
-                                "toolbar scenegraph editor library world"
-                                "toolbar panels     panels panels  world";
+                grid-template: "menubar menubar    menubar menubar worldbar"
+                               "toolbar scenegraph editor library  worldtoggles"
+                               "toolbar scenegraph editor library  world"
+                               "toolbar panels     panels panels   world";
                 grid-template-columns: auto auto auto auto 1fr;
-                grid-template-rows: auto 1fr auto;
+                grid-template-rows: ${APPBAR_HEIGHT + 8}px auto 1fr auto;
             }
             .lingo3d-scenegraph { grid-area: scenegraph; }
             .lingo3d-editor { grid-area: editor; }
             .lingo3d-library { grid-area: library; }
-            .lingo3d-tabs { grid-area: tabs; }
+            .lingo3d-worldbar { grid-area: worldbar; }
+            .lingo3d-worldtoggles { grid-area: worldtoggles; }
             .lingo3d-panels { grid-area: panels; }
             .lingo3d-toolbar { grid-area: toolbar; }
             .lingo3d-world { grid-area: world; }
+            .lingo3d-menubar { grid-area: menubar; }
+
+            .lingo3d-body {
+                overscroll-behavior: none;
+            }
+
+            .lingo3d-connector {
+                width: 14px;
+                height: 14px;
+                margin-left: 2px;
+                margin-right: 2px;
+                flex-shrink: 0;
+                z-index: 1;
+                cursor: pointer;
+                z-index: 1;
+            }
+
+            .lingo3d-connector-child {
+                width: 4px;
+                height: 4px;
+                pointer-events: none;
+            }
 
             .lingo3d-sk-cube-grid {
                 width: 20px;
@@ -166,4 +213,4 @@ export default () => {
         </style>
     `)
     document.head.appendChild(style)
-}
+})

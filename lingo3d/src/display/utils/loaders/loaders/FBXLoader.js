@@ -37,6 +37,7 @@ import {
     Vector3,
     Vector4,
     VectorKeyframeTrack,
+    SRGBColorSpace,
     MeshStandardMaterial
 } from "three"
 import * as fflate from "three/examples/jsm/libs/fflate.module.js"
@@ -466,16 +467,18 @@ class FBXTreeParser {
         }
 
         if (materialNode.Diffuse) {
-            parameters.color = new Color().fromArray(materialNode.Diffuse.value)
+            parameters.color = new Color()
+                .fromArray(materialNode.Diffuse.value)
+                .convertSRGBToLinear()
         } else if (
             materialNode.DiffuseColor &&
             (materialNode.DiffuseColor.type === "Color" ||
                 materialNode.DiffuseColor.type === "ColorRGB")
         ) {
             // The blender exporter exports diffuse here instead of in materialNode.Diffuse
-            parameters.color = new Color().fromArray(
-                materialNode.DiffuseColor.value
-            )
+            parameters.color = new Color()
+                .fromArray(materialNode.DiffuseColor.value)
+                .convertSRGBToLinear()
         }
 
         if (materialNode.DisplacementFactor) {
@@ -483,18 +486,18 @@ class FBXTreeParser {
         }
 
         if (materialNode.Emissive) {
-            parameters.emissive = new Color().fromArray(
-                materialNode.Emissive.value
-            )
+            parameters.emissive = new Color()
+                .fromArray(materialNode.Emissive.value)
+                .convertSRGBToLinear()
         } else if (
             materialNode.EmissiveColor &&
             (materialNode.EmissiveColor.type === "Color" ||
                 materialNode.EmissiveColor.type === "ColorRGB")
         ) {
             // The blender exporter exports emissive color here instead of in materialNode.Emissive
-            parameters.emissive = new Color().fromArray(
-                materialNode.EmissiveColor.value
-            )
+            parameters.emissive = new Color()
+                .fromArray(materialNode.EmissiveColor.value)
+                .convertSRGBToLinear()
         }
 
         if (materialNode.EmissiveFactor) {
@@ -527,6 +530,10 @@ class FBXTreeParser {
                 case "DiffuseColor":
                 case "Maya|TEX_color_map":
                     parameters.map = scope.getTexture(textureMap, child.ID)
+                    if (parameters.map !== undefined) {
+                        parameters.map.colorSpace = SRGBColorSpace
+                    }
+
                     break
 
                 case "DisplacementColor":
@@ -541,6 +548,10 @@ class FBXTreeParser {
                         textureMap,
                         child.ID
                     )
+                    if (parameters.emissiveMap !== undefined) {
+                        parameters.emissiveMap.colorSpace = SRGBColorSpace
+                    }
+
                     break
 
                 case "NormalMap":
@@ -556,6 +567,18 @@ class FBXTreeParser {
                     if (parameters.envMap !== undefined) {
                         parameters.envMap.mapping =
                             EquirectangularReflectionMapping
+                        parameters.envMap.colorSpace = SRGBColorSpace
+                    }
+
+                    break
+
+                case "SpecularColor":
+                    parameters.specularMap = scope.getTexture(
+                        textureMap,
+                        child.ID
+                    )
+                    if (parameters.specularMap !== undefined) {
+                        parameters.specularMap.colorSpace = SRGBColorSpace
                     }
 
                     break
@@ -567,6 +590,8 @@ class FBXTreeParser {
                     break
 
                 case "AmbientColor":
+                case "ShininessExponent": // AKA glossiness map
+                case "SpecularFactor": // AKA specularLevel
                 case "VectorDisplacementColor": // NOTE: Seems to be a copy of DisplacementColor
                 default:
                     console.warn(
@@ -990,7 +1015,9 @@ class FBXTreeParser {
             let color = 0xffffff
 
             if (lightAttribute.Color !== undefined) {
-                color = new Color().fromArray(lightAttribute.Color.value)
+                color = new Color()
+                    .fromArray(lightAttribute.Color.value)
+                    .convertSRGBToLinear()
             }
 
             let intensity =
@@ -1103,7 +1130,10 @@ class FBXTreeParser {
         } else if (materials.length > 0) {
             material = materials[0]
         } else {
-            material = new MeshStandardMaterial({ color: 0xcccccc })
+            material = new MeshStandardMaterial({
+                name: Loader.DEFAULT_MATERIAL_NAME,
+                color: 0xcccccc
+            })
             materials.push(material)
         }
 
@@ -1132,6 +1162,7 @@ class FBXTreeParser {
 
         // FBX does not list materials for Nurbs lines, so we'll just put our own in here.
         const material = new LineBasicMaterial({
+            name: Loader.DEFAULT_MATERIAL_NAME,
             color: 0x3300ff,
             linewidth: 1
         })
@@ -1273,7 +1304,7 @@ class FBXTreeParser {
             const b = ambientColor[2]
 
             if (r !== 0 || g !== 0 || b !== 0) {
-                const color = new Color(r, g, b)
+                const color = new Color(r, g, b).convertSRGBToLinear()
                 sceneGraph.add(new AmbientLight(color, 1))
             }
         }
@@ -1432,13 +1463,7 @@ class GeometryParser {
         }
 
         buffers.uvs.forEach(function (uvBuffer, i) {
-            // subsequent uv buffers are called 'uv1', 'uv2', ...
-            let name = "uv" + (i + 1).toString()
-
-            // the first uv buffer is just called 'uv'
-            if (i === 0) {
-                name = "uv"
-            }
+            const name = i === 0 ? "uv" : `uv${i}`
 
             geo.setAttribute(
                 name,
@@ -1717,6 +1742,11 @@ class GeometryParser {
             faceLength++
 
             if (endOfFace) {
+                if (faceLength > 4)
+                    console.warn(
+                        "FBXLoader: Polygons with more than four sides are not supported. Make sure to triangulate the geometry during export."
+                    )
+
                 scope.genFace(
                     buffers,
                     geoInfo,
@@ -1999,6 +2029,10 @@ class GeometryParser {
             indexBuffer = ColorNode.ColorIndex.a
         }
 
+        for (let i = 0, c = new Color(); i < buffer.length; i += 4) {
+            c.fromArray(buffer, i).convertSRGBToLinear().toArray(buffer, i)
+        }
+
         return {
             dataSize: 4,
             buffer: buffer,
@@ -2045,13 +2079,6 @@ class GeometryParser {
 
     // Generate a NurbGeometry from a node in FBXTree.Objects.Geometry
     parseNurbsGeometry(geoNode) {
-        if (NURBSCurve === undefined) {
-            console.error(
-                "FBXLoader: The loader relies on NURBSCurve for any nurbs present in the model. Nurbs will show up as empty geometry."
-            )
-            return new BufferGeometry()
-        }
-
         const order = parseInt(geoNode.Order)
 
         if (isNaN(order)) {
@@ -2197,7 +2224,7 @@ class AnimationParser {
                     curveNodesMap.get(animationCurveID).curves["z"] =
                         animationCurve
                 } else if (
-                    animationCurveRelationship.match(/d|DeformPercent/) &&
+                    animationCurveRelationship.match(/DeformPercent/) &&
                     curveNodesMap.has(animationCurveID)
                 ) {
                     curveNodesMap.get(animationCurveID).curves["morph"] =
@@ -3158,15 +3185,9 @@ class BinaryParser {
                     }
                 }
 
-                if (typeof fflate === "undefined") {
-                    console.error(
-                        "FBXLoader: External library fflate.min.js required."
-                    )
-                }
-
                 const data = fflate.unzlibSync(
                     new Uint8Array(reader.getArrayBuffer(compressedLength))
-                ) // eslint-disable-line no-undef
+                )
                 const reader2 = new BinaryReader(data.buffer)
 
                 switch (type) {
@@ -3200,6 +3221,7 @@ class BinaryReader {
         this.dv = new DataView(buffer)
         this.offset = 0
         this.littleEndian = littleEndian !== undefined ? littleEndian : true
+        this._textDecoder = new TextDecoder()
     }
 
     getOffset() {
@@ -3360,17 +3382,15 @@ class BinaryReader {
     }
 
     getString(size) {
-        // note: safari 9 doesn't support Uint8Array.indexOf; create intermediate array instead
-        let a = []
+        const start = this.offset
+        let a = new Uint8Array(this.dv.buffer, start, size)
 
-        for (let i = 0; i < size; i++) {
-            a[i] = this.getUint8()
-        }
+        this.skip(size)
 
         const nullByte = a.indexOf(0)
-        if (nullByte >= 0) a = a.slice(0, nullByte)
+        if (nullByte >= 0) a = new Uint8Array(this.dv.buffer, start, nullByte)
 
-        return LoaderUtils.decodeText(new Uint8Array(a))
+        return this._textDecoder.decode(a)
     }
 }
 
@@ -3521,19 +3541,19 @@ function generateTransform(transformData) {
 
     if (transformData.preRotation) {
         const array = transformData.preRotation.map(MathUtils.degToRad)
-        array.push(transformData.eulerOrder || Euler.DefaultOrder)
+        array.push(transformData.eulerOrder || Euler.DEFAULT_ORDER)
         lPreRotationM.makeRotationFromEuler(tempEuler.fromArray(array))
     }
 
     if (transformData.rotation) {
         const array = transformData.rotation.map(MathUtils.degToRad)
-        array.push(transformData.eulerOrder || Euler.DefaultOrder)
+        array.push(transformData.eulerOrder || Euler.DEFAULT_ORDER)
         lRotationM.makeRotationFromEuler(tempEuler.fromArray(array))
     }
 
     if (transformData.postRotation) {
         const array = transformData.postRotation.map(MathUtils.degToRad)
-        array.push(transformData.eulerOrder || Euler.DefaultOrder)
+        array.push(transformData.eulerOrder || Euler.DEFAULT_ORDER)
         lPostRotationM.makeRotationFromEuler(tempEuler.fromArray(array))
         lPostRotationM.invert()
     }
@@ -3681,7 +3701,7 @@ function convertArrayBufferToString(buffer, from, to) {
     if (from === undefined) from = 0
     if (to === undefined) to = buffer.byteLength
 
-    return LoaderUtils.decodeText(new Uint8Array(buffer, from, to))
+    return new TextDecoder().decode(new Uint8Array(buffer, from, to))
 }
 
 function append(a, b) {

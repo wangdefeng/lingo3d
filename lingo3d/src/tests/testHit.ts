@@ -1,4 +1,4 @@
-import mouse from "../api/mouse"
+import { mouse } from ".."
 import Cube from "../display/primitives/Cube"
 import clientToWorld from "../display/utils/clientToWorld"
 
@@ -15,7 +15,7 @@ mouse.onMouseMove = (e) => {
 
 const box2 = new Cube()
 
-box.hitTarget = [box2]
+box.hitTarget = box2.uuid
 box.onHit = () => {
     console.log("hit")
 }

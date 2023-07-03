@@ -10,6 +10,7 @@ import {
     Matrix4,
     Mesh,
     MeshBasicMaterial,
+    MeshStandardMaterial,
     Object3D,
     OctahedronGeometry,
     PlaneGeometry,
@@ -20,13 +21,15 @@ import {
     Vector3
 } from "three"
 
-const ratio = 0.5
-const translatePlaneSize = 0.2
-const hexRed = 0xcc4444
-const hexGreen = 0x44cc44
-const hexBlue = 0x4444cc
-const hexYellow = 0xccbb44
+const ratio = 1
+const translatePlaneSize = 0.1
+const hexRed = 0xff0000
+const hexGreen = 0x00ff00
+const hexBlue = 0x0000ff
+const hexYellow = 0xffff00
 const hexGray = 0x787878
+const showOpposite = true
+const showCentral = false
 
 const _raycaster = new Raycaster()
 
@@ -736,12 +739,14 @@ class TransformControlsGizmo extends Object3D {
 
         // shared materials
 
-        const gizmoMaterial = new MeshBasicMaterial({
+        const gizmoMaterial = new MeshStandardMaterial({
             depthTest: false,
             depthWrite: false,
             fog: false,
             toneMapped: false,
-            transparent: true
+            transparent: true,
+            emissive: 0x000000,
+            emissiveIntensity: 0.5
         })
 
         const gizmoLineMaterial = new LineBasicMaterial({
@@ -762,23 +767,29 @@ class TransformControlsGizmo extends Object3D {
 
         const matRed = gizmoMaterial.clone()
         matRed.color.setHex(hexRed)
+        matRed.emissive.setHex(hexRed)
 
         const matGreen = gizmoMaterial.clone()
         matGreen.color.setHex(hexGreen)
+        matGreen.emissive.setHex(hexGreen)
 
         const matBlue = gizmoMaterial.clone()
         matBlue.color.setHex(hexBlue)
+        matBlue.emissive.setHex(hexBlue)
 
         const matRedTransparent = gizmoMaterial.clone()
         matRedTransparent.color.setHex(hexRed)
+        matRedTransparent.emissive.setHex(hexRed)
         matRedTransparent.opacity = 1
 
         const matGreenTransparent = gizmoMaterial.clone()
         matGreenTransparent.color.setHex(hexGreen)
+        matGreenTransparent.emissive.setHex(hexGreen)
         matGreenTransparent.opacity = 1
 
         const matBlueTransparent = gizmoMaterial.clone()
         matBlueTransparent.color.setHex(hexBlue)
+        matBlueTransparent.emissive.setHex(hexBlue)
         matBlueTransparent.opacity = 1
 
         const matWhiteTransparent = gizmoMaterial.clone()
@@ -786,13 +797,16 @@ class TransformControlsGizmo extends Object3D {
 
         const matYellowTransparent = gizmoMaterial.clone()
         matYellowTransparent.color.setHex(hexYellow)
+        matYellowTransparent.emissive.setHex(hexYellow)
         matYellowTransparent.opacity = 0.25
 
         const matYellow = gizmoMaterial.clone()
         matYellow.color.setHex(hexYellow)
+        matYellow.emissive.setHex(hexYellow)
 
         const matGray = gizmoMaterial.clone()
         matGray.color.setHex(hexGray)
+        matGray.emissive.setHex(hexGray)
 
         // reusable geometry
 
@@ -805,9 +819,9 @@ class TransformControlsGizmo extends Object3D {
         arrowGeometry.translate(0, 0.05 * ratio, 0)
 
         const scaleHandleGeometry = new BoxGeometry(
-            0.08 * ratio,
-            0.08 * ratio,
-            0.08 * ratio
+            0.05 * ratio,
+            0.05 * ratio,
+            0.05 * ratio
         )
         scaleHandleGeometry.translate(0, 0.04 * ratio, 0)
 
@@ -860,11 +874,15 @@ class TransformControlsGizmo extends Object3D {
                     [0.5 * ratio, 0, 0],
                     [0, 0, -Math.PI / 2]
                 ],
-                // [
-                //     new Mesh(arrowGeometry, matRed),
-                //     [-0.5 * ratio, 0, 0],
-                //     [0, 0, Math.PI / 2]
-                // ],
+                ...(showOpposite
+                    ? [
+                          [
+                              new Mesh(arrowGeometry, matRed),
+                              [-0.5 * ratio, 0, 0],
+                              [0, 0, Math.PI / 2]
+                          ]
+                      ]
+                    : []),
                 [
                     new Mesh(lineGeometry2, matRed),
                     [0, 0, 0],
@@ -873,11 +891,15 @@ class TransformControlsGizmo extends Object3D {
             ],
             Y: [
                 [new Mesh(arrowGeometry, matGreen), [0, 0.5 * ratio, 0]],
-                // [
-                //     new Mesh(arrowGeometry, matGreen),
-                //     [0, -0.5 * ratio, 0],
-                //     [Math.PI, 0, 0]
-                // ],
+                ...(showOpposite
+                    ? [
+                          [
+                              new Mesh(arrowGeometry, matGreen),
+                              [0, -0.5 * ratio, 0],
+                              [Math.PI, 0, 0]
+                          ]
+                      ]
+                    : []),
                 [new Mesh(lineGeometry2, matGreen)]
             ],
             Z: [
@@ -886,63 +908,69 @@ class TransformControlsGizmo extends Object3D {
                     [0, 0, 0.5 * ratio],
                     [Math.PI / 2, 0, 0]
                 ],
-                // [
-                //     new Mesh(arrowGeometry, matBlue),
-                //     [0, 0, -0.5 * ratio],
-                //     [-Math.PI / 2, 0, 0]
-                // ],
+                ...(showOpposite
+                    ? [
+                          [
+                              new Mesh(arrowGeometry, matBlue),
+                              [0, 0, -0.5 * ratio],
+                              [-Math.PI / 2, 0, 0]
+                          ]
+                      ]
+                    : []),
                 [new Mesh(lineGeometry2, matBlue), null, [Math.PI / 2, 0, 0]]
             ],
-            XYZ: [
-                [
-                    new Mesh(
-                        new OctahedronGeometry(0.1 * ratio, 0),
-                        matWhiteTransparent.clone()
-                    ),
-                    [0, 0, 0]
-                ]
-            ],
-            XY: [
-                [
-                    new Mesh(
-                        new BoxGeometry(
-                            translatePlaneSize * ratio,
-                            translatePlaneSize * ratio,
-                            0.01 * ratio
-                        ),
-                        matBlueTransparent.clone()
-                    ),
-                    [translatePlaneSize * ratio, translatePlaneSize * ratio, 0]
-                ]
-            ],
-            YZ: [
-                [
-                    new Mesh(
-                        new BoxGeometry(
-                            translatePlaneSize * ratio,
-                            translatePlaneSize * ratio,
-                            0.01 * ratio
-                        ),
-                        matRedTransparent.clone()
-                    ),
-                    [0, translatePlaneSize * ratio, translatePlaneSize * ratio],
-                    [0, Math.PI / 2, 0]
-                ]
-            ],
-            XZ: [
-                [
-                    new Mesh(
-                        new BoxGeometry(
-                            translatePlaneSize * ratio,
-                            translatePlaneSize * ratio,
-                            0.01 * ratio
-                        ),
-                        matGreenTransparent.clone()
-                    ),
-                    [translatePlaneSize * ratio, 0, translatePlaneSize * ratio],
-                    [-Math.PI / 2, 0, 0]
-                ]
-            ]
+            XYZ: showCentral
+                ? [
+                      [
+                          new Mesh(
+                              new OctahedronGeometry(0.1 * ratio, 0),
+                              matWhiteTransparent.clone()
+                          ),
+                          [0, 0, 0]
+                      ]
+                  ]
+                : []
+            // XY: [
+            //     [
+            //         new Mesh(
+            //             new BoxGeometry(
+            //                 translatePlaneSize * ratio,
+            //                 translatePlaneSize * ratio,
+            //                 0.01 * ratio
+            //             ),
+            //             matBlueTransparent.clone()
+            //         ),
+            //         [translatePlaneSize * ratio, translatePlaneSize * ratio, 0]
+            //     ]
+            // ],
+            // YZ: [
+            //     [
+            //         new Mesh(
+            //             new BoxGeometry(
+            //                 translatePlaneSize * ratio,
+            //                 translatePlaneSize * ratio,
+            //                 0.01 * ratio
+            //             ),
+            //             matRedTransparent.clone()
+            //         ),
+            //         [0, translatePlaneSize * ratio, translatePlaneSize * ratio],
+            //         [0, Math.PI / 2, 0]
+            //     ]
+            // ],
+            // XZ: [
+            //     [
+            //         new Mesh(
+            //             new BoxGeometry(
+            //                 translatePlaneSize * ratio,
+            //                 translatePlaneSize * ratio,
+            //                 0.01 * ratio
+            //             ),
+            //             matGreenTransparent.clone()
+            //         ),
+            //         [translatePlaneSize * ratio, 0, translatePlaneSize * ratio],
+            //         [-Math.PI / 2, 0, 0]
+            //     ]
+            // ]
         }
 
         const pickerTranslate = {
@@ -954,15 +982,24 @@ class TransformControlsGizmo extends Object3D {
                     ),
                     [0.3 * ratio, 0, 0],
                     [0, 0, -Math.PI / 2]
-                ]
-                // [
-                //     new Mesh(
-                //         new CylinderGeometry(0.2 * ratio, 0, 0.6 * ratio, 4),
-                //         matInvisible
-                //     ),
-                //     [-0.3 * ratio, 0, 0],
-                //     [0, 0, Math.PI / 2]
-                // ]
+                ],
+                ...(showOpposite
+                    ? [
+                          [
+                              new Mesh(
+                                  new CylinderGeometry(
+                                      0.2 * ratio,
+                                      0,
+                                      0.6 * ratio,
+                                      4
+                                  ),
+                                  matInvisible
+                              ),
+                              [-0.3 * ratio, 0, 0],
+                              [0, 0, Math.PI / 2]
+                          ]
+                      ]
+                    : [])
             ],
             Y: [
                 [
@@ -971,15 +1008,24 @@ class TransformControlsGizmo extends Object3D {
                         matInvisible
                     ),
                     [0, 0.3 * ratio, 0]
-                ]
-                // [
-                //     new Mesh(
-                //         new CylinderGeometry(0.2 * ratio, 0, 0.6 * ratio, 4),
-                //         matInvisible
-                //     ),
-                //     [0, -0.3 * ratio, 0],
-                //     [0, 0, Math.PI]
-                // ]
+                ],
+                ...(showOpposite
+                    ? [
+                          [
+                              new Mesh(
+                                  new CylinderGeometry(
+                                      0.2 * ratio,
+                                      0,
+                                      0.6 * ratio,
+                                      4
+                                  ),
+                                  matInvisible
+                              ),
+                              [0, -0.3 * ratio, 0],
+                              [0, 0, Math.PI]
+                          ]
+                      ]
+                    : [])
             ],
             Z: [
                 [
@@ -989,19 +1035,35 @@ class TransformControlsGizmo extends Object3D {
                     ),
                     [0, 0, 0.3 * ratio],
                     [Math.PI / 2, 0, 0]
-                ]
-                // [
-                //     new Mesh(
-                //         new CylinderGeometry(0.2 * ratio, 0, 0.6 * ratio, 4),
-                //         matInvisible
-                //     ),
-                //     [0, 0, -0.3 * ratio],
-                //     [-Math.PI / 2, 0, 0]
-                // ]
+                ],
+                ...(showOpposite
+                    ? [
+                          [
+                              new Mesh(
+                                  new CylinderGeometry(
+                                      0.2 * ratio,
+                                      0,
+                                      0.6 * ratio,
+                                      4
+                                  ),
+                                  matInvisible
+                              ),
+                              [0, 0, -0.3 * ratio],
+                              [-Math.PI / 2, 0, 0]
+                          ]
+                      ]
+                    : [])
             ],
-            XYZ: [
-                [new Mesh(new OctahedronGeometry(0.2 * ratio, 0), matInvisible)]
-            ],
+            XYZ: showCentral
+                ? [
+                      [
+                          new Mesh(
+                              new OctahedronGeometry(0.2 * ratio, 0),
+                              matInvisible
+                          )
+                      ]
+                  ]
+                : [],
             XY: [
                 [
                     new Mesh(
@@ -1112,14 +1174,19 @@ class TransformControlsGizmo extends Object3D {
                     null,
                     [0, Math.PI / 2, 0]
                 ]
-            ]
-            // E: [
-            //     [
-            //         new Mesh(CircleGeometry(0.75, 1), matYellowTransparent),
-            //         null,
-            //         [0, Math.PI / 2, 0]
-            //     ]
-            // ]
+            ],
+            E: showCentral
+                ? [
+                      [
+                          new Mesh(
+                              CircleGeometry(0.75, 1),
+                              matYellowTransparent
+                          ),
+                          null,
+                          [0, Math.PI / 2, 0]
+                      ]
+                  ]
+                : []
         }
 
         const helperRotate = {
@@ -1135,14 +1202,16 @@ class TransformControlsGizmo extends Object3D {
         }
 
         const pickerRotate = {
-            // XYZE: [
-            //     [
-            //         new Mesh(
-            //             new SphereGeometry(0.25 * ratio, 10, 8),
-            //             matInvisible
-            //         )
-            //     ]
-            // ],
+            XYZE: showCentral
+                ? [
+                      [
+                          new Mesh(
+                              new SphereGeometry(0.25 * ratio, 10, 8),
+                              matInvisible
+                          )
+                      ]
+                  ]
+                : [],
             X: [
                 [
                     new Mesh(
@@ -1172,15 +1241,22 @@ class TransformControlsGizmo extends Object3D {
                     [0, 0, 0],
                     [0, 0, -Math.PI / 2]
                 ]
-            ]
-            // E: [
-            //     [
-            //         new Mesh(
-            //             new TorusGeometry(0.75 * ratio, 0.1 * ratio, 2, 24),
-            //             matInvisible
-            //         )
-            //     ]
-            // ]
+            ],
+            E: showCentral
+                ? [
+                      [
+                          new Mesh(
+                              new TorusGeometry(
+                                  0.75 * ratio,
+                                  0.1 * ratio,
+                                  2,
+                                  24
+                              ),
+                              matInvisible
+                          )
+                      ]
+                  ]
+                : []
         }
 
         const gizmoScale = {
@@ -1194,21 +1270,29 @@ class TransformControlsGizmo extends Object3D {
                     new Mesh(lineGeometry2, matRed),
                     [0, 0, 0],
                     [0, 0, -Math.PI / 2]
-                ]
-                // [
-                //     new Mesh(scaleHandleGeometry, matRed),
-                //     [-0.5 * ratio, 0, 0],
-                //     [0, 0, Math.PI / 2]
-                // ]
+                ],
+                ...(showOpposite
+                    ? [
+                          [
+                              new Mesh(scaleHandleGeometry, matRed),
+                              [-0.5 * ratio, 0, 0],
+                              [0, 0, Math.PI / 2]
+                          ]
+                      ]
+                    : [])
             ],
             Y: [
                 [new Mesh(scaleHandleGeometry, matGreen), [0, 0.5 * ratio, 0]],
-                [new Mesh(lineGeometry2, matGreen)]
-                // [
-                //     new Mesh(scaleHandleGeometry, matGreen),
-                //     [0, -0.5 * ratio, 0],
-                //     [0, 0, Math.PI]
-                // ]
+                [new Mesh(lineGeometry2, matGreen)],
+                ...(showOpposite
+                    ? [
+                          [
+                              new Mesh(scaleHandleGeometry, matGreen),
+                              [0, -0.5 * ratio, 0],
+                              [0, 0, Math.PI]
+                          ]
+                      ]
+                    : [])
             ],
             Z: [
                 [
@@ -1220,54 +1304,58 @@ class TransformControlsGizmo extends Object3D {
                     new Mesh(lineGeometry2, matBlue),
                     [0, 0, 0],
                     [Math.PI / 2, 0, 0]
-                ]
-                // [
-                //     new Mesh(scaleHandleGeometry, matBlue),
-                //     [0, 0, -0.5 * ratio],
-                //     [-Math.PI / 2, 0, 0]
-                // ]
+                ],
+                ...(showOpposite
+                    ? [
+                          [
+                              new Mesh(scaleHandleGeometry, matBlue),
+                              [0, 0, -0.5 * ratio],
+                              [-Math.PI / 2, 0, 0]
+                          ]
+                      ]
+                    : [])
             ],
-            XY: [
-                [
-                    new Mesh(
-                        new BoxGeometry(
-                            0.15 * ratio,
-                            0.15 * ratio,
-                            0.01 * ratio
-                        ),
-                        matBlueTransparent
-                    ),
-                    [0.15 * ratio, 0.15 * ratio, 0]
-                ]
-            ],
-            YZ: [
-                [
-                    new Mesh(
-                        new BoxGeometry(
-                            0.15 * ratio,
-                            0.15 * ratio,
-                            0.01 * ratio
-                        ),
-                        matRedTransparent
-                    ),
-                    [0, 0.15 * ratio, 0.15 * ratio],
-                    [0, Math.PI / 2, 0]
-                ]
-            ],
-            XZ: [
-                [
-                    new Mesh(
-                        new BoxGeometry(
-                            0.15 * ratio,
-                            0.15 * ratio,
-                            0.01 * ratio
-                        ),
-                        matGreenTransparent
-                    ),
-                    [0.15 * ratio, 0, 0.15 * ratio],
-                    [-Math.PI / 2, 0, 0]
-                ]
-            ],
+            // XY: [
+            //     [
+            //         new Mesh(
+            //             new BoxGeometry(
+            //                 0.15 * ratio,
+            //                 0.15 * ratio,
+            //                 0.01 * ratio
+            //             ),
+            //             matBlueTransparent
+            //         ),
+            //         [0.15 * ratio, 0.15 * ratio, 0]
+            //     ]
+            // ],
+            // YZ: [
+            //     [
+            //         new Mesh(
+            //             new BoxGeometry(
+            //                 0.15 * ratio,
+            //                 0.15 * ratio,
+            //                 0.01 * ratio
+            //             ),
+            //             matRedTransparent
+            //         ),
+            //         [0, 0.15 * ratio, 0.15 * ratio],
+            //         [0, Math.PI / 2, 0]
+            //     ]
+            // ],
+            // XZ: [
+            //     [
+            //         new Mesh(
+            //             new BoxGeometry(
+            //                 0.15 * ratio,
+            //                 0.15 * ratio,
+            //                 0.01 * ratio
+            //             ),
+            //             matGreenTransparent
+            //         ),
+            //         [0.15 * ratio, 0, 0.15 * ratio],
+            //         [-Math.PI / 2, 0, 0]
+            //     ]
+            // ],
             XYZ: [
                 [
                     new Mesh(
@@ -1287,15 +1375,24 @@ class TransformControlsGizmo extends Object3D {
                     ),
                     [0.3 * ratio, 0, 0],
                     [0, 0, -Math.PI / 2]
-                ]
-                // [
-                //     new Mesh(
-                //         new CylinderGeometry(0.2 * ratio, 0, 0.6 * ratio, 4),
-                //         matInvisible
-                //     ),
-                //     [-0.3 * ratio, 0, 0],
-                //     [0, 0, Math.PI / 2]
-                // ]
+                ],
+                ...(showOpposite
+                    ? [
+                          [
+                              new Mesh(
+                                  new CylinderGeometry(
+                                      0.2 * ratio,
+                                      0,
+                                      0.6 * ratio,
+                                      4
+                                  ),
+                                  matInvisible
+                              ),
+                              [-0.3 * ratio, 0, 0],
+                              [0, 0, Math.PI / 2]
+                          ]
+                      ]
+                    : [])
             ],
             Y: [
                 [
@@ -1304,15 +1401,24 @@ class TransformControlsGizmo extends Object3D {
                         matInvisible
                     ),
                     [0, 0.3 * ratio, 0]
-                ]
-                // [
-                //     new Mesh(
-                //         new CylinderGeometry(0.2 * ratio, 0, 0.6 * ratio, 4),
-                //         matInvisible
-                //     ),
-                //     [0, -0.3 * ratio, 0],
-                //     [0, 0, Math.PI]
-                // ]
+                ],
+                ...(showOpposite
+                    ? [
+                          [
+                              new Mesh(
+                                  new CylinderGeometry(
+                                      0.2 * ratio,
+                                      0,
+                                      0.6 * ratio,
+                                      4
+                                  ),
+                                  matInvisible
+                              ),
+                              [0, -0.3 * ratio, 0],
+                              [0, 0, Math.PI]
+                          ]
+                      ]
+                    : [])
             ],
             Z: [
                 [
@@ -1322,15 +1428,24 @@ class TransformControlsGizmo extends Object3D {
                     ),
                     [0, 0, 0.3 * ratio],
                     [Math.PI / 2, 0, 0]
-                ]
-                // [
-                //     new Mesh(
-                //         new CylinderGeometry(0.2 * ratio, 0, 0.6 * ratio, 4),
-                //         matInvisible
-                //     ),
-                //     [0, 0, -0.3 * ratio],
-                //     [-Math.PI / 2, 0, 0]
-                // ]
+                ],
+                ...(showOpposite
+                    ? [
+                          [
+                              new Mesh(
+                                  new CylinderGeometry(
+                                      0.2 * ratio,
+                                      0,
+                                      0.6 * ratio,
+                                      4
+                                  ),
+                                  matInvisible
+                              ),
+                              [0, 0, -0.3 * ratio],
+                              [-Math.PI / 2, 0, 0]
+                          ]
+                      ]
+                    : [])
             ],
             XY: [
                 [

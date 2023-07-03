@@ -1,19 +1,6 @@
-import { Point } from "@lincode/math"
-import { signal } from "@preact/signals"
 import { memo } from "preact/compat"
 import { FRAME_HEIGHT, FRAME_WIDTH } from "../../globals"
-import { getTimelineLayer } from "../../states/useTimelineLayer"
-
-export const highlightFrame = (pt?: Point) => {
-    if (pt) {
-        setTimeout(() => (frameIndicatorSignal.value = pt))
-        return
-    }
-    frameIndicatorSignal.value = undefined
-}
-
-const frameIndicatorSignal = signal<Point | undefined>(undefined)
-getTimelineLayer(() => highlightFrame())
+import { frameIndicatorSignal } from "./frameIndicatorSignal"
 
 const FrameIndicator = () => {
     const pt = frameIndicatorSignal.value

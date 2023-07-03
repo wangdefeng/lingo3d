@@ -5,17 +5,14 @@ import finalSSRShader from "./material/shader/finalSSRShader"
 import helperFunctions from "./material/shader/helperFunctions"
 import trCompose from "./material/shader/trCompose"
 import { ReflectionsPass } from "./pass/ReflectionsPass"
-import { afterRenderSSR, beforeRenderSSR } from "./renderSetup"
 import { defaultSSROptions } from "./SSROptions"
 import { TemporalResolvePass } from "./temporal-resolve/pass/TemporalResolvePass"
 import { generateHalton23Points } from "./utils/generateHalton23Points"
+import { emitRenderSSR } from "../../../../events/onRenderSSR"
 
 const finalFragmentShader = finalSSRShader
     .replace("#include <helperFunctions>", helperFunctions)
     .replace("#include <boxBlur>", boxBlur)
-
-// all the properties for which we don't have to resample
-const noResetSamplesProperties = ["blur", "blurSharpness", "blurKernel"]
 
 export class SSREffect extends Effect {
     haltonSequence = generateHalton23Points(1024)
@@ -98,14 +95,6 @@ export class SSREffect extends Effect {
                     if (options[key] === value && needsUpdate) return
 
                     options[key] = value
-
-                    if (!noResetSamplesProperties.includes(key)) {
-                        this.setSize(
-                            this.lastSize.width,
-                            this.lastSize.height,
-                            true
-                        )
-                    }
 
                     switch (key) {
                         case "resolutionScale":
@@ -256,7 +245,7 @@ export class SSREffect extends Effect {
     }
 
     update(renderer, inputBuffer) {
-        beforeRenderSSR()
+        emitRenderSSR("before")
 
         this.haltonIndex = (this.haltonIndex + 1) % this.haltonSequence.length
 
@@ -278,6 +267,6 @@ export class SSREffect extends Effect {
 
         this._camera.clearViewOffset()
 
-        afterRenderSSR()
+        emitRenderSSR("after")
     }
 }

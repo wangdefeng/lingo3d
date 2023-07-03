@@ -5,10 +5,18 @@ import {
     WebGLMultipleRenderTargets,
     WebGLRenderTarget
 } from "three"
-import isWebGL2 from "../../../../../api/utils/isWebGL2"
 import { MRTMaterial } from "../material/MRTMaterial"
 import { ReflectionsMaterial } from "../material/ReflectionsMaterial"
 import { getVisibleChildren } from "../utils/Utils"
+
+const isWebGL2 = (() => {
+    try {
+        const canvas = document.createElement("canvas")
+        return !!(window.WebGL2RenderingContext && canvas.getContext("webgl2"))
+    } catch (e) {
+        return false
+    }
+})()
 
 export class ReflectionsPass extends Pass {
     ssrEffect
@@ -237,8 +245,6 @@ export class ReflectionsPass extends Pass {
 
         this.fullscreenMaterial.uniforms.inputTexture.value =
             inputBuffer.texture
-        this.fullscreenMaterial.uniforms.samples.value =
-            this.ssrEffect.temporalResolvePass.samples
         this.fullscreenMaterial.uniforms.cameraNear.value = this._camera.near
         this.fullscreenMaterial.uniforms.cameraFar.value = this._camera.far
 

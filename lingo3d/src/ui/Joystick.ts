@@ -6,16 +6,17 @@ import IJoystick, {
 import { Point } from "@lincode/math"
 import Nullable from "../interface/utils/Nullable"
 import createElement from "../utils/createElement"
-import { Cancellable } from "@lincode/promiselikes"
 import store, { Reactive } from "@lincode/reactivity"
 import { onBeforeRender } from "../events/onBeforeRender"
-import Appendable from "../api/core/Appendable"
-import { uiContainer } from "../engine/renderLoop/renderSetup"
+import Appendable from "../display/core/Appendable"
+import { onResize } from "../events/onResize"
+import { uiContainer } from "../engine/renderLoop/containers"
 
 export default class Joystick extends Appendable implements IJoystick {
     public static componentName = "joystick"
     public static defaults = joystickDefaults
     public static schema = joystickSchema
+    public static includeKeys = ["onMove"]
 
     public onMove: Nullable<(e: Point) => void>
     public onMoveStart: Nullable<(e: Point) => void>
@@ -41,13 +42,14 @@ export default class Joystick extends Appendable implements IJoystick {
             const cb = this.onPressState.get()
             if (!cb || !getDown()) return
 
-            const handle = onBeforeRender(() => {
-                cb(pt)
-            })
+            const handle = onBeforeRender(() => cb(pt))
             return () => {
                 return handle.cancel()
             }
         }, [this.onPressState.get, getDown])
+
+        const [setRefresh, getRefresh] = store({})
+        this.watch(onResize(() => setRefresh({})))
 
         this.createEffect(() => {
             const zone = createElement<HTMLDivElement>(`
@@ -63,36 +65,31 @@ export default class Joystick extends Appendable implements IJoystick {
             zone.ontouchstart = prevent
             zone.onpointerdown = prevent
 
-            const handle = new Cancellable()
-            setTimeout(() => {
-                if (handle.done) return
+            const manager = nipplejs.create({
+                zone,
+                mode: "static",
+                position: { left: "75px", bottom: "75px" },
+                color: "white"
+            })
 
-                const manager = nipplejs.create({
-                    zone,
-                    mode: "static",
-                    position: { left: "75px", bottom: "75px" },
-                    color: "white"
-                })
-                handle.then(() => manager.destroy())
-
-                manager.on("start", () => {
-                    this.onMoveStart?.(new Point(0, 0))
-                    setDown(true)
-                })
-                manager.on("move", (_, nipple) => {
-                    this.onMove?.(nipple.vector)
-                    pt = nipple.vector
-                })
-                manager.on("end", () => {
-                    this.onMoveEnd?.(new Point(0, 0))
-                    pt = new Point(0, 0)
-                    setDown(false)
-                })
+            manager.on("start", () => {
+                this.onMoveStart?.(new Point(0, 0))
+                setDown(true)
+            })
+            manager.on("move", (_, nipple) => {
+                this.onMove?.(nipple.vector)
+                pt = nipple.vector
+            })
+            manager.on("end", () => {
+                pt = new Point(0, 0)
+                this.onMove?.(pt)
+                this.onMoveEnd?.(pt)
+                setDown(false)
             })
             return () => {
-                handle.cancel()
+                manager.destroy()
                 zone.remove()
             }
-        }, [])
+        }, [getRefresh])
     }
 }

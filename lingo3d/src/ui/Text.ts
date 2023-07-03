@@ -1,5 +1,5 @@
-import Appendable from "../api/core/Appendable"
-import { uiContainer } from "../engine/renderLoop/renderSetup"
+import Appendable from "../display/core/Appendable"
+import { uiContainer } from "../engine/renderLoop/containers"
 import IText, { textDefaults, textSchema } from "../interface/IText"
 import createElement from "../utils/createElement"
 
@@ -14,9 +14,12 @@ export default class Text extends Appendable implements IText {
 
     public constructor() {
         super()
-
         uiContainer.appendChild(this.el)
-        this.then(() => this.el.remove())
+    }
+
+    protected override disposeNode() {
+        super.disposeNode()
+        this.el.remove()
     }
 
     public get opacity() {

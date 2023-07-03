@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "preact/hooks"
+import { stopPropagation } from "../utils/stopPropagation"
+import { CLICK_TIME } from "../../globals"
 
 export default (cb?: (e: MouseEvent) => void) => {
     const elRef = useRef<HTMLDivElement>(null)
@@ -7,20 +9,18 @@ export default (cb?: (e: MouseEvent) => void) => {
         const el = elRef.current
         if (!el || !cb) return
 
+        stopPropagation(el)
+
         let downTime = 0
         let downX = 0
         let downY = 0
 
         const handleMouseDown = (e: MouseEvent) => {
-            e.stopPropagation()
-
             downTime = Date.now()
             downX = e.clientX
             downY = e.clientY
         }
         const handleMouseUp = (e: MouseEvent) => {
-            e.stopPropagation()
-
             const upTime = Date.now()
 
             const deltaTime = upTime - downTime
@@ -31,19 +31,14 @@ export default (cb?: (e: MouseEvent) => void) => {
             downX = e.clientX
             downY = e.clientY
 
-            deltaTime < 300 && deltaX < 5 && deltaY < 5 && cb(e)
-        }
-        const handleClick = (e: MouseEvent) => {
-            e.stopPropagation()
+            deltaTime < CLICK_TIME && deltaX < 5 && deltaY < 5 && cb(e)
         }
         el.addEventListener("mousedown", handleMouseDown)
         el.addEventListener("mouseup", handleMouseUp)
-        el.addEventListener("click", handleClick)
 
         return () => {
             el.removeEventListener("mousedown", handleMouseDown)
             el.removeEventListener("mouseup", handleMouseUp)
-            el.removeEventListener("click", handleClick)
         }
     }, [])
 

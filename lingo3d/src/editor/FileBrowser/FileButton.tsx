@@ -1,45 +1,81 @@
 import { getExtensionType } from "@lincode/filetypes"
 import { splitFileName } from "@lincode/utils"
 import loadFile from "../../api/files/loadFile"
-import { createObjectURL } from "../../display/core/utils/objectURL"
 import Model from "../../display/Model"
 import useSyncState from "../hooks/useSyncState"
 import { getFileSelected, setFileSelected } from "../../states/useFileSelected"
-import drag, { setDragImage } from "../utils/drag"
+import dragToCreate, { setDragImage } from "../utils/dragToCreate"
 import FileIcon from "./icons/FileIcon"
+import { stopPropagation } from "../utils/stopPropagation"
+import { pathDirectoryDataMap } from "../../collections/pathDirectoryDataMap"
+import { fileBrowserDirPtr } from "../../pointers/fileBrowserDirPtr"
+import logStatus from "../../utils/logStatus"
+import { fileBrowserMaterialContextMenuSignal } from "./FileBrowserMaterialContextMenu"
 
-const setDraggingItem = drag<File>((draggingItem, hitManager) => {
+export type TextureType =
+    | "texture"
+    | "metalnessMap"
+    | "roughnessMap"
+    | "normalMap"
+    | "aoMap"
+    | "envMap"
+    | "displacementMap"
+    | "alphaMap"
+
+const getTextureProp = (name: string): TextureType | undefined => {
+    if (
+        name.startsWith("diffuse") ||
+        name.startsWith("albedo") ||
+        name.startsWith("base")
+    )
+        return "texture"
+    if (name.startsWith("rough")) return "roughnessMap"
+    if (name.startsWith("metal")) return "metalnessMap"
+    if (name.startsWith("norm")) return "normalMap"
+    if (name.startsWith("env")) return "envMap"
+    if (name.startsWith("ao") || name.startsWith("ambient")) return "aoMap"
+}
+
+const setDraggingItem = dragToCreate<File>((draggingItem, hitManager, e) => {
     const filetype = getExtensionType(draggingItem.name)
-    const [filename, extension] = splitFileName(draggingItem.name)
-
-    const lazyObjectURL = () =>
-        createObjectURL(draggingItem, extension?.toLowerCase())
-
     if (filetype === "model") {
         const manager = new Model()
-        manager.src = lazyObjectURL()
+        manager.src = draggingItem.webkitRelativePath
         return manager
     } else if (filetype === "image" && hitManager && "texture" in hitManager) {
-        const name = filename.toLowerCase()
-        if (name.includes("rough")) hitManager.roughnessMap = lazyObjectURL()
-        else if (name.includes("metal"))
-            hitManager.metalnessMap = lazyObjectURL()
-        else if (name.includes("normal")) hitManager.normalMap = lazyObjectURL()
-        else if (name.includes("disp"))
-            hitManager.displacementMap = lazyObjectURL()
-        else hitManager.texture = lazyObjectURL()
+        const pathData = pathDirectoryDataMap.get(fileBrowserDirPtr[0])
+        if (!pathData?.isMaterialFolder) return
+
+        const [filename] = splitFileName(draggingItem.name)
+        const processedFileName = (
+            pathData.fileNameOverlap
+                ? filename.replace(pathData.fileNameOverlap, "")
+                : filename
+        ).toLowerCase()
+
+        const prop = getTextureProp(processedFileName)
+        if (!prop) {
+            fileBrowserMaterialContextMenuSignal.value = {
+                x: e.clientX,
+                y: e.clientY,
+                onSelect: (type) =>
+                    (hitManager[type] = draggingItem.webkitRelativePath)
+            }
+            return
+        }
+        hitManager[prop] = draggingItem.webkitRelativePath
+        logStatus(`set texture: ${prop}`)
     }
 })
 
-type FileButtonProps = {
-    file: File
-}
+type Props = { file: File }
 
-const FileButton = ({ file }: FileButtonProps) => {
+const FileButton = ({ file }: Props) => {
     const fileSelected = useSyncState(getFileSelected)
 
     return (
         <div
+            ref={stopPropagation}
             style={{
                 width: 70,
                 height: 90,
@@ -54,7 +90,7 @@ const FileButton = ({ file }: FileButtonProps) => {
                 setDragImage(e)
             }}
             onDragEnd={() => setDraggingItem(undefined)}
-            onMouseDown={(e) => (e.stopPropagation(), setFileSelected(file))}
+            onMouseDown={() => setFileSelected(file)}
             onDblClick={() => loadFile(file)}
         >
             <div

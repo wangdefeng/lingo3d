@@ -5,37 +5,22 @@ import AbsoluteIcon from "./icons/AbsoluteIcon"
 import RelativeIcon from "./icons/RelativeIcon"
 import ToolbarButton from "./ToolbarButton"
 import CursorIcon from "./icons/CursorIcon"
-import OpenIcon from "./icons/OpenIcont"
-import ReactIcon from "./icons/ReactIcon"
-import VueIcon from "./icons/VueIcon"
-import exportReact from "../../api/files/exportReact"
-import exportVue from "../../api/files/exportVue"
-import openJSON from "../../api/files/openJSON"
 import Section from "./Section"
 import { setTransformControlsSpace } from "../../states/useTransformControlsSpace"
-import MeshIcon from "./icons/MeshIcon"
 import PathIcon from "./icons/PathIcon"
-import FolderIcon from "./icons/FolderIcon"
-import SaveIcon from "./icons/SaveIcon"
-import saveJSON from "../../api/files/saveJSON"
-import openFolder from "../../api/files/openFolder"
-import exportJSON from "../../api/files/exportJSON"
-import JSONIcon from "./icons/JSONIcon"
 import useInitCSS from "../hooks/useInitCSS"
-import useClickable from "../hooks/useClickable"
 import { setEditorMode } from "../../states/useEditorMode"
 import useSyncState from "../hooks/useSyncState"
 import { getSelectionTarget } from "../../states/useSelectionTarget"
 import { getEditorModeComputed } from "../../states/useEditorModeComputed"
 import { getTransformControlsSpaceComputed } from "../../states/useTransformControlsSpaceComputed"
-import { setWorldPlay } from "../../states/useWorldPlay"
+import { setWorldMode } from "../../states/useWorldMode"
 import useInitEditor from "../hooks/useInitEditor"
+import { stopPropagation } from "../utils/stopPropagation"
 
 const Toolbar = () => {
     useInitCSS()
     useInitEditor()
-
-    const elRef = useClickable()
 
     const mode = useSyncState(getEditorModeComputed)
     const space = useSyncState(getTransformControlsSpaceComputed)
@@ -47,7 +32,7 @@ const Toolbar = () => {
 
     return (
         <div
-            ref={elRef}
+            ref={stopPropagation}
             className="lingo3d-ui lingo3d-bg lingo3d-toolbar"
             style={{
                 width: 50,
@@ -56,19 +41,14 @@ const Toolbar = () => {
             }}
         >
             <div
-                style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    opacity: 0.75,
-                    paddingTop: 12
-                }}
+                className="lingo3d-flexcenter lingo3d-flexcol"
+                style={{ opacity: 0.75, paddingTop: 12 }}
             >
                 <Section>
                     <ToolbarButton
                         active={mode === "select"}
                         onClick={() => {
-                            setWorldPlay(false)
+                            setWorldMode("editor")
                             setEditorMode("select")
                         }}
                     >
@@ -77,7 +57,7 @@ const Toolbar = () => {
                     <ToolbarButton
                         active={mode === "translate"}
                         onClick={() => {
-                            setWorldPlay(false)
+                            setWorldMode("editor")
                             setEditorMode("translate")
                         }}
                         disabled={!canTranslate}
@@ -88,7 +68,7 @@ const Toolbar = () => {
                         active={mode === "rotate"}
                         disabled={!canRotate}
                         onClick={() => {
-                            setWorldPlay(false)
+                            setWorldMode("editor")
                             setEditorMode("rotate")
                         }}
                     >
@@ -98,7 +78,7 @@ const Toolbar = () => {
                         active={mode === "scale"}
                         disabled={!canScale}
                         onClick={() => {
-                            setWorldPlay(false)
+                            setWorldMode("editor")
                             setEditorMode("scale")
                         }}
                     >
@@ -131,7 +111,7 @@ const Toolbar = () => {
                     {/* <ToolbarButton
                         active={mode === "mesh"}
                         onClick={() => {
-                            setWorldPlay(false)
+                            setWorldPlay("editor")
                             setEditorMode("mesh")
                         }}
                     >
@@ -140,7 +120,7 @@ const Toolbar = () => {
                     <ToolbarButton
                         active={mode === "curve"}
                         onClick={() => {
-                            setWorldPlay(false)
+                            setWorldMode("editor")
                             setEditorMode("curve")
                         }}
                     >
@@ -148,7 +128,7 @@ const Toolbar = () => {
                     </ToolbarButton>
                 </Section>
 
-                <Section>
+                {/* <Section>
                     <ToolbarButton onClick={openFolder}>
                         <FolderIcon />
                     </ToolbarButton>
@@ -158,9 +138,9 @@ const Toolbar = () => {
                     <ToolbarButton onClick={saveJSON}>
                         <SaveIcon />
                     </ToolbarButton>
-                </Section>
+                </Section> */}
 
-                <Section>
+                {/* <Section>
                     <ToolbarButton onClick={exportJSON}>
                         <JSONIcon />
                     </ToolbarButton>
@@ -170,7 +150,7 @@ const Toolbar = () => {
                     <ToolbarButton onClick={exportVue}>
                         <VueIcon />
                     </ToolbarButton>
-                </Section>
+                </Section> */}
             </div>
         </div>
     )

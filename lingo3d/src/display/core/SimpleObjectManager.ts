@@ -1,12 +1,8 @@
 import { Object3D } from "three"
 import ISimpleObjectManager from "../../interface/ISimpleObjectManager"
-import { applyMixins } from "@lincode/utils"
 import AnimatedObjectManager from "./AnimatedObjectManager"
-import PositionedMixin from "./mixins/PositionedMixin"
-import DirectionedMixin from "./mixins/DirectionedMixin"
-import MixinType from "./mixins/utils/MixinType"
 
-class SimpleObjectManager<T extends Object3D = Object3D>
+export default class SimpleObjectManager<T extends Object3D = Object3D>
     extends AnimatedObjectManager<T>
     implements ISimpleObjectManager
 {
@@ -40,9 +36,3 @@ class SimpleObjectManager<T extends Object3D = Object3D>
         this.scaleZ = val
     }
 }
-interface SimpleObjectManager<T extends Object3D = Object3D>
-    extends AnimatedObjectManager<T>,
-        MixinType<PositionedMixin<T>>,
-        MixinType<DirectionedMixin<T>> {}
-applyMixins(SimpleObjectManager, [DirectionedMixin, PositionedMixin])
-export default SimpleObjectManager

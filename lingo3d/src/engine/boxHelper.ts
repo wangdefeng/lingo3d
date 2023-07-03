@@ -1,52 +1,57 @@
 import { createEffect } from "@lincode/reactivity"
 import { BoxHelper } from "three"
-import {
-    addUpdateSystem,
-    deleteUpdateSystem
-} from "../display/core/utils/updateSystem"
 import { getMultipleSelectionTargets } from "../states/useMultipleSelectionTargets"
-import { getSelectionNativeTarget } from "../states/useSelectionNativeTarget"
 import { getSelectionTarget } from "../states/useSelectionTarget"
 import scene from "./scene"
+import { selectionTargetPtr } from "../pointers/selectionTargetPtr"
+import { ssrExcludeSet } from "../collections/ssrExcludeSet"
+import { renderCheckExcludeSet } from "../collections/renderCheckExcludeSet"
+import { multipleSelectionTargets } from "../collections/multipleSelectionTargets"
+import MeshAppendable from "../display/core/MeshAppendable"
+import { updateSystem } from "../systems/updateSystem"
 
 createEffect(() => {
-    const selectionTarget = getSelectionTarget()
+    const [selectionTarget] = selectionTargetPtr
     const target =
-        getSelectionNativeTarget() ??
-        (selectionTarget && "object3d" in selectionTarget
+        selectionTarget instanceof MeshAppendable
             ? selectionTarget.object3d
-            : undefined)
-
+            : undefined
     if (!target) return
 
     const boxHelper = new BoxHelper(target)
-    const frame = requestAnimationFrame(() => scene.add(boxHelper))
-    addUpdateSystem(boxHelper)
+    scene.add(boxHelper)
+    updateSystem.add(boxHelper)
+    ssrExcludeSet.add(boxHelper)
+    renderCheckExcludeSet.add(boxHelper)
 
     return () => {
-        cancelAnimationFrame(frame)
         scene.remove(boxHelper)
-        deleteUpdateSystem(boxHelper)
+        updateSystem.delete(boxHelper)
+        boxHelper.dispose()
+        ssrExcludeSet.delete(boxHelper)
+        renderCheckExcludeSet.delete(boxHelper)
     }
-}, [getSelectionTarget, getSelectionNativeTarget])
+}, [getSelectionTarget])
 
 createEffect(() => {
-    const [targets] = getMultipleSelectionTargets()
-    if (!targets.size) return
+    if (!multipleSelectionTargets.size) return
 
     const boxHelpers: Array<BoxHelper> = []
-    for (const target of targets) {
-        const boxHelper = new BoxHelper(target.outerObject3d)
+    for (const target of multipleSelectionTargets) {
+        const boxHelper = new BoxHelper(target.object3d)
         scene.add(boxHelper)
         boxHelpers.push(boxHelper)
+        updateSystem.add(boxHelper)
+        ssrExcludeSet.add(boxHelper)
+        renderCheckExcludeSet.add(boxHelper)
     }
-
-    for (const boxHelper of boxHelpers) addUpdateSystem(boxHelper)
-
     return () => {
         for (const boxHelper of boxHelpers) {
-            deleteUpdateSystem(boxHelper)
+            updateSystem.delete(boxHelper)
             scene.remove(boxHelper)
+            boxHelper.dispose()
+            ssrExcludeSet.delete(boxHelper)
+            renderCheckExcludeSet.delete(boxHelper)
         }
     }
 }, [getMultipleSelectionTargets])

@@ -1,14 +1,23 @@
+import { handleStopPropagation } from "../../engine/hotkeys"
 import { emitEditorEdit } from "../../events/onEditorEdit"
+import { tweakpaneChangePtr } from "../../pointers/tweakpaneChangePtr"
+import { tweakpaneDownPtr } from "../../pointers/tweanpaneDownPtr"
 
-export const downPtr = [false]
-
-const handleDown = () => {
-    downPtr[0] = true
-    emitEditorEdit("start")
+const handleDown = (ev) => {
+    handleStopPropagation(ev)
+    tweakpaneDownPtr[0] = true
+    queueMicrotask(() => {
+        const [key, value] = tweakpaneChangePtr[0]
+        emitEditorEdit({ phase: "start", key, value })
+    })
 }
-const handleUp = () => {
-    emitEditorEdit("end")
-    queueMicrotask(() => (downPtr[0] = false))
+const handleUp = (ev) => {
+    handleStopPropagation(ev)
+    queueMicrotask(() => {
+        tweakpaneDownPtr[0] = false
+        const [key, value] = tweakpaneChangePtr[0]
+        emitEditorEdit({ phase: "end", key, value })
+    })
 }
 
 /***
@@ -3157,7 +3166,7 @@ class PointerHandler {
         const doc = this.elem_.ownerDocument
         doc.addEventListener("mousemove", this.onDocumentMouseMove_)
         doc.addEventListener("mouseup", this.onDocumentMouseUp_)
-        handleDown()
+        handleDown(ev)
         this.emitter.emit("down", {
             altKey: ev.altKey,
             data: this.computePosition_(computeOffset$1(ev, this.elem_)),
@@ -3177,7 +3186,7 @@ class PointerHandler {
         const doc = this.elem_.ownerDocument
         doc.removeEventListener("mousemove", this.onDocumentMouseMove_)
         doc.removeEventListener("mouseup", this.onDocumentMouseUp_)
-        handleUp()
+        handleUp(ev)
         this.emitter.emit("up", {
             altKey: ev.altKey,
             data: this.computePosition_(computeOffset$1(ev, this.elem_)),
@@ -3189,7 +3198,7 @@ class PointerHandler {
         ev.preventDefault()
         const touch = ev.targetTouches.item(0)
         const rect = this.elem_.getBoundingClientRect()
-        handleDown()
+        handleDown(ev)
         this.emitter.emit("down", {
             altKey: ev.altKey,
             data: this.computePosition_(
@@ -3230,7 +3239,7 @@ class PointerHandler {
                 ? _a
                 : this.lastTouch_
         const rect = this.elem_.getBoundingClientRect()
-        handleUp()
+        handleUp(ev)
         this.emitter.emit("up", {
             altKey: ev.altKey,
             data: this.computePosition_(
@@ -3252,6 +3261,7 @@ function mapRange(value, start1, end1, start2, end2) {
     return start2 + p * (end2 - start2)
 }
 function getDecimalDigits(value) {
+    if (value === Infinity || value === -Infinity) return 0
     const text = String(value.toFixed(10))
     const frac = text.split(".")[1]
     return frac.replace(/0+$/, "").length
@@ -3316,8 +3326,11 @@ class NumberTextView {
             this.element.classList.remove(className$g(undefined, "drg"))
             return
         }
+        const draggingScale = this.props_.get("draggingScale")
+        if (draggingScale === Infinity || draggingScale === -Infinity) return
+
         this.element.classList.add(className$g(undefined, "drg"))
-        const x = ev.rawValue / this.props_.get("draggingScale")
+        const x = ev.rawValue / draggingScale
         const aox = x + (x > 0 ? -1 : x < 0 ? +1 : 0)
         const adx = constrainRange(-aox, -4, +4)
         this.guideHeadElem_.setAttributeNS(
@@ -3425,9 +3438,9 @@ class NumberTextController {
     }
     onPointerMove_(ev) {
         const v = this.computeDraggingValue_(ev.data)
-        if (v === null) {
+        if (v === null || v === -Infinity || v === Infinity || Number.isNaN(v))
             return
-        }
+
         this.value.setRawValue(v, {
             forceEmit: false,
             last: false

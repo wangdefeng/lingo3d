@@ -1,16 +1,21 @@
-import { Point } from "@lincode/math"
 import { extendDefaults } from "./utils/Defaults"
 import { ExtractProps } from "./utils/extractProps"
 import Nullable from "./utils/Nullable"
 import { nullableDefault } from "./utils/NullableDefault"
 import Range from "./utils/Range"
+import { ColorRepresentation } from "three"
+import Choices from "./utils/Choices"
+
+export type ColorString = Extract<ColorRepresentation, string>
+
+export type Blending = "additive" | "subtractive" | "multiply" | "normal"
 
 export default interface ITexturedStandard {
-    color: Nullable<string>
+    color: Nullable<ColorString>
     opacity: Nullable<number>
     texture: Nullable<string>
     alphaMap: Nullable<string>
-    textureRepeat: Nullable<Point | number>
+    textureRepeat: Nullable<number>
     textureFlipY: Nullable<boolean>
     textureRotation: Nullable<number>
 
@@ -35,6 +40,7 @@ export default interface ITexturedStandard {
     normalMap: Nullable<string>
     normalScale: Nullable<number>
     depthTest: Nullable<boolean>
+    blending: Nullable<Blending>
 }
 
 export const texturedStandardSchema: Required<ExtractProps<ITexturedStandard>> =
@@ -43,7 +49,7 @@ export const texturedStandardSchema: Required<ExtractProps<ITexturedStandard>> =
         opacity: Number,
         texture: String,
         alphaMap: String,
-        textureRepeat: [Object, Number],
+        textureRepeat: Number,
         textureFlipY: Boolean,
         textureRotation: Number,
 
@@ -67,8 +73,16 @@ export const texturedStandardSchema: Required<ExtractProps<ITexturedStandard>> =
         roughness: Number,
         normalMap: String,
         normalScale: Number,
-        depthTest: Boolean
+        depthTest: Boolean,
+        blending: String
     }
+
+export const blendingChoices = new Choices({
+    additive: "additive",
+    subtractive: "subtractive",
+    multiply: "multiply",
+    normal: "normal"
+})
 
 export const texturedStandardDefaults = extendDefaults<ITexturedStandard>(
     [],
@@ -77,7 +91,7 @@ export const texturedStandardDefaults = extendDefaults<ITexturedStandard>(
         opacity: nullableDefault(1),
         texture: undefined,
         alphaMap: undefined,
-        textureRepeat: nullableDefault({ x: 1, y: 1 }),
+        textureRepeat: nullableDefault(1),
         textureFlipY: nullableDefault(false),
         textureRotation: nullableDefault(0),
 
@@ -101,12 +115,13 @@ export const texturedStandardDefaults = extendDefaults<ITexturedStandard>(
         roughness: nullableDefault(1),
         normalMap: undefined,
         normalScale: nullableDefault(1),
-        depthTest: nullableDefault(true)
+        depthTest: nullableDefault(true),
+        blending: nullableDefault("normal")
     },
     {
         opacity: new Range(0, 1),
+        textureRepeat: new Range(1, 10),
         textureRotation: new Range(0, 360),
-
         envMapIntensity: new Range(0, 4),
         aoMapIntensity: new Range(0, 4),
         bumpScale: new Range(0, 4),
@@ -116,6 +131,7 @@ export const texturedStandardDefaults = extendDefaults<ITexturedStandard>(
         lightMapIntensity: new Range(0, 4),
         metalness: new Range(-2, 2),
         roughness: new Range(0, 4),
-        normalScale: new Range(0, 4)
+        normalScale: new Range(0, 20),
+        blending: blendingChoices
     }
 )

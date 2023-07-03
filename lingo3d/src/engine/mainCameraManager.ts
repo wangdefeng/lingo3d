@@ -1,41 +1,35 @@
-import { getOrbitControls } from "../states/useOrbitControls"
-import { container } from "./renderLoop/renderSetup"
 import { createEffect } from "@lincode/reactivity"
 import mainCamera from "./mainCamera"
 import OrbitCamera from "../display/cameras/OrbitCamera"
 import { getTransformControlsDragging } from "../states/useTransformControlsDragging"
 import { onEditorCenterView } from "../events/onEditorCenterView"
-import { getCameraDistance } from "../states/useCameraDistance"
 import { getCameraRendered } from "../states/useCameraRendered"
-import getActualScale from "../display/utils/getActualScale"
-import { appendableRoot } from "../api/core/collections"
+import getActualScale from "../memo/getActualScale"
 import { M2CM } from "../globals"
+import { getEditorBehavior } from "../states/useEditorBehavior"
+import { container } from "./renderLoop/containers"
+import { cameraRenderedPtr } from "../pointers/cameraRenderedPtr"
+import { editorBehaviorPtr } from "../pointers/editorBehaviorPtr"
 
 const mainCameraManager = new OrbitCamera(mainCamera)
 export default mainCameraManager
-
+mainCameraManager.$ghost()
+mainCameraManager.$disableUnload = true
 mainCameraManager.name = "camera"
 mainCameraManager.enableZoom = true
 mainCameraManager.enableFly = true
 mainCameraManager.mouseControl = false
-appendableRoot.delete(mainCameraManager)
 
 onEditorCenterView((manager) => {
-    Object.assign(mainCameraManager, manager.worldPosition)
+    Object.assign(mainCameraManager, manager.getWorldPosition())
     const size = getActualScale(manager)
     mainCameraManager.innerZ = Math.max(size.x, size.y, size.z, 1) * M2CM + 50
 })
 
-getOrbitControls((val) => {
-    if (val) return
-    mainCameraManager.setPolarAngle(90)
-    mainCameraManager.setAzimuthAngle(90)
-})
-
 createEffect(() => {
     if (
-        !getOrbitControls() ||
-        getCameraRendered() !== mainCamera ||
+        !editorBehaviorPtr[0] ||
+        cameraRenderedPtr[0] !== mainCamera ||
         getTransformControlsDragging()
     )
         return
@@ -47,16 +41,19 @@ createEffect(() => {
         mainCameraManager.mouseControl = false
         container.style.cursor = "auto"
     }
-}, [getOrbitControls, getTransformControlsDragging, getCameraRendered])
+}, [getEditorBehavior, getTransformControlsDragging, getCameraRendered])
 
-createEffect(() => {
-    if (getCameraRendered() !== mainCamera || getOrbitControls()) return
+export const resetMainCameraManager = () => {
+    mainCameraManager.x = 0
+    mainCameraManager.y = 0
+    mainCameraManager.z = 0
+    mainCameraManager.rotationX = 0
+    mainCameraManager.rotationY = 0
+    mainCameraManager.rotationZ = 0
+    mainCameraManager.polarAngle = editorBehaviorPtr[0] ? 120 : 0
+    mainCameraManager.azimuthAngle = 0
+}
 
-    const handle = getCameraDistance(
-        (cameraDistance) => (mainCameraManager.innerZ = cameraDistance)
-    )
-
-    return () => {
-        handle.cancel()
-    }
-}, [getCameraRendered, getOrbitControls])
+getEditorBehavior(
+    (editorBehavior) => editorBehavior && resetMainCameraManager()
+)

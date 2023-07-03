@@ -2,8 +2,9 @@ import { distance3d } from "@lincode/math"
 import randomColor from "randomcolor"
 import { Object3D } from "three"
 import Octahedron from "./primitives/Octahedron"
-import getWorldPosition from "./utils/getWorldPosition"
+import getWorldPosition from "../memo/getWorldPosition"
 import { vec2Point } from "./utils/vec2Point"
+import { ColorString } from "../interface/ITexturedStandard"
 
 export default class Bone extends Octahedron {
     public end: Octahedron
@@ -12,7 +13,7 @@ export default class Bone extends Octahedron {
         super()
         // hiddenAppendables.add(this)
 
-        const color = randomColor()
+        const color = randomColor() as ColorString
 
         this.wireframe = true
         const thisMaterial = this.object3d.material

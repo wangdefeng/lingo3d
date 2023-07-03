@@ -1,7 +1,6 @@
 import { Reactive } from "@lincode/reactivity"
 import { Mesh } from "three"
 import scene from "../../engine/scene"
-import { onRender } from "../../events/onRender"
 import IReflector, {
     reflectorDefaults,
     reflectorSchema
@@ -10,9 +9,13 @@ import { getCameraRendered } from "../../states/useCameraRendered"
 import { getRenderer } from "../../states/useRenderer"
 import PhysicsObjectManager from "../core/PhysicsObjectManager"
 import { planeGeometry } from "../primitives/Plane"
+import { cameraRenderedPtr } from "../../pointers/cameraRenderedPtr"
+import { rendererPtr } from "../../pointers/rendererPtr"
+import { ssrExcludeSet } from "../../collections/ssrExcludeSet"
+import { reflectorSystem } from "../../systems/reflectorSystem"
 
 export default class Reflector
-    extends PhysicsObjectManager
+    extends PhysicsObjectManager<Mesh>
     implements IReflector
 {
     public static componentName = "reflector"
@@ -21,25 +24,21 @@ export default class Reflector
 
     public constructor() {
         const mesh = new Mesh(planeGeometry)
-        mesh.castShadow = true
-        mesh.receiveShadow = true
-
         super(mesh)
+        ssrExcludeSet.add(this.outerObject3d)
         this.rotationX = 270
-        this.object3d.scale.z = Number.EPSILON
+        mesh.scale.z = Number.EPSILON
 
         import("./MeshReflectorMaterial").then(
             ({ default: MeshReflectorMaterial }) => {
                 this.createEffect(() => {
-                    const renderer = getRenderer()
-                    if (!renderer || this.done) return
+                    if (this.done) return
 
-                    const camera = getCameraRendered()
-                    const mat = (mesh.material = new MeshReflectorMaterial(
-                        renderer,
-                        camera,
+                    const material = (mesh.material = new MeshReflectorMaterial(
+                        rendererPtr[0],
+                        cameraRenderedPtr[0],
                         scene,
-                        this.object3d,
+                        mesh,
                         {
                             resolution: this.resolutionState.get(),
                             blur: [this.blurState.get(), this.blurState.get()],
@@ -49,13 +48,10 @@ export default class Reflector
                             distortionMap: undefined
                         }
                     ))
-                    const handle = onRender(() => {
-                        camera.updateWorldMatrix(true, false)
-                        mat.update()
-                    })
+                    reflectorSystem.add(this, { material })
                     return () => {
-                        mat.dispose()
-                        handle.cancel()
+                        material.dispose()
+                        reflectorSystem.delete(this)
                     }
                 }, [
                     getRenderer,
@@ -67,6 +63,11 @@ export default class Reflector
                 ])
             }
         )
+    }
+
+    protected override disposeNode() {
+        super.disposeNode()
+        ssrExcludeSet.delete(this.outerObject3d)
     }
 
     public override get depth() {

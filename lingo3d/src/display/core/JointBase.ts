@@ -1,176 +1,61 @@
-import { centroid3d } from "@lincode/math"
-import { Reactive } from "@lincode/reactivity"
-import { extendFunction, omitFunction } from "@lincode/utils"
-import { Vector3, Quaternion, Object3D } from "three"
-import { TransformControlsPhase } from "../../events/onTransformControls"
+import { Vector3, Quaternion } from "three"
 import IJointBase from "../../interface/IJointBase"
 import { getEditorBehavior } from "../../states/useEditorBehavior"
-import { getEditorHelper } from "../../states/useEditorHelper"
 import { flushMultipleSelectionTargets } from "../../states/useMultipleSelectionTargets"
-import { getPhysXLoaded } from "../../states/usePhysXLoaded"
-import { getWorldPlayComputed } from "../../states/useWorldPlayComputed"
 import PhysicsObjectManager from "./PhysicsObjectManager"
-import destroy from "./PhysicsObjectManager/physx/destroy"
-import { physxPtr } from "./PhysicsObjectManager/physx/physxPtr"
-import {
-    setPxTransform_,
-    setPxTransform__
-} from "./PhysicsObjectManager/physx/pxMath"
-import PositionedDirectionedManager from "./PositionedDirectionedManager"
-import { addSelectionHelper } from "./utils/raycast/selectionCandidates"
 import HelperSphere from "./utils/HelperSphere"
-import { getAppendables } from "../../api/core/Appendable"
-
-export const joints = new Set<JointBase>()
-
-const getRelativeTransform = (
-    thisObject: Object3D,
-    fromObject: Object3D,
-    setPxTransform: typeof setPxTransform_
-) => {
-    const fromScale = fromObject.scale
-    const clone = new Object3D()
-    clone.position.copy(thisObject.position)
-    clone.quaternion.copy(thisObject.quaternion)
-    fromObject.attach(clone)
-    const fromPxTransform = setPxTransform(
-        clone.position.x * fromScale.x,
-        clone.position.y * fromScale.y,
-        clone.position.z * fromScale.z,
-        clone.quaternion.x,
-        clone.quaternion.y,
-        clone.quaternion.z,
-        clone.quaternion.w
-    )
-    fromObject.remove(clone)
-    return fromPxTransform
-}
+import { jointSet } from "../../collections/jointSet"
+import MeshAppendable from "./MeshAppendable"
+import { editorBehaviorPtr } from "../../pointers/editorBehaviorPtr"
+import { configJointSystem } from "../../systems/configSystems/configJointSystem"
+import { getWorldMode } from "../../states/useWorldMode"
+import { worldModePtr } from "../../pointers/worldModePtr"
+import { configPhysicsTransformSystem } from "../../systems/configSystems/configPhysicsTransformSystem"
 
 export default abstract class JointBase
-    extends PositionedDirectionedManager
+    extends MeshAppendable
     implements IJointBase
 {
-    public fromManager?: PhysicsObjectManager
-    public toManager?: PhysicsObjectManager
+    public $fromManager?: PhysicsObjectManager
+    public $toManager?: PhysicsObjectManager
 
-    protected abstract createJoint(
+    public abstract $createJoint(
         fromPxTransfrom: any,
         toPxTransform: any,
         fromManager: PhysicsObjectManager,
         toManager: PhysicsObjectManager
     ): any
 
-    public pxJoint: any
+    public $pxJoint: any
 
-    protected override _dispose() {
-        super._dispose()
-        joints.delete(this)
+    protected override disposeNode() {
+        super.disposeNode()
+        jointSet.delete(this)
     }
 
     public constructor() {
         super()
-        import("./PhysicsObjectManager/physx")
-
-        joints.add(this)
+        jointSet.add(this)
 
         this.createEffect(() => {
-            if (!getWorldPlayComputed() || !getEditorBehavior()) return
+            if (worldModePtr[0] !== "default" || !editorBehaviorPtr[0]) return
             flushMultipleSelectionTargets(() => this.savePos())
             return () => {
                 flushMultipleSelectionTargets(() => this.restorePos())
             }
-        }, [getWorldPlayComputed, getEditorBehavior])
+        }, [getWorldMode, getEditorBehavior])
 
         this.createEffect(() => {
-            if (!getEditorHelper()) return
+            if (worldModePtr[0] !== "editor" || this.$disableSceneGraph) return
 
-            const sphere = new HelperSphere()
-            sphere.scale = 0.1
-            sphere.depthTest = false
-            const handle = addSelectionHelper(sphere, this)
-
-            sphere.onTransformControls = (phase, mode) =>
-                mode === "translate" &&
-                phase === "end" &&
-                this.setManualPosition()
+            const helper = new HelperSphere(this)
+            helper.scale = 0.1
+            helper.depthTest = false
 
             return () => {
-                handle.cancel()
+                helper.dispose()
             }
-        }, [getEditorHelper])
-
-        this.createEffect(() => {
-            const { _to, _from } = this
-            if (!physxPtr[0].physics || !_to || !_from) return
-
-            const [toManager] = getAppendables(_to)
-            const [fromManager] = getAppendables(_from)
-            if (
-                !(toManager instanceof PhysicsObjectManager) ||
-                !(fromManager instanceof PhysicsObjectManager)
-            )
-                return
-
-            !this.manualPosition &&
-                Object.assign(this, centroid3d([fromManager, toManager]))
-
-            fromManager.jointCount++
-            toManager.jointCount++
-
-            let fromPhysics = fromManager.physics
-            const handle0 = fromManager.refreshPhysicsState!.get(() => {
-                if (fromPhysics === fromManager.physics) return
-                fromPhysics = fromManager.physics
-                this.refreshState.set({})
-            })
-            let toPhysics = toManager.physics
-            const handle1 = toManager.refreshPhysicsState!.get(() => {
-                if (toPhysics === toManager.physics) return
-                toPhysics = toManager.physics
-                this.refreshState.set({})
-            })
-
-            const cb = (phase: TransformControlsPhase) => {
-                if (phase === "end") this.refreshState.set({})
-            }
-            const fromCaller = (fromManager.onTransformControls =
-                extendFunction(fromManager.onTransformControls, cb))
-            const toCaller = (toManager.onTransformControls = extendFunction(
-                toManager.onTransformControls,
-                cb
-            ))
-
-            const joint = (this.pxJoint = this.createJoint(
-                getRelativeTransform(
-                    this.outerObject3d,
-                    fromManager.outerObject3d,
-                    setPxTransform_
-                ),
-                getRelativeTransform(
-                    this.outerObject3d,
-                    toManager.outerObject3d,
-                    setPxTransform__
-                ),
-                fromManager,
-                toManager
-            ))
-
-            this.fromManager = fromManager
-            this.toManager = toManager
-
-            return () => {
-                handle0.cancel()
-                handle1.cancel()
-                omitFunction(fromCaller, cb)
-                omitFunction(toCaller, cb)
-                this.pxJoint = undefined
-                destroy(joint)
-                fromManager.jointCount--
-                toManager.jointCount--
-                this.fromManager = undefined
-                this.toManager = undefined
-            }
-        }, [this.refreshState.get, getPhysXLoaded])
+        }, [getWorldMode])
     }
 
     private fromPos: Vector3 | undefined
@@ -179,7 +64,7 @@ export default abstract class JointBase
     private toQuat: Quaternion | undefined
 
     private savePos() {
-        const { fromManager, toManager } = this
+        const { $fromManager: fromManager, $toManager: toManager } = this
         if (!fromManager || !toManager) return
 
         this.fromPos = fromManager.position.clone()
@@ -188,7 +73,7 @@ export default abstract class JointBase
         this.toQuat = toManager.quaternion.clone()
     }
     private restorePos() {
-        const { fromManager, toManager } = this
+        const { $fromManager: fromManager, $toManager: toManager } = this
         if (!fromManager || !toManager) return
 
         this.fromPos && fromManager.position.copy(this.fromPos)
@@ -196,58 +81,26 @@ export default abstract class JointBase
         this.fromQuat && fromManager.quaternion.copy(this.fromQuat)
         this.toQuat && toManager.quaternion.copy(this.toQuat)
 
-        this.refreshState.set({})
-        fromManager.updatePhysics()
-        toManager.updatePhysics()
+        configJointSystem.add(this)
+        configPhysicsTransformSystem.add(fromManager)
+        configPhysicsTransformSystem.add(toManager)
     }
 
-    protected refreshState = new Reactive({})
-
-    private _to?: string | PhysicsObjectManager
+    private _to?: string
     public get to() {
         return this._to
     }
     public set to(val) {
         this._to = val
-        this.refreshState.set({})
+        configJointSystem.add(this)
     }
 
-    private _from?: string | PhysicsObjectManager
+    private _from?: string
     public get from() {
         return this._from
     }
     public set from(val) {
         this._from = val
-        this.refreshState.set({})
-    }
-
-    private manualPosition?: boolean
-    private setManualPosition() {
-        this.manualPosition = true
-        this.refreshState.set({})
-    }
-
-    public override get x() {
-        return super.x
-    }
-    public override set x(val) {
-        super.x = val
-        this.setManualPosition()
-    }
-
-    public override get y() {
-        return super.y
-    }
-    public override set y(val) {
-        super.y = val
-        this.setManualPosition()
-    }
-
-    public override get z() {
-        return super.z
-    }
-    public override set z(val) {
-        super.z = val
-        this.setManualPosition()
+        configJointSystem.add(this)
     }
 }

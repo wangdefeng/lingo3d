@@ -1,31 +1,23 @@
-import { ConeGeometry } from "three"
+import toFixed from "../../api/serializer/toFixed"
 import { PI2 } from "../../globals"
 import ICone, { coneDefaults, coneSchema } from "../../interface/ICone"
-import ConfigurablePrimitive, {
-    allocateDefaultInstance,
-    refreshParamsSystem
-} from "../core/ConfigurablePrimitive"
+import { ConeParams, coneGeometryPool } from "../../pools/coneGeometryPool"
+import { refreshPooledPrimitiveSystem } from "../../systems/configSystems/refreshPooledPrimitiveSystem"
+import PooledPrimitve from "../core/PooledPrimitive"
 
-const defaultParams = <const>[0.5, 1, 32, 1, false, 0, PI2]
-const geometry = allocateDefaultInstance(
-    ConeGeometry,
-    defaultParams
-) as ConeGeometry
+const geometry = coneGeometryPool.request([0.5, 1, 32, 1, false, 0, PI2])
 
-export default class Cone
-    extends ConfigurablePrimitive<typeof ConeGeometry>
-    implements ICone
-{
+export default class Cone extends PooledPrimitve implements ICone {
     public static componentName = "cone"
     public static override defaults = coneDefaults
     public static override schema = coneSchema
 
     public constructor() {
-        super(ConeGeometry, defaultParams, geometry)
+        super(geometry, coneGeometryPool)
     }
 
-    public override getParams() {
-        return <const>[0.5, 1, this.segments, 1, false, 0, PI2]
+    public $getParams(): ConeParams {
+        return [0.5, 1, this.segments, 1, false, 0, PI2]
     }
 
     private _segments?: number
@@ -33,7 +25,7 @@ export default class Cone
         return this._segments ?? 32
     }
     public set segments(val) {
-        this._segments = val
-        refreshParamsSystem(this)
+        this._segments = toFixed(val)
+        refreshPooledPrimitiveSystem.add(this)
     }
 }

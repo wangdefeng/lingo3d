@@ -1,7 +1,5 @@
-import { settings } from "."
-import "./tests/testBVH"
+import "./index"
+import "./tests/testCharacter"
 import LingoEditor from "./editor"
-
-settings.autoMount = true
 
 const editor = new LingoEditor()

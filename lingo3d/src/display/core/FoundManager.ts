@@ -4,58 +4,48 @@ import IFoundManager, {
     foundManagerDefaults,
     foundManagerSchema
 } from "../../interface/IFoundManager"
-import Model from "../Model"
 import VisibleMixin from "./mixins/VisibleMixin"
 import SimpleObjectManager from "./SimpleObjectManager"
-import { setManager } from "../../api/utils/getManager"
-import TextureManager from "./TextureManager"
-import MeshAppendable from "../../api/core/MeshAppendable"
-import { appendableRoot } from "../../api/core/collections"
-import { StandardMesh } from "./mixins/TexturedStandardMixin"
+import TexturedStandardMixin, {
+    StandardMesh
+} from "./mixins/TexturedStandardMixin"
 import MixinType from "./mixins/utils/MixinType"
 import { Cancellable } from "@lincode/promiselikes"
+import type Model from "../Model"
+import { MaterialParams } from "../../pools/materialPool"
+import { materialDefaultsMap } from "../../collections/materialDefaultsMap"
 
 class FoundManager extends SimpleObjectManager implements IFoundManager {
     public static componentName = "find"
     public static defaults = foundManagerDefaults
     public static schema = foundManagerSchema
 
-    public constructor(
-        mesh: Object3D | StandardMesh,
-        public owner: MeshAppendable
-    ) {
+    protected _materialParams?: MaterialParams
+    protected _defaults?: Record<string, any>
+
+    public constructor(mesh: Object3D | StandardMesh, owner?: Model) {
         super(mesh)
-        appendableRoot.delete(this)
+        owner?.$appendNode(this)
+        this.$ghost(false)
+        this._name = mesh.name
 
         if (!("material" in mesh)) return
-        const { defaults, defaultParams, refreshParamSystem } =
-            mesh.material.userData.TextureManager
-        this.defaults = defaults
-        this.defaultParams = defaultParams
-        this.refreshParamsSystem = refreshParamSystem
+
+        this._defaults = materialDefaultsMap.get(mesh.material)
+        if (!this._defaults) return
+
+        this._materialParams = Object.values(this._defaults) as MaterialParams
     }
 
-    public model?: Model
+    private retargeted?: boolean
     private retargetAnimations() {
-        const state = this.model?.lazyStates()
-        if (!state) return
-
-        const {
-            onFinishState,
-            repeatState,
-            managerRecordState,
-            finishEventState
-        } = state
-        for (const animationManager of Object.values(managerRecordState.get()))
-            this.animations[animationManager.name] = this.watch(
-                animationManager.retarget(
-                    this,
-                    repeatState,
-                    onFinishState,
-                    finishEventState
-                )
+        if (this.retargeted) return
+        const states = (this.parent as Model).$animationStates
+        for (const animationManager of Object.values(states.managerRecord))
+            this.animations[animationManager.name!] = this.watch(
+                animationManager.retarget(this, states)
             )
-        this.model = undefined
+        this.retargeted = true
     }
 
     public override get animation() {
@@ -66,19 +56,14 @@ class FoundManager extends SimpleObjectManager implements IFoundManager {
         super.animation = val
     }
 
-    private managerSet?: boolean
-    public addToRaycastSet(set: Set<Object3D>) {
-        if (!this.managerSet) {
-            this.managerSet = true
-            this.object3d.traverse((child) => setManager(child, this))
-        }
+    public $addToRaycastSet(set: Set<Object3D>) {
         set.add(this.object3d)
         return new Cancellable(() => set.delete(this.object3d))
     }
 }
 interface FoundManager
     extends SimpleObjectManager,
-        TextureManager,
+        MixinType<TexturedStandardMixin>,
         MixinType<VisibleMixin> {}
-applyMixins(FoundManager, [VisibleMixin, TextureManager])
+applyMixins(FoundManager, [VisibleMixin, TexturedStandardMixin])
 export default FoundManager
